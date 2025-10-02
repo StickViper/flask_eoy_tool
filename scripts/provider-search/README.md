@@ -7,7 +7,6 @@ This folder contains the Apps Script code for the **Provider Search / Verificati
 - **UniversalProviderSuite.js** - Main verification logic (API calls, batch processing)
 - **QuickStartWizard.html** - Setup wizard UI
 - **VerificationSidebar.html** - Manual verification sidebar
-- **Code.js** - (clasp-generated, may contain duplicates of above)
 - **appsscript.json** - Apps Script manifest
 
 ## Setup with clasp
