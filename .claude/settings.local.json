@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk:*)",
+      "Bash(python3:*)",
+      "Bash(git rev-parse:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

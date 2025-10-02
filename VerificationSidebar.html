@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      padding: 15px;
+      font-size: 14px;
+      color: #333;
+      background: #f8f9fa;
+    }
+    
+    h2 {
+      color: #1a73e8;
+      font-size: 18px;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #1a73e8;
+      padding-bottom: 8px;
+    }
+    
+    .config-badges {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .config-badge {
+      display: inline-block;
+      background: #f8f9fa;
+      border: 1px solid #dadce0;
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 12px;
+    }
+    
+    .config-badge.provider {
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-color: #1a73e8;
+    }
+    
+    .config-badge.state {
+      background: #fef7e0;
+      color: #ea8600;
+      border-color: #ea8600;
+    }
+    
+    button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+    
+    .btn-primary {
+      background: #1a73e8;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #1557b0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .btn-search {
+      background: #34a853;
+      color: white;
+    }
+    
+    .btn-search:hover {
+      background: #2d8e47;
+    }
+    
+    .btn-operational {
+      background: #34a853;
+      color: white;
+    }
+    
+    .btn-operational:hover {
+      background: #2d8e47;
+    }
+    
+    .btn-closed {
+      background: #ea4335;
+      color: white;
+    }
+    
+    .btn-closed:hover {
+      background: #d33b27;
+    }
+    
+    .btn-needs-info {
+      background: #fbbc04;
+      color: white;
+    }
+    
+    .btn-needs-info:hover {
+      background: #f9a800;
+    }
+    
+    #details {
+      display: none;
+      animation: fadeIn 0.3s;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .info-section {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .info-row {
+      margin: 8px 0;
+      display: flex;
+      align-items: flex-start;
+    }
+    
+    .info-label {
+      font-weight: 600;
+      color: #5f6368;
+      min-width: 80px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+      flex: 1;
+      color: #202124;
+      word-break: break-word;
+    }
+    
+    .confidence-meter {
+      width: 100%;
+      height: 20px;
+      background: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 5px 0;
+    }
+    
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ea4335, #fbbc04, #34a853);
+      transition: width 0.3s;
+    }
+    
+    .confidence-text {
+      text-align: center;
+      font-size: 12px;
+      color: #5f6368;
+      margin-top: 4px;
+    }
+    
+    textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+      min-height: 60px;
+    }
+    
+    textarea:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+    }
+    
+    .action-group {
+      margin: 15px 0;
+    }
+    
+    .action-label {
+      font-weight: 600;
+      color: #5f6368;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    
+    .status-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    
+    .status-buttons button {
+      font-size: 12px;
+      padding: 8px 4px;
+    }
+    
+    #status-message {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+      animation: slideIn 0.3s;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateY(-10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .success {
+      background: #e6f4ea;
+      color: #1e8e3e;
+      border: 1px solid #a8dab5;
+    }
+    
+    .error {
+      background: #fce8e6;
+      color: #d33b27;
+      border: 1px solid #f4c7c3;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #5f6368;
+    }
+    
+    .divider {
+      border-top: 1px solid #e0e0e0;
+      margin: 15px 0;
+    }
+    
+    .step-indicator {
+      background: #1a73e8;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    
+    .quick-actions button {
+      font-size: 12px;
+      padding: 8px;
+      background: white;
+      color: #5f6368;
+      border: 1px solid #dadce0;
+    }
+    
+    .quick-actions button:hover {
+      background: #f8f9fa;
+      border-color: #1a73e8;
+    }
+    
+    .keyboard-shortcuts {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f1f3f4;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #5f6368;
+    }
+    
+    .keyboard-shortcuts h3 {
+      font-size: 12px;
+      margin-bottom: 5px;
+      color: #202124;
+    }
+    
+    .shortcut {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+    }
+    
+    .key {
+      background: white;
+      padding: 2px 5px;
+      border-radius: 3px;
+      border: 1px solid #dadce0;
+      font-family: monospace;
+    }
+    
+    .spinner {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #1a73e8;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h2>⚡ Manual Verification Tool</h2>
+  
+  <div class="config-badges">
+    <span class="config-badge provider" id="provider-type">Loading...</span>
+    <span class="config-badge state" id="state">Loading...</span>
+  </div>
+  
+  <button class="btn-primary" onclick="loadRowData()">
+    <span class="step-indicator">1</span> Load Selected Row
+  </button>
+  
+  <div id="details">
+    <div class="info-section">
+      <div class="info-row">
+        <span class="info-label">Row #</span>
+        <span class="info-value" id="row-num"></span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Provider</span>
+        <span class="info-value" id="office-name"></span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Address</span>
+        <span class="info-value" id="address"></span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Phone</span>
+        <span class="info-value" id="phone"></span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Location</span>
+        <span class="info-value" id="location"></span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value" id="current-status">Not verified</span>
+      </div>
+      
+      <div class="info-row" id="confidence-section" style="display: none;">
+        <span class="info-label">Confidence</span>
+        <div style="flex: 1;">
+          <div class="confidence-meter">
+            <div class="confidence-fill" id="confidence-bar"></div>
+          </div>
+          <div class="confidence-text" id="confidence-text"></div>
+        </div>
+      </div>
+    </div>
+    
+    <button class="btn-search" id="search-btn" onclick="openGoogleSearch()">
+      <span class="step-indicator">2</span> Google Search This Provider
+    </button>
+    
+    <div class="action-group">
+      <div class="action-label">
+        <span class="step-indicator">3</span> Add Verification Notes:
+      </div>
+      <textarea id="notes" rows="3" placeholder="Enter any relevant notes from your research..."></textarea>
+    </div>
+    
+    <div class="action-group">
+      <div class="action-label">
+        <span class="step-indicator">4</span> Set Verification Status:
+      </div>
+      <div class="status-buttons">
+        <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active</button>
+        <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed</button>
+        <button class="btn-needs-info" onclick="updateStatus('NEEDS_INFO')">? Review</button>
+      </div>
+    </div>
+    
+    <div class="quick-actions">
+      <button onclick="skipToNext()">Skip & Next →</button>
+      <button onclick="clearForm()">Clear Form</button>
+    </div>
+  </div>
+  
+  <div id="status-message"></div>
+  
+  <div class="keyboard-shortcuts">
+    <h3>Keyboard Shortcuts:</h3>
+    <div class="shortcut">
+      <span>Load Row</span>
+      <span class="key">L</span>
+    </div>
+    <div class="shortcut">
+      <span>Google Search</span>
+      <span class="key">G</span>
+    </div>
+    <div class="shortcut">
+      <span>Mark Active</span>
+      <span class="key">1</span>
+    </div>
+    <div class="shortcut">
+      <span>Mark Closed</span>
+      <span class="key">2</span>
+    </div>
+    <div class="shortcut">
+      <span>Skip Row</span>
+      <span class="key">S</span>
+    </div>
+  </div>
+  
+  <script>
+    let currentRow = null;
+    let currentSheet = null;
+    let searchUrl = null;
+    
+    // Initialize on load
+    window.onload = function() {
+      loadRowData();
+      setupKeyboardShortcuts();
+    };
+    
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', function(e) {
+        // Ignore if typing in textarea
+        if (e.target.tagName === 'TEXTAREA') return;
+        
+        switch(e.key.toLowerCase()) {
+          case 'l':
+            loadRowData();
+            break;
+          case 'g':
+            openGoogleSearch();
+            break;
+          case '1':
+            updateStatus('OPERATIONAL');
+            break;
+          case '2':
+            updateStatus('CLOSED');
+            break;
+          case 's':
+            skipToNext();
+            break;
+        }
+      });
+    }
+    
+    function showStatus(message, isError) {
+      const statusDiv = document.getElementById('status-message');
+      statusDiv.textContent = message;
+      statusDiv.className = isError ? 'error' : 'success';
+      statusDiv.style.display = 'block';
+      
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 3000);
+    }
+    
+    function showLoading(show) {
+      if (show) {
+        document.getElementById('details').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+        document.getElementById('details').style.display = 'block';
+      }
+    }
+    
+    function loadRowData() {
+      showLoading(true);
+      
+      google.script.run
+        .withSuccessHandler(response => {
+          if (response.error) {
+            showStatus(response.error, true);
+            document.getElementById('details').style.display = 'none';
+            return;
+          }
+          
+          const data = response.data;
+          currentRow = response.row;
+          currentSheet = response.sheetName;
+          searchUrl = response.searchUrl;
+          
+          // Update config badges
+          document.getElementById('provider-type').textContent = response.providerType || 'PCP';
+          document.getElementById('state').textContent = response.state || '--';
+          
+          // Rebuild details section
+          document.getElementById('details').innerHTML = `
+            <div class="info-section">
+              <div class="info-row">
+                <span class="info-label">Row #</span>
+                <span class="info-value" id="row-num">${currentRow}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Provider</span>
+                <span class="info-value" id="office-name">${data['Office Name'] || 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Address</span>
+                <span class="info-value" id="address">${data['Address'] || 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Phone</span>
+                <span class="info-value" id="phone">${data['Phone Number'] || 'No phone'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Location</span>
+                <span class="info-value" id="location">${data['City'] || ''}, ${data['State'] || ''} ${data['ZIP'] || ''}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="current-status">${data['Verification_Status'] || 'Not verified'}</span>
+              </div>
+              ${response.confidence ? `
+                <div class="info-row" id="confidence-section">
+                  <span class="info-label">Confidence</span>
+                  <div style="flex: 1;">
+                    <div class="confidence-meter">
+                      <div class="confidence-fill" style="width: ${response.confidence * 100}%"></div>
+                    </div>
+                    <div class="confidence-text">${Math.round(response.confidence * 100)}% Match Confidence</div>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+            
+            <button class="btn-search" id="search-btn" onclick="openGoogleSearch()">
+              <span class="step-indicator">2</span> Google Search This Provider
+            </button>
+            
+            <div class="action-group">
+              <div class="action-label">
+                <span class="step-indicator">3</span> Add Verification Notes:
+              </div>
+              <textarea id="notes" rows="3" placeholder="Enter any relevant notes from your research...">${data['Verification_Notes'] || ''}</textarea>
+            </div>
+            
+            <div class="action-group">
+              <div class="action-label">
+                <span class="step-indicator">4</span> Set Verification Status:
+              </div>
+              <div class="status-buttons">
+                <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active</button>
+                <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed</button>
+                <button class="btn-needs-info" onclick="updateStatus('NEEDS_INFO')">? Review</button>
+              </div>
+            </div>
+            
+            <div class="quick-actions">
+              <button onclick="skipToNext()">Skip & Next →</button>
+              <button onclick="clearForm()">Clear Form</button>
+            </div>
+          `;
+          
+          document.getElementById('details').style.display = 'block';
+          showStatus(`Loaded Row ${currentRow}`, false);
+        })
+        .withFailureHandler(err => {
+          showStatus(err.message || 'Error loading row', true);
+          document.getElementById('details').style.display = 'none';
+        })
+        .getActiveRowData();
+    }
+    
+    function openGoogleSearch() {
+      if (searchUrl) {
+        window.open(searchUrl, '_blank');
+      } else {
+        showStatus('No search URL available', true);
+      }
+    }
+    
+    function updateStatus(status) {
+      if (!currentRow) {
+        showStatus('Please load a row first', true);
+        return;
+      }
+
+      const notes = document.getElementById('notes').value;
+
+      google.script.run
+        .withSuccessHandler(message => {
+          showStatus(message, false);
+          // Auto-advance to next row after 1.5 seconds
+          setTimeout(() => {
+            skipToNext();
+          }, 1500);
+        })
+        .withFailureHandler(err => showStatus(err.message || 'Error updating', true))
+        .updateRowStatus(currentRow, currentSheet, status, notes);
+    }
+    
+    function skipToNext() {
+      if (!currentRow) {
+        showStatus('No row loaded', true);
+        return;
+      }
+
+      showLoading(true);
+
+      // Call the new server-side function to change the active cell
+      google.script.run
+        .withSuccessHandler(newRow => {
+          // Once the cell is moved, reload the data for the new row
+          if (newRow) {
+            loadRowData();
+          } else {
+            showStatus('Already on the last row.', false);
+            loadRowData(); // Reload current row to remove loading spinner
+          }
+        })
+        .withFailureHandler(err => {
+          showStatus('Error moving to next row: ' + err.message, true);
+          loadRowData(); // Reload to remove spinner
+        })
+        .moveToNextRow();
+    }
+  </script>
+</body>
+</html>

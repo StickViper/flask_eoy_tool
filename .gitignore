@@ -1,0 +1,33 @@
+# CSV Data Files
+*.csv
+
+# NPPES bulk data
+npidata_*.csv
+NPPES_Data_Dissemination*/
+
+# Temporary files
+*.tmp
+*.log
+
+# API Keys & Secrets
+.env
+config/secrets.js
+*_secrets.*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# clasp files
+.clasp.json
+.claspignore
+
+# Node modules (if using clasp)
+node_modules/
+package-lock.json
