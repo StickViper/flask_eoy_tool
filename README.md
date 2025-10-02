@@ -1,184 +1,618 @@
-# JGDC - Provider Outreach System
+# JGDC - Provider Outreach Management System
 
-Healthcare provider outreach system for the Canavan Foundation (nonprofit).
+## 🎯 Project Overview
 
-## Project Structure
+### What is this project?
+
+This is a **healthcare provider outreach system** built for the **Canavan Foundation**, a nonprofit organization in the United States. The foundation reaches out to healthcare providers (doctors, nurse practitioners, medical clinics) to offer free educational brochures about Canavan disease - a rare genetic disorder.
+
+The system helps volunteers:
+1. **Find** primary care providers (PCPs) from a national database
+2. **Verify** they are still in business and accepting patients
+3. **Track** phone call outcomes over multiple years
+4. **Manage** brochure orders and follow-ups
+
+### Why does this project exist?
+
+**The problem:**
+- Manually finding and verifying thousands of doctors is time-consuming
+- Tracking 3+ years of call history across multiple volunteers is messy
+- Data quality issues (duplicate providers, wrong phone numbers, closed practices)
+- Need to consolidate data from multiple sources at year-end
+
+**The solution:**
+This codebase automates the boring parts (filtering, verification) while providing spreadsheet-based tools for the human parts (calling, decision-making).
+
+---
+
+## 🏗️ System Architecture
+
+### The Complete Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: DATA ACQUISITION                              │
+│ Download NPPES database → 11 MILLION healthcare providers       │
+│ (National Plan and Provider Enumeration System - public CMS data)│
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: FILTERING (Python - Local Computer)                     │
+│ Filter 11M → ~30K providers per state                           │
+│ • Only Family Medicine, Internal Medicine, Family NPs           │
+│ • Only specific states (currently: TX, TN, OK, OR)             │
+│ • Remove: Pediatricians, Specialists, Hospitals, Closed practices│
+│ • Fix: ALL CAPS names, credential formats                       │
+│ Script: data/nppes/.../nppes_filter_pcps.py                    │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: IMPORT TO GOOGLE SHEETS (Manual)                        │
+│ Import filtered CSVs → Google Sheets                            │
+│ Sheet name format: "PCP_TX_import"                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: AUTOMATED VERIFICATION (Google Apps Script)             │
+│ Use Google Places API to verify each provider:                  │
+│ • Is the business operational?                                  │
+│ • Does the phone number match?                                 │
+│ • Is the address correct?                                       │
+│ Script: scripts/provider-search/UniversalProviderSuite.js      │
+│ Outputs: "nppes_verified", "nppes_errors", "nppes_formatted"   │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 5: MANUAL VERIFICATION (Edge Cases)                        │
+│ Sidebar UI for ambiguous cases                                  │
+│ Script: scripts/provider-search/VerificationSidebar.html        │  
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 6: OUTREACH & CALLING (Google Sheets + Volunteers)        │
+│ Working List sheets with:                                      │
+│ • Color-coded call status (Yellow=Order, Red=Invalid, etc.)    │
+│ • Year-over-year quantity tracking (2023/2024/2025 QTY columns)│
+│ • Automatic row formatting on status change                    │
+│ Script: scripts/pcp-list/ToolboxSuite.js                       │
+│ Sheet name: "Working List 2025"                                │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 7: ORDER FULFILLMENT (Subsheet of PCP Sheet, External)     │
+│ Copy orders to "New Orders 2025" sheet                          │
+│ External volunteer packages and ships brochures                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 8: YEAR-END CONSOLIDATION (First time specific List is touched after year-end)│
+│ Merge all data sources into master archive:                     │
+│ • Combine multiple working lists from same year                 │
+│ • Deduplicate by phone/NPI/address                              │
+│ • Preserve order history across years                           │
+│ • Clear statuses for next year's calling cycle                  │
+│ Script: scripts/pcp-list/ToolboxSuite.js (consolidation tools)  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📂 Project Structure (File System)
 
 ```
 JGDC/
-├── README.md                    # This file
-├── TODO.md                      # Master task list
 │
-├── Google Apps Script Files/    # Deployed to Google Sheets
-│   ├── ToolboxSuite.js         # Main utilities for Working List sheets
-│   ├── UniversalProviderSuite.js  # Provider verification (API-based)
-│   ├── QuickStartWizard.html   # Setup wizard
-│   └── VerificationSidebar.html   # Manual verification UI
+├── README.md                          ← You are here (main documentation)
+├── TODO.md                            ← Prioritized task list
+├── STRUCTURE.md                       ← Visual folder guide
+├── .gitignore                         ← Excludes CSVs, secrets from git
 │
-├── Python Scripts/              # Local data filtering
-│   └── nppes_filter_pcps.py    # NPPES data filtering (v3.0)
+├── scripts/                           ← Google Apps Script code
+│   │
+│   ├── provider-search/               ← For "Provider Search" Google Sheet
+│   │   ├── README.md                  ← Setup instructions
+│   │   ├── UniversalProviderSuite.js  ← Main verification logic
+│   │   ├── QuickStartWizard.html      ← Setup wizard UI
+│   │   ├── VerificationSidebar.html   ← Manual verification UI
+│   │   ├── Code.js                    ← (auto-generated by clasp)
+│   │   ├── appsscript.json            ← Apps Script config
+│   │   └── .clasp.json                ← (created when you run: clasp clone)
+│   │
+│   └── pcp-list/                      ← For "Working List" Google Sheets
+│       ├── README.md                  ← Setup instructions
+│       ├── ToolboxSuite.js            ← Utilities (consolidation, validation)
+│       └── .clasp.json                ← (created when you run: clasp clone)
 │
-└── Data/                        # CSV files (gitignored)
-    ├── Filtered CSVs (TX, TN, OK, OR)
-    └── Working lists
+├── data/                              ← All data files (gitignored)
+│   │
+│   ├── exports/                       ← CSV exports from Google Sheets
+│   │   ├── PCP List 2025 - Working List 2025.csv
+│   │   ├── PCP List 2025 - STATS.tsv
+│   │   └── NPPES Provider Search - All_Verified_Providers.csv
+│   │
+│   └── nppes/                         ← NPPES bulk data (~11 GB)
+│       ├── README.md
+│       └── NPPES_Data_Dissemination_September_2025_V2/
+│           ├── nppes_filter_pcps.py              ⭐ Python filter script
+│           ├── npidata_pfile_*.csv               (11 GB - raw provider data)
+│           ├── FILTERED_pcps_TX_20250927.csv     (filtered outputs)
+│           ├── FILTERED_pcps_TN_20250929.csv
+│           ├── FILTERED_pcps_OK_20250929.csv
+│           └── FILTERED_pcps_OR_20250929.csv
+│
+└── docs/                              ← Documentation
+    └── CLASP_SETUP.md                 ← How to sync Apps Script with git
 ```
-
-## Workflow
-
-### 1. Data Acquisition (Python - Local)
-- Download NPPES bulk data from CMS
-- Run `nppes_filter_pcps.py` to filter by:
-  - Taxonomy codes (Family Medicine, Internal Medicine, FNP only)
-  - States
-  - Independent clinics (strict validation)
-  - Removes specialists, hospitalists, pediatricians
-- **Output:** Filtered CSVs by state
-
-### 2. Import to Google Sheets
-- **Manual step:** Import filtered CSVs to Google Sheets
-- Sheet naming: `PCP_[STATE]_import`
-
-### 3. Automated Verification (Google Apps Script)
-- **Script:** `UniversalProviderSuite.js`
-- Uses Google Places API to verify providers are operational
-- **Output Sheets:**
-  - `nppes_verified` - Operational providers
-  - `nppes_errors` - Failed verification
-  - `nppes_formatted` - Export-ready
-
-### 4. Manual Verification (Edge Cases)
-- **Script:** `VerificationSidebar.html`
-- Sidebar UI for manual review of ambiguous cases
-
-### 5. Outreach & Calling
-- **Script:** `ToolboxSuite.js` (event-driven formatting)
-- Working List format: `Working List [YEAR]`
-- Color-coded by call status:
-  - Yellow: Successful Order
-  - Green: Requested Email
-  - Red: Potentially Invalid
-  - Fuchsia: Voicemail/No Answer
-  - White: Not interested
-
-### 6. Year-End Consolidation
-- **Script:** `ToolboxSuite.js` (consolidation tools)
-- Merges multiple sheets for same year
-- Deduplicates by phone/NPI/address
-- Preserves order history across years (2023 QTY, 2024 QTY, 2025 QTY)
 
 ---
 
-## Setup Instructions
+## 🚀 Setup Instructions (First Time Setup)
 
-### Google Apps Script Deployment
+### Prerequisites
 
-#### Option 1: Manual Copy-Paste
-1. Open your Google Sheet
-2. Extensions → Apps Script
-3. Copy contents of each `.js` and `.html` file
-4. Create matching filenames in Apps Script editor
-5. Save & deploy
+1. **Google Account** - with access to the Google Sheets
+2. **Python 3.x** - for NPPES filtering (`python --version` to check)
+3. **Node.js** - for clasp tool (`node --version` to check)
+4. **Git** - already initialized in this project
+5. **Text editor** - VS Code, Sublime, or any code editor
 
-#### Option 2: clasp (Command-line)
+### Step 1: Install clasp (Google Apps Script CLI)
+[X]
 ```bash
-# Install clasp
+# Open terminal/command prompt
 npm install -g @google/clasp
 
-# Login
+# Verify installation
+clasp --version
+
+# Login to Google (opens browser)
 clasp login
-
-# Clone your existing project
-clasp clone <SCRIPT_ID>
-
-# Or create new project
-clasp create --title "JGDC Provider Tools" --type sheets
-
-# Push code
-clasp push
+# Select your Google account that has access to the sheets
 ```
 
-**Find your SCRIPT_ID:**
-1. Open your Google Sheet → Extensions → Apps Script
-2. Project Settings (gear icon)
-3. Copy "Script ID"
+**What is clasp?**
+- clasp = Command Line Apps Script Projects
+- It lets you edit Google Apps Script files on your local computer
+- Changes sync between local files and Google Sheets
+- Enables version control with git
 
-### Python Setup
+### Step 2: Get Your Google Apps Script IDs
+[X]
+**You need TWO script IDs (one for each Google Sheet):**
+
+ 1FXjGC-3NVUzKcQ-oEpDwptaX5gizcJp_3EFHoqLxTo5lo7Wiw2jDH8ri
+#### For "Provider Search" sheet:
+1. Open your "Provider Search" Google Sheet in browser
+2. Click: **Extensions → Apps Script**
+3. Click the gear icon (⚙️ Project Settings)
+4. Copy the **Script ID** (looks like: `1a2b3c4d5e6f7g8h9i0j...`)
+5. Save it somewhere (you'll use it in Step 3)
+
+ 1DjPdNWWtGbl4iR1jo4z9vsn-dTguko-AGxXF44MXvkSdxP3kyZQOqNVR 
+#### For "PCP List 2025" (or "Working List") sheet:
+1. Open your "PCP List 2025" Google Sheet in browser
+2. Click: **Extensions → Apps Script**
+3. Click the gear icon (⚙️ Project Settings)
+4. Copy the **Script ID**
+5. Save it somewhere
+
+
+### Step 3: Link Local Code to Google Sheets
+[X]
+
 ```bash
-cd "PCP Hunt/NPPES_Data_Dissemination_September_2025_V2"
-python3 nppes_filter_pcps.py
+# Navigate to this project
+cd "C:\Users\noagi\Desktop\JGDC"
+
+# Link Provider Search script
+cd scripts/provider-search
+clasp clone <PASTE_PROVIDER_SEARCH_SCRIPT_ID_HERE>
+# This creates .clasp.json file
+
+# Link PCP List script
+cd ../pcp-list
+clasp clone <PASTE_PCP_LIST_SCRIPT_ID_HERE>
+# This creates .clasp.json file
+
+# You're done! Now you can sync code between local and Google Sheets
 ```
 
-**Configuration** (edit `CONFIG` in nppes_filter_pcps.py):
-- `DRY_RUN`: Set `True` for preview mode
-- `TARGET_STATES`: Add state codes
-- `FIX_CAPITALIZATION`: Toggle name fixes
-- `ORGANIZATION_HANDLING`: Configure clinic filtering
+### Step 4: Verify Setup
+[X]
+
+```bash
+# Test pushing code to Google Sheets
+cd scripts/provider-search
+clasp push
+# This uploads your local files to Google Sheets
+
+# Open Google Sheets Apps Script editor to verify
+clasp open
+# This opens your Apps Script project in browser
+
+# Check git status
+cd ../..
+git status
+# Should show .clasp.json files are gitignored (not tracked)
+```
 
 ---
 
-## Tools Reference
+## 📖 How to Use This System
 
-### ToolboxSuite.js (Working List Sheets)
-- **Event-driven formatting:** Auto-colors rows on status change
-- **Search links:** Google search from Office column
-- **Capitalization fix:** Fixes ALL CAPS, Mc/Mac, credentials
-- **Consolidation:** Year-end data merge
-- **Validation:** (TODO) Find data issues
+### Scenario 1: Adding a New State
 
-### UniversalProviderSuite.js (Provider Verification Sheet)
-- **API verification:** Google Places validation
-- **Batch processing:** 25 providers per batch
-- **Manual sidebar:** For edge cases
-- **Deduplication:** By NPI/phone/address
+**Goal:** You want to find PCPs in California (CA).
 
-### nppes_filter_pcps.py (Local Filtering)
-- **v3.0 Features:**
-  - Tightened taxonomy codes (no pediatrics, no specialists)
-  - Independent clinic support (strict validation)
-  - Capitalization fixes (6 types)
-  - Dry-run preview mode
-  - Excluded providers audit trail
+```bash
+# 1. Edit the Python filter config
+cd data/nppes/NPPES_Data_Dissemination_September_2025_V2
+
+# 2. Open nppes_filter_pcps.py in editor
+# Find this line (around line 24):
+#   'TARGET_STATES': ['OK','OR','TN'],
+# Change to:
+#   'TARGET_STATES': ['CA'],
+
+# 3. (Optional) Enable dry-run mode to preview first
+# Find this line (around line 45):
+#   'DRY_RUN': False,
+# Change to:
+#   'DRY_RUN': True,
+
+# 4. Run the filter script
+python3 nppes_filter_pcps.py
+# This will show preview of what would be filtered
+
+# 5. If preview looks good, disable dry-run and run for real
+# Change 'DRY_RUN': True back to False
+python3 nppes_filter_pcps.py
+# Creates: FILTERED_pcps_CA_YYYYMMDD.csv
+
+# 6. Import the CSV to Google Sheets manually
+# 7. Run provider verification from Google Sheets menu
+```
+
+### Scenario 2: Fixing Capitalization in Existing Data
+
+**Problem:** Office names are in ALL CAPS or have "M.d." instead of "MD".
+
+```bash
+# Option A: Fix in Google Sheets (for existing data)
+1. Open your Google Sheet
+2. Select the "Office Name" column (or any column with names)
+3. Click menu: Misc. Tools → Fix Capitalization in Selection
+4. Done! Names are now properly formatted
+
+# Option B: Fix during import (for new data)
+# Ensure Python script has this enabled:
+#   'FIX_CAPITALIZATION': True,
+# Re-run the filter script to regenerate CSVs with fixed names
+```
+
+### Scenario 3: Year-End Consolidation
+
+**It's January 2026, and you need to:**
+1. Archive all 2025 calling data
+2. Prepare sheets for 2026 calling cycle
+
+```bash
+# WARNING: This is currently MANUAL (automation planned in TODO.md)
+
+# Current manual steps:
+1. Open your Google Sheet
+2. Verify all "Successful Order" rows are in "New Orders 2025"
+3. Verify all "Not interested" rows have notes and 0 in QTY
+4. Run: Misc. Tools → (consolidation function - TO BE IMPLEMENTED)
+5. Manually:
+   - Add "2026 QTY" column
+   - Duplicate sheets, rename old ones with "OLD 2025" prefix
+   - Clear "New Orders 2025"
+   - Clear colors and statuses (keep email notes)
+   - Update STATS tab formulas
+
+# See TODO.md for automation of these steps
+```
+
+### Scenario 4: Finding and Fixing Duplicates
+
+**Problem:** Same provider appears multiple times with slightly different info.
+
+```bash
+# In Google Sheets:
+1. Click menu: Misc. Tools → Validation & Debugging → Check for Duplicates
+2. (Currently shows "Under development" - see TODO.md)
+
+# Manual process currently:
+1. Sort by phone number
+2. Look for identical phone numbers
+3. Check if same address
+4. If duplicate: verify only one order was shipped (check New Orders sheet)
+5. Merge the rows, keeping the most complete information
+```
 
 ---
 
-## Key Files to Edit
+## 🔧 Configuration Files
 
-### When adding new states:
-- `nppes_filter_pcps.py` → `CONFIG['TARGET_STATES']`
+### Python Script Configuration
 
-### When changing provider type:
-- `nppes_filter_pcps.py` → `CONFIG['PROVIDER_TYPE']`
-- `UniversalProviderSuite.js` → `PROVIDER_CONFIG.PROVIDER_TYPE`
+**File:** `data/nppes/NPPES_Data_Dissemination_September_2025_V2/nppes_filter_pcps.py`
 
-### When starting new year:
-- Create new `Working List [YEAR]` sheet
-- Update `ToolboxSuite.js` → `targetSheetName` in `onEdit()`
-- Run consolidation on old year
+**Key settings to edit:**
+
+```python
+CONFIG = {
+    # Which provider type to find
+    'PROVIDER_TYPE': 'PCP',  # Options: 'PCP', 'OBGYN', 'BOTH'
+
+    # Which states (2-letter codes)
+    'TARGET_STATES': ['OK','OR','TN'],  # Change this!
+
+    # Preview mode (no files created, just shows what would happen)
+    'DRY_RUN': False,  # Set True to preview
+
+    # Fix name capitalization issues
+    'FIX_CAPITALIZATION': True,  # Keep this True!
+
+    # Allow independent clinics (strict validation)
+    'ORGANIZATION_HANDLING': {
+        'INCLUDE_ORGANIZATIONS': True,  # Allow clinics
+        # ... more settings below
+    },
+
+    # Optional name filtering (disabled by default)
+    'NAME_PATTERN_FILTER': {
+        'ENABLED': False,  # Set True to filter by name patterns
+        'RISK_THRESHOLD': 'HIGH',  # How aggressive to filter
+    }
+}
+```
+
+### Google Apps Script Configuration
+
+**File:** `scripts/provider-search/UniversalProviderSuite.js`
+
+**Key settings:**
+
+```javascript
+const PROVIDER_CONFIG = {
+  PROVIDER_TYPE: 'PCP',  // Options: 'PCP', 'OBGYN', 'SPECIALIST'
+  TARGET_STATE: 'TX',     // 2-letter state code
+
+  USE_UNIFIED_OUTPUT: true,  // All states in one sheet vs. separate
+
+  SHEETS: {
+    MASTER: function() {
+      return `${PROVIDER_CONFIG.PROVIDER_TYPE}_${PROVIDER_CONFIG.TARGET_STATE}_import`;
+    },
+    VERIFIED: function() {
+      return 'nppes_verified';  // or state-specific
+    },
+    // ... more sheet names
+  }
+}
+```
+
+**File:** `scripts/pcp-list/ToolboxSuite.js`
+
+**Key settings:**
+
+```javascript
+function onEdit(e) {
+  const statusColumn = 10; // Column J for "CALL STATUS"
+  const targetSheetName = 'Working List 2025';  // ← Change this each year!
+
+  const colorMappings = {
+    'Successful Order': '#ffff00',    // Yellow
+    'Requested Email': '#00ff00',     // Green
+    'Potentially Invalid': '#ff0000', // Red
+    'Voicemail/No Answer': '#ff00ff', // Fuchsia
+    'Not interested': '#ffffff',      // White
+    '': '#ffffff'                     // White for empty
+  };
+  // ...
+}
+```
 
 ---
 
-## Known Issues & Limitations
+## 🐛 Troubleshooting
 
-1. **Manual import step:** No automated CSV → Sheets import (need UI for batch size control)
-2. **Validation tools incomplete:** Stubs in place, need implementation
-3. **"Not interested" enforcement:** Soft validation only (coworkers bypass it)
-4. **Filter views:** Not implemented (fear of breaking routes)
-5. **Capitalization scattered:** Needs to run at every stage (NPPES → Sheets → Verification)
+### clasp errors
+
+**Error:** "User has not enabled the Apps Script API"
+
+**Solution:**
+1. Go to: https://script.google.com/home/usersettings
+2. Toggle ON: "Google Apps Script API"
+
+**Error:** "Unable to read .clasp.json"
+
+**Solution:**
+You need to run `clasp clone <SCRIPT_ID>` first.
+
+### Python script errors
+
+**Error:** "No module named 'pandas'"
+
+**Solution:**
+```bash
+pip install pandas
+```
+
+**Error:** "Input file not found: npidata_pfile_*.csv"
+
+**Solution:**
+1. Download NPPES data from: https://download.cms.gov/nppes/NPI_Files.html
+2. Extract to `data/nppes/NPPES_Data_Dissemination_*/`
+3. Verify the filename matches what's in CONFIG['INPUT_FILE']
+
+### Google Sheets errors
+
+**Error:** "API Key Missing"
+
+**Solution:**
+1. Get Google Places API key from: https://console.cloud.google.com
+2. In Google Sheets: Extensions → Apps Script
+3. Project Settings → Script Properties
+4. Add property: `PLACES_API_KEY` with your API key value
 
 ---
 
-## Contributing
+## 🔐 Security & Privacy
 
-This is a volunteer-run nonprofit project. When making changes:
-1. Test on a COPY of the sheet first
+### What data is stored where?
+
+**Local computer (this folder):**
+- Code files (tracked in git)
+- NPPES bulk data (11 GB, NOT in git)
+- Filtered CSVs (NOT in git)
+
+**Google Sheets (cloud):**
+- Provider lists
+- Call history
+- Order tracking
+
+**NOT stored anywhere:**
+- Patient data (we don't have it)
+- Medical records (we don't collect it)
+- Credit card info (brochures are free)
+
+### Secrets & API Keys
+
+**Never commit to git:**
+- Google API keys
+- `.clasp.json` files (contain project IDs)
+- CSV files with provider data
+
+**Already gitignored:**
+- `*.csv`
+- `.clasp.json`
+- `*_secrets.*`
+- `.env`
+
+---
+
+## 👥 Team & Contributors
+
+This is a **volunteer-run nonprofit project** for the Canavan Foundation.
+
+**Primary maintainer:** noa.gilbert@gmail.com
+
+**Current team:**
+- 3 volunteers making phone calls
+- 1 volunteer handling shipping
+- 1 volunteer (technical) maintaining this codebase
+
+**When making changes:**
+1. Test on a COPY of the sheet first (never on production)
 2. Document what you changed
 3. Update TODO.md with new tasks
-4. Be cautious with automation (human error anxiety)
+4. Commit to git with clear message
+5. Be cautious - data loss anxiety is real with volunteer-run projects!
 
 ---
 
-## Links
+## 📚 Key Concepts (For Developers)
 
-- **NPPES Data:** https://download.cms.gov/nppes/NPI_Files.html
-- **Google Places API:** https://console.cloud.google.com
+### NPPES Database
+
+**What is it?**
+- National Plan and Provider Enumeration System
+- Public database maintained by CMS (Centers for Medicare & Medicaid Services)
+- Contains ~11 million healthcare providers in the US
+- Updated monthly
+- Each provider has an NPI (National Provider Identifier - unique 10-digit number)
+
+**What data does it have?**
+- Provider name, credentials
+- Business address, phone
+- Practice location
+- Taxonomy codes (specialty classifications)
+- Deactivation status
+
+**Taxonomy Codes (Important!):**
+- `207Q00000X` = Family Medicine physician
+- `207R00000X` = Internal Medicine physician
+- `208D00000X` = General Practice physician
+- `363LF0000X` = Family Nurse Practitioner
+- `207P00000X` = Emergency Medicine (we EXCLUDE this!)
+- `208M00000X` = Hospitalist (we EXCLUDE this!)
+- Many more...
+
+We filter to ONLY family/primary care codes to avoid wasting time calling specialists.
+
+### Google Apps Script
+
+**What is it?**
+- JavaScript-based scripting language for Google Workspace
+- Runs on Google's servers (not your computer)
+- Can interact with Google Sheets, Gmail, Calendar, etc.
+- Has time-based triggers (run every X minutes)
+- Has event-based triggers (run when sheet is edited)
+
+**Why use it?**
+- Volunteers are familiar with Google Sheets
+- No server to maintain
+- Free (within usage limits)
+- Easy collaboration
+
+**Limitations:**
+- 6-minute execution time limit (we batch process to work around this)
+- API call quotas
+- No direct file system access (have to use Google Drive)
+
+### clasp (Command Line Apps Script)
+
+**What problem does it solve?**
+- Editing code in the web-based Apps Script editor is painful
+- No version control
+- No proper code editor features
+- Can't use git
+
+**How it works:**
+1. You edit `.js` and `.html` files locally (in VS Code, etc.)
+2. Run `clasp push` to upload to Google
+3. Run `clasp pull` to download from Google
+4. `.clasp.json` file stores which Google project to sync with
+
+### Git Workflow
+
+**What's tracked:**
+- All `.js` code files
+- All `.html` UI files
+- All `.md` documentation
+- Python filter script
+
+**What's NOT tracked:**
+- CSV data files (too large)
+- `.clasp.json` (contains project-specific IDs)
+- API keys
+- Secrets
+
+---
+
+## 🔗 External Resources
+
+- **NPPES Data Downloads:** https://download.cms.gov/nppes/NPI_Files.html
+- **Google Apps Script Docs:** https://developers.google.com/apps-script
 - **clasp Documentation:** https://github.com/google/clasp
+- **Google Places API:** https://developers.google.com/maps/documentation/places/web-service
+- **Canavan Foundation:** https://www.canavanfoundation.org
+
+---
+
+## 📞 Support
+
+**For technical issues:**
+- Check TODO.md for known issues
+- Check STRUCTURE.md for file locations
+- Check docs/CLASP_SETUP.md for clasp help
+
+**For questions about the workflow:**
+- See "How to Use This System" section above
+- See individual README files in scripts/provider-search/ and scripts/pcp-list/
+
+**For emergencies:**
+Contact: noa.gilbert@gmail.com
