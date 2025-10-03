@@ -18,7 +18,9 @@ const DEFAULT_CONFIG = {
   HIGH_CONFIDENCE_THRESHOLD: 0.85,
   REQUIRE_PHONE_FOR_OPERATIONAL: true,
   CACHE_DURATION: 21600,
-  FIX_CAPITALIZATION: true
+  FIX_CAPITALIZATION: true,
+  API_CALL_LIMIT: 3000,  // Hard limit before charges apply
+  API_WARNING_THRESHOLD: 2800  // Warn when approaching limit
 };
 
 function getConfig() {
@@ -236,18 +238,44 @@ function startProcessing() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const inputSheet = ss.getSheetByName(sheets.INPUT);
-  
+
   if (!inputSheet) {
-    ui.alert('Missing Input Sheet', 
-      `Cannot find sheet: ${sheets.INPUT}\n\nPlease create this sheet with your provider data.`, 
+    ui.alert('Missing Input Sheet',
+      `Cannot find sheet: ${sheets.INPUT}\n\nPlease create this sheet with your provider data.`,
       ui.ButtonSet.OK);
     return;
+  }
+
+  // API usage safety check
+  const currentUsage = getApiCallCount();
+  const remainingCalls = DEFAULT_CONFIG.API_CALL_LIMIT - currentUsage;
+  const rowsToProcess = Math.max(0, inputSheet.getLastRow() - 1);
+
+  if (currentUsage >= DEFAULT_CONFIG.API_CALL_LIMIT) {
+    ui.alert('API Limit Reached',
+      `You have used ${currentUsage} of ${DEFAULT_CONFIG.API_CALL_LIMIT} API calls.\n\n` +
+      'Cannot start verification. Reset counter or wait for billing cycle.',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  if (currentUsage >= DEFAULT_CONFIG.API_WARNING_THRESHOLD) {
+    const warningResponse = ui.alert('API Usage Warning',
+      `⚠️ You have used ${currentUsage} of ${DEFAULT_CONFIG.API_CALL_LIMIT} API calls.\n` +
+      `Only ${remainingCalls} calls remaining.\n\n` +
+      `This run will process up to ${rowsToProcess} providers.\n\n` +
+      'Continue?',
+      ui.ButtonSet.YES_NO);
+
+    if (warningResponse !== ui.Button.YES) return;
   }
 
   const response = ui.alert('Start Verification',
     `Ready to process ${config.PROVIDER_TYPE} providers in ${config.TARGET_STATE}\n\n` +
     `Input: ${sheets.INPUT}\n` +
-    `Output: ${sheets.VERIFIED}\n\n` +
+    `Output: ${sheets.VERIFIED}\n` +
+    `Rows to process: ${rowsToProcess}\n` +
+    `API calls used: ${currentUsage}/${DEFAULT_CONFIG.API_CALL_LIMIT}\n\n` +
     'Continue?',
     ui.ButtonSet.YES_NO);
 
@@ -256,11 +284,11 @@ function startProcessing() {
   deleteTriggers();
   resetProcessingProgress();
   initializeOutputSheets();
-  
+
   processNextBatch();
-  
-  ui.alert('Processing Started', 
-    'Verification is running in the background.\n\nYou can close this sheet.', 
+
+  ui.alert('Processing Started',
+    'Verification is running in the background.\n\nYou can close this sheet.',
     ui.ButtonSet.OK);
 }
 
@@ -269,15 +297,26 @@ function processNextBatch() {
   const config = getConfig();
   const sheets = getSheetNames();
   const apiKey = getApiKey();
-  
+
   if (!apiKey) {
     logMessage('ERROR: No API key found');
     return;
   }
 
+  // Check API limit before processing
+  const currentUsage = getApiCallCount();
+  if (currentUsage >= DEFAULT_CONFIG.API_CALL_LIMIT) {
+    logMessage(`ERROR: API limit reached (${currentUsage}/${DEFAULT_CONFIG.API_CALL_LIMIT})`);
+    finishProcessing();
+    SpreadsheetApp.getUi().alert('API Limit Reached',
+      `Processing stopped. Used ${currentUsage} of ${DEFAULT_CONFIG.API_CALL_LIMIT} API calls.`,
+      SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const inputSheet = ss.getSheetByName(sheets.INPUT);
-  
+
   if (!inputSheet) {
     logMessage('ERROR: Input sheet not found');
     return;
@@ -285,7 +324,7 @@ function processNextBatch() {
 
   const progress = getProcessingProgress();
   const totalRows = inputSheet.getLastRow();
-  
+
   if (progress.lastProcessedRow >= totalRows) {
     finishProcessing();
     return;
@@ -843,21 +882,37 @@ function logMessage(message) {
   Logger.log(message);
 }
 
+function getApiCallCount() {
+  const props = PropertiesService.getScriptProperties();
+  return parseInt(props.getProperty('apiCallCount') || '0');
+}
+
 function incrementApiCallCount(count) {
   const props = PropertiesService.getScriptProperties();
-  const current = parseInt(props.getProperty('apiCallCount') || '0');
+  const current = getApiCallCount();
   props.setProperty('apiCallCount', (current + count).toString());
 }
 
 function showApiUsage() {
-  const count = PropertiesService.getScriptProperties().getProperty('apiCallCount') || '0';
-  const response = SpreadsheetApp.getUi().alert('API Usage',
-    `Total API calls: ${count}\n\nReset counter?`,
-    SpreadsheetApp.getUi().ButtonSet.YES_NO);
+  const ui = SpreadsheetApp.getUi();
+  const count = getApiCallCount();
+  const limit = DEFAULT_CONFIG.API_CALL_LIMIT;
+  const remaining = limit - count;
+  const percentUsed = Math.round((count / limit) * 100);
 
-  if (response === SpreadsheetApp.getUi().Button.YES) {
+  let statusEmoji = '✅';
+  if (count >= limit) statusEmoji = '🛑';
+  else if (count >= DEFAULT_CONFIG.API_WARNING_THRESHOLD) statusEmoji = '⚠️';
+
+  const response = ui.alert('API Usage Status',
+    `${statusEmoji} API Calls Used: ${count} / ${limit} (${percentUsed}%)\n` +
+    `Remaining: ${remaining} calls\n\n` +
+    'Reset counter?',
+    ui.ButtonSet.YES_NO);
+
+  if (response === ui.Button.YES) {
     PropertiesService.getScriptProperties().setProperty('apiCallCount', '0');
-    SpreadsheetApp.getUi().alert('Counter reset to 0');
+    ui.alert('Counter Reset', 'API call counter reset to 0', ui.ButtonSet.OK);
   }
 }
 

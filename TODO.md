@@ -1,253 +1,305 @@
 # JGDC Master TODO List
 
-## 🔴 CRITICAL (Blocking Current Work)
+## 🔴 IMMEDIATE PRIORITIES (Current Session)
 
-### Data Quality
-- [ ] **Fix capitalization at ALL stages of pipeline**
-  - [x] Python script (nppes_filter_pcps.py) - DONE
-  - [x] Google Sheets toolbox (ToolboxSuite.js) - DONE
-  - [ ] Apply to existing Working List data (run fix on all sheets)
-  - [ ] Apply to existing Provider Search data
-  - [ ] Document when/where to run fixes
+### 1. Install Python Dependencies (BLOCKING)
+```bash
+pip install pandas
+```
+- **Why:** Required for NPPES filtering script to run
+- **Status:** Not installed on current machine
 
-- [ ] **Validate specialist contamination in existing data**
-  - [x] Identify contaminated taxonomy codes (ER, hospitalists, students) - DONE
-  - [ ] Audit existing Working Lists for specialists
-  - [ ] Remove contaminated entries from active lists
-  - [ ] Re-filter TX, TN, OR, OK with v3.0 script
+### 2. Run OBGYN Filtering (TX, WA, CO, PA)
+- **Goal:** Generate ~400 TX + ~80 each WA/CO/PA providers for verification
+- **Steps:**
+  1. Verify pandas is installed
+  2. Set `DRY_RUN = False` in `nppes_filter_pcps.py`
+  3. Run: `python nppes_filter_pcps.py`
+  4. Import filtered CSVs to Google Sheets (manual)
+  5. Run verification (watch API limit: 3000 max)
+- **Expected API usage:** ~465 calls (well under 3000 limit)
 
-- [ ] **Implement "Not Interested" workflow enforcement**
-  - [ ] Design dropdown options (General / Wrong Specialty / Closed-Moved)
-  - [ ] Auto-fill notes based on selection
-  - [ ] Decide: Soft validation vs. hard enforcement vs. protected columns
-  - [ ] Update onEdit trigger to handle new workflow
+### 3. Test EOY Automation on OBGYN Working List
+- **Status:** Code complete, needs real-world testing
+- **Menu location:** Misc. Tools → End-of-Year Workflow
+- **Steps to test:**
+  1. Open OBGYN Working List 2025
+  2. Run "Step 1: Audit Working List"
+  3. Review flagged issues in hidden "Debug/Issues" column
+  4. Fix issues manually or run individual validation steps
+- **Edge cases to watch:**
+  - Messy copy-paste in New Orders sheet
+  - "Not interested" variations in Notes column
+  - Duplicate detection accuracy
 
-## 🟠 HIGH PRIORITY (Next 2 Weeks)
+### 4. Update OBGYN Sheet Script Connection
+- **Current:** OBGYN uses standalone `onEdit()` function
+- **Goal:** Connect to ToolboxSuite.js for EOY automation
+- **Steps:**
+  1. Get OBGYN sheet Script ID
+  2. `cd scripts/obgyn-list` (create folder)
+  3. `clasp clone <OBGYN_SCRIPT_ID>`
+  4. Replace old code with ToolboxSuite.js functions
+  5. Test onEdit coloring still works
 
-### Validation & Debugging Tools
+---
 
-- [ ] **Build validation script for Working Lists**
-  - [ ] Check: Yellow rows not in New Orders sheet
-  - [ ] Check: "Not interested" missing notes or 0 in QTY
-  - [ ] Check: Potential duplicates (same phone/address)
-  - [ ] Check: QTY mismatches vs New Orders
-  - [ ] Check: Missing required data (phone, address)
-  - [ ] Output: Hidden "⚠️" column with issue flags (quiet, non-intrusive)
-  - [ ] Add "Clear all warnings" function
+## 🟠 HIGH PRIORITY (Next Week)
 
-- [ ] **Duplicate detection & resolution**
-  - [ ] Find duplicates by phone number
-  - [ ] Find duplicates by address
-  - [ ] Find duplicates by office name
-  - [ ] Create duplicate review UI (sidebar?)
-  - [ ] Auto-merge clear duplicates
-  - [ ] Flag ambiguous duplicates for manual review
-  - [ ] Check if duplicate orders shipped (cross-reference New Orders)
+### Data Quality & Validation
 
-### Automation Gaps
+- [ ] **Test all 6 EOY automation steps individually**
+  - [x] Step 1: Audit Working List ✅ (code complete)
+  - [x] Step 2: Validate Yellow → New Orders ✅ (code complete)
+  - [x] Step 3: Enforce Not Interested Rules ✅ (code complete)
+  - [x] Step 4: Detect Duplicates ✅ (code complete)
+  - [x] Step 5: Review Status Issues ✅ (code complete)
+  - [ ] Test with real OBGYN data
+  - [ ] Identify and document edge cases
 
-- [ ] **Automate CSV import workflow**
-  - [ ] Design UI for batch size selection
-  - [ ] Preview # of providers per state before import
-  - [ ] Auto-create properly named sheets
-  - [ ] Set up column mapping/validation
-  - [ ] Handle import errors gracefully
+- [ ] **Handle EOY transitions (Steps 6-7 - NOT YET AUTOMATED)**
+  - Manual steps still required:
+    1. Add "202X QTY" column
+    2. Duplicate sheets, rename old ones with "OLD" prefix
+    3. Clear New Orders sheet
+    4. Clear colors/statuses (preserve email Notes)
+    5. Update STATS tab formulas
+    6. Update linked dashboard IMPORTRANGE
+  - Automation complexity: High (formatting, formula updates)
+  - Priority: Medium (once per year)
 
-- [ ] **Annual re-verification scheduler**
-  - [ ] Design: When to re-verify (yearly? per call cycle?)
-  - [ ] Mark providers as "needs re-verification" after X months
-  - [ ] Batch re-verification process
-  - [ ] Update verification dates
+### API Usage Management
 
-## 🟡 MEDIUM PRIORITY (Within Month)
+- [x] **Centralized API tracking** ✅ COMPLETE
+  - [x] Hard limit at 3000 calls
+  - [x] Warning at 2800 calls
+  - [x] Pre-flight check before verification
+  - [x] In-flight check during batch processing
+  - [x] Enhanced usage display with percentages
 
-### Code Quality & Maintainability
+- [ ] **API usage reset procedure**
+  - Document when/how to reset counter
+  - Track actual billing cycle dates
+  - Add monthly usage log
 
-- [ ] **Set up version control properly**
-  - [ ] Initialize git repo (`git init`)
-  - [ ] Create `.gitignore` (exclude CSVs, API keys)
-  - [ ] Set up clasp for Google Apps Script sync
-  - [ ] Document clasp workflow for team
-  - [ ] Create branches for testing changes
+### Documentation
 
-- [ ] **Improve error handling**
-  - [ ] Add try-catch blocks to all API calls
-  - [ ] Better error messages for users
-  - [ ] Log errors to separate sheet for debugging
-  - [ ] Graceful degradation when APIs fail
+- [ ] **Create OBGYN-specific docs**
+  - How to run OBGYN filtering (different from PCP)
+  - Expected taxonomy codes for OBGYN
+  - State-specific considerations
 
-- [ ] **Code documentation**
-  - [ ] Add JSDoc comments to all functions
-  - [ ] Create inline examples for complex functions
-  - [ ] Document all CONFIG options
-  - [ ] Create troubleshooting guide
+- [ ] **Update EOY workflow guide**
+  - Document each automation step
+  - Screenshot expected outputs
+  - Troubleshooting common errors
+
+---
+
+## 🟡 MEDIUM PRIORITY (This Month)
+
+### Code Quality
+
+- [ ] **Test capitalization fixes across both sheets**
+  - Verify Mc/Mac names work
+  - Test credential standardization (MD, DO, etc.)
+  - Check apostrophe handling (O'Donnell)
+  - Confirm mixed case suffixes (Jr, Sr)
+
+- [ ] **Add error handling to EOY automation**
+  - Graceful failures if columns missing
+  - Better error messages for users
+  - Rollback option if automation fails mid-process
+
+- [ ] **Consolidation function improvements**
+  - The current consolidation logic is complex
+  - Add dry-run preview mode
+  - Better conflict resolution UI
+  - Test with multiple data sources
 
 ### User Experience
 
-- [ ] **Implement Filter Views safely**
-  - [ ] Research: Can filter views break active routes?
-  - [ ] Create saved filter views for common tasks:
-    - Uncalled providers
-    - Successful orders
-    - Needs follow-up
-  - [ ] Document how to use without breaking workflow
-  - [ ] Train coworkers on filter views
+- [ ] **Improve duplicate detection accuracy**
+  - Fuzzy matching for office names (optional)
+  - Address normalization (Suite vs Ste)
+  - Phone number format variations
+  - Consider name similarity scoring
 
-- [ ] **Improve consolidation workflow**
-  - [ ] Add pre-consolidation validation checklist
-  - [ ] Automate year-transition steps:
-    - Add new QTY column
-    - Duplicate & rename sheets with "OLD" prefix
-    - Clear New Orders
-    - Clear colors/statuses (preserve emails in Notes)
-    - Update STATS tab formulas
-    - Update dashboard IMPORTRANGE links
-  - [ ] Create "Year-End Wizard" UI
-  - [ ] Dry-run mode for consolidation
+- [ ] **Better status-based review workflow**
+  - Create actionable checklists for each status type
+  - Add quick-action buttons (move to invalid list, etc.)
+  - Track review progress
 
-## 🟢 LOW PRIORITY (Nice to Have)
+---
+
+## 🟢 LOW PRIORITY (Future Enhancements)
+
+### Automation Gaps
+
+- [ ] **CSV import automation**
+  - Auto-create properly named sheets
+  - Map columns automatically
+  - Validate data on import
+
+- [ ] **Annual re-verification scheduler**
+  - Mark providers needing re-verification
+  - Batch re-verification process
+  - Update verification dates
 
 ### Features
 
 - [ ] **Enhanced search functionality**
-  - [ ] Search by provider name across all sheets
-  - [ ] Search by phone number
-  - [ ] Search by city/zip code
-  - [ ] "Find me in list" function for providers
+  - Search across all sheets
+  - Find provider by phone/name/city
+  - "Where is this provider?" tool
 
 - [ ] **Reporting & Analytics**
-  - [ ] Success rate by state
-  - [ ] Success rate by provider type
-  - [ ] Call efficiency metrics (calls per order)
-  - [ ] Year-over-year comparison
-  - [ ] Export reports for board meetings
-
-- [ ] **Coworker guardrails**
-  - [ ] Protected ranges for critical columns (QTY, Notes when "not interested")
-  - [ ] Data validation rules for dropdown fields
-  - [ ] Automated reminders (e.g., "Don't forget to add 0 to QTY!")
-  - [ ] Undo protection (warning before deleting data)
-
-### Data Management
-
-- [ ] **Better organization handling**
-  - [ ] Improve clinic vs. individual detection
-  - [ ] Flag when clinic + individual both exist at same address
-  - [ ] Smart merge suggestions
-  - [ ] Track which NPIs are clinics vs. individuals
-
-- [ ] **Name pattern filtering optimization**
-  - [ ] Enable toggleable name filtering in Python script
-  - [ ] Build pattern library from actual data
-  - [ ] Create "review excluded" UI
-  - [ ] Allow re-adding false positives
-
-## 📋 MAINTENANCE & OPERATIONS
-
-### Regular Tasks
-
-- [ ] **Monthly:**
-  - [ ] Audit specialist contamination in new imports
-  - [ ] Check for duplicate entries
-  - [ ] Validate STATS tab accuracy
-  - [ ] Review API usage/costs
-
-- [ ] **Quarterly:**
-  - [ ] Update NPPES data (new download from CMS)
-  - [ ] Re-verify closed/inactive providers
-  - [ ] Clean up Invalid/Inactive List
-
-- [ ] **Annually:**
-  - [ ] Year-end consolidation
-  - [ ] Archive old year sheets
-  - [ ] Update all year references in code
-  - [ ] Review and optimize workflow
+  - Success rate by state
+  - Call efficiency metrics
+  - Year-over-year comparison
+  - Export board reports
 
 ### Technical Debt
 
-- [ ] **Fix jank STATS tab trigger**
-  - Current: Updates random cell to force recalc
-  - Better: Proper refresh mechanism
-  - Best: Real-time formula updates
-
-- [ ] **Standardize sheet naming**
-  - Document naming conventions
-  - Rename inconsistent sheets
-  - Update all hardcoded sheet references in code
+- [ ] **Standardize sheet naming conventions**
+  - Document naming rules
+  - Update hardcoded references
+  - Create config file for sheet names
 
 - [ ] **Optimize performance**
   - Batch API calls more efficiently
   - Reduce sheet read/write operations
   - Cache frequently accessed data
-  - Profile slow operations
+
+---
+
+## ✅ RECENTLY COMPLETED (This Session)
+
+- [x] Updated Python config for OBGYN filtering (TX, WA, CO, PA)
+- [x] Changed OUTPUT_PREFIX to 'FILTERED_obgyns'
+- [x] Added centralized API usage tracker (3000 limit)
+- [x] Added pre-flight safety check before verification starts
+- [x] Added in-flight safety check during batch processing
+- [x] Enhanced showApiUsage() with limit status and percentages
+- [x] Built complete EOY automation suite (6 validation steps)
+  - Yellow → New Orders validation
+  - Not Interested rule enforcement
+  - Duplicate detection (flag only, no auto-merge)
+  - Status-based review (Red/Fuschia/Green/Empty)
+  - Hidden Debug/Issues column creation
+- [x] Added EOY workflow menu to Misc. Tools
+- [x] Pushed all changes to Google Sheets via clasp
+- [x] Verified OBGYN taxonomy codes in filter script
+
+---
+
+## 📋 MAINTENANCE TASKS
+
+### Regular (Monthly)
+- [ ] Check for specialist contamination in new imports
+- [ ] Review API usage trends
+- [ ] Validate STATS tab accuracy
+
+### Quarterly
+- [ ] Update NPPES data (download from CMS)
+- [ ] Re-verify closed/inactive providers
+- [ ] Clean up Invalid/Inactive List
+
+### Annually
+- [ ] Run full EOY workflow
+- [ ] Archive old year sheets
+- [ ] Update year references in code
+- [ ] Review and optimize entire workflow
+
+---
 
 ## 🔬 RESEARCH & EXPLORATION
 
-- [ ] **Explore Google Sheets API limits**
-  - How many API calls can we make?
-  - Rate limiting strategies
-  - Alternative APIs if we hit limits
-
-- [ ] **Investigate automated calling integrations**
-  - Can we integrate with a dialer?
-  - Auto-populate call results?
-  - Voice recording transcription?
+- [ ] **Explore OBGYN-specific filtering needs**
+  - Are there OBGYN specialists we should exclude? (e.g., maternal-fetal medicine)
+  - Should we include OB/GYN nurse practitioners?
+  - Geographic concentration differences vs PCP
 
 - [ ] **Better duplicate detection algorithms**
-  - Fuzzy matching for office names
-  - Address normalization (Suite 100 vs. Ste 100)
-  - Phone number formatting variations
+  - Levenshtein distance for name matching
+  - Address parsing libraries
+  - Phone number similarity scoring
 
-- [ ] **Machine learning for verification**
-  - Can we predict "not interested" based on patterns?
-  - Auto-flag likely closed practices?
-  - Recommend similar providers when one is invalid?
-
-## 📝 DOCUMENTATION NEEDED
-
-- [ ] **User guides**
-  - [ ] How to run yearly consolidation
-  - [ ] How to add new states
-  - [ ] How to handle duplicates
-  - [ ] How to use filter views safely
-  - [ ] Troubleshooting common errors
-
-- [ ] **Developer guides**
-  - [ ] How to modify NPPES filter script
-  - [ ] How to add new validation checks
-  - [ ] How to update API integrations
-  - [ ] Testing checklist before deploying changes
-
-- [ ] **Process documentation**
-  - [ ] Full workflow diagram
-  - [ ] Decision trees for edge cases
-  - [ ] Data dictionary (what each column means)
-  - [ ] When to escalate issues
+- [ ] **EOY automation phase 2**
+  - Sheet duplication with OLD prefix
+  - Formula updates in STATS tab
+  - IMPORTRANGE link updates
+  - Complexity: Very High
 
 ---
 
-## Recently Completed ✅
+## 📝 NOTES & DECISIONS
 
-- [x] Spot-check TX, TN, OR, OK providers for capitalization issues
-- [x] Analyze specialist contamination in filtered data
-- [x] Design tighter NPPES taxonomy filter
-- [x] Implement updated NPPES filter script (v3.0) with:
-  - Tightened taxonomy codes (4 only)
-  - Organization handling (independent clinics)
-  - Capitalization fixes (6 types)
-  - Dry-run preview mode
-  - Excluded providers audit trail
-- [x] Add capitalization fix to ToolboxSuite.js
-- [x] Create README.md documenting project structure
-- [x] Create master TODO.md (this file)
+### Python Setup
+- **Pandas required:** Script will fail without pandas installed
+- **Installation:** `pip install pandas` (or `pip3` on some systems)
+- **Testing:** Always run with `DRY_RUN = True` first
+
+### API Limits
+- **Free tier:** 3000 Places API calls per month
+- **Current buffer:** 200-call safety margin (warning at 2800)
+- **Actual usage:** Counter persists in ScriptProperties across sessions
+- **Reset:** Manual via "API Usage" menu item
+
+### EOY Workflow Philosophy
+- **Flag, don't fix:** Most issues are flagged for manual review
+- **Exception:** "Not interested" rules are auto-fixed (low risk)
+- **Hidden column:** Debug/Issues column is auto-hidden to avoid clutter
+- **Dry-run first:** All functions support dry-run mode for safety
+
+### OBGYN vs PCP Differences
+- **Taxonomy codes:** OBGYN uses 207V* codes
+- **Provider density:** OBGYNs are less common than PCPs
+- **Filtering ratio:** May need different input:output ratio
+- **Organization handling:** Same rules apply (independent clinics only)
 
 ---
 
-## Notes & Ideas
+## 🎯 SUCCESS METRICS
 
-- Consider building a dashboard sheet that shows progress across all states
-- Explore using Google Forms for manual verification instead of sidebar?
-- Could we use Zapier/Make.com to automate some steps?
-- Build a "health check" function that runs all validations at once
-- Create video tutorials for new volunteers
-- Set up automated backups of sheets before major changes
+### This Campaign (OBGYN 2025)
+- [ ] 200 verified OBGYNs in TX
+- [ ] 40 verified OBGYNs each in WA, CO, PA
+- [ ] Total API calls < 3000
+- [ ] Zero duplicate orders shipped
+- [ ] Clean EOY transition with no data loss
+
+### Long-term
+- Reduce manual EOY work by 80%
+- Zero formatting errors in consolidated data
+- < 5% duplicate rate across all sheets
+- 100% of yellow rows accounted for in New Orders
+
+---
+
+## 🚨 KNOWN ISSUES & RISKS
+
+### High Risk
+- **Pandas not installed:** BLOCKING Python script execution
+- **Messy copy-pastes in New Orders:** Yellow validation may find many issues
+- **OBGYN sheet not connected to ToolboxSuite:** EOY automation won't work until connected
+
+### Medium Risk
+- **Edge cases in "not interested" logic:** Need to test variations in Notes column
+- **Duplicate detection false positives:** Phone number formatting variations
+- **Status-based review complexity:** Many edge cases to handle
+
+### Low Risk
+- **API limit exceeded:** Unlikely with current safeguards (3000 limit, 465 expected usage)
+- **Filter views breaking routes:** User mentioned but using filter views personally
+
+---
+
+## 💡 IDEAS FOR FUTURE
+
+- Video tutorials for volunteers
+- Automated backups before major changes
+- Dashboard showing campaign progress
+- Integration with dialer software
+- Machine learning for predicting "not interested"
+- Zapier/Make.com automation for some steps

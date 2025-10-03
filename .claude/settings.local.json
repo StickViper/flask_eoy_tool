@@ -11,7 +11,10 @@
       "Bash(tree:*)",
       "Bash(grep:*)",
       "Bash(mv:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(clasp status:*)",
+      "Bash(clasp push:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

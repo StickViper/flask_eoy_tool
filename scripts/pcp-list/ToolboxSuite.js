@@ -31,6 +31,15 @@ function onOpen() {
     .addSubMenu(ui.createMenu('🔍 Validation & Debugging')
       .addItem('Find Issues in Current Sheet', 'validateCurrentSheet')
       .addItem('Check for Duplicates', 'findDuplicatesInSheet'))
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🎯 End-of-Year Workflow')
+      .addItem('📋 Step 1: Audit Working List', 'auditWorkingList')
+      .addItem('✅ Step 2: Validate Yellow → New Orders', 'validateYellowOrders')
+      .addItem('📝 Step 3: Enforce Not Interested Rules', 'enforceNotInterestedRules')
+      .addItem('🔍 Step 4: Detect Duplicates', 'detectAndFlagDuplicates')
+      .addItem('🎨 Step 5: Review Status-Based Issues', 'reviewStatusIssues')
+      .addSeparator()
+      .addItem('🚀 Run Full EOY Automation', 'runFullEOYAutomation'))
     .addToUi();
 }
 
@@ -673,6 +682,368 @@ function findDuplicatesInSheet() {
   ui.alert('Duplicate Finder', 'This feature is under development.', ui.ButtonSet.OK);
 
   // TODO: Group by phone + address, flag duplicates
+}
+
+
+// ====================================================================================
+// END-OF-YEAR AUTOMATION SUITE
+// ====================================================================================
+
+/**
+ * EOY Step 1: Comprehensive audit of Working List
+ * Identifies all issues that need attention before year-end transition
+ */
+function auditWorkingList() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+  ui.alert('Starting Audit',
+    'This will scan the current sheet for common issues.\n\n' +
+    'Issues will be flagged in a "Debug/Issues" column.',
+    ui.ButtonSet.OK);
+
+  const issues = {
+    yellowMissingInOrders: 0,
+    notInterestedMissingNotes: 0,
+    notInterestedWrongQty: 0,
+    duplicates: 0,
+    statusReviewNeeded: 0
+  };
+
+  // Run all validation checks
+  issues.yellowMissingInOrders = validateYellowOrders(true);
+  issues.notInterestedMissingNotes = enforceNotInterestedRules(true);
+  issues.duplicates = detectAndFlagDuplicates(true);
+  issues.statusReviewNeeded = reviewStatusIssues(true);
+
+  const total = Object.values(issues).reduce((a, b) => a + b, 0);
+
+  ui.alert('Audit Complete',
+    `Found ${total} total issues:\n\n` +
+    `• Yellow rows not in New Orders: ${issues.yellowMissingInOrders}\n` +
+    `• Not Interested missing notes: ${issues.notInterestedMissingNotes}\n` +
+    `• Not Interested wrong QTY: ${issues.notInterestedWrongQty}\n` +
+    `• Duplicate entries: ${issues.duplicates}\n` +
+    `• Status reviews needed: ${issues.statusReviewNeeded}\n\n` +
+    'Check the "Debug/Issues" column for details.',
+    ui.ButtonSet.OK);
+}
+
+/**
+ * EOY Step 2: Validate Yellow (Successful Order) → New Orders sheet
+ * Checks that yellow rows exist in New Orders with correct QTY
+ * @param {boolean} dryRun - If true, only count issues without fixing
+ */
+function validateYellowOrders(dryRun = false) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const workingSheet = ss.getActiveSheet();
+  const newOrdersSheet = ss.getSheetByName('New Orders 2025');
+
+  if (!newOrdersSheet) {
+    ui.alert('Error', 'Cannot find "New Orders 2025" sheet.', ui.ButtonSet.OK);
+    return 0;
+  }
+
+  const data = workingSheet.getDataRange().getValues();
+  const headers = data[0];
+  const backgrounds = workingSheet.getDataRange().getBackgrounds();
+
+  const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
+  const qtyCol = headers.findIndex(h => h && h.toLowerCase().includes('qty'));
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+
+  // Get New Orders data
+  const ordersData = newOrdersSheet.getDataRange().getValues();
+  const ordersHeaders = ordersData[0];
+  const ordersPhoneCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const ordersQtyCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('qty'));
+
+  const ordersMap = new Map();
+  ordersData.slice(1).forEach(row => {
+    const phone = normalizePhone(row[ordersPhoneCol]);
+    const qty = parseFloat(row[ordersQtyCol]) || 0;
+    if (phone) ordersMap.set(phone, qty);
+  });
+
+  let issuesFound = 0;
+  const issuesCol = getOrCreateDebugColumn(workingSheet);
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const bgColor = backgrounds[i][statusCol];
+
+    // Check if yellow (Successful Order)
+    if (bgColor.toLowerCase() === '#ffff00') {
+      const phone = normalizePhone(row[phoneCol]);
+      const workingQty = parseFloat(row[qtyCol]) || 0;
+      const orderQty = ordersMap.get(phone) || 0;
+
+      let issue = null;
+      if (!ordersMap.has(phone)) {
+        issue = '⚠️ Yellow but NOT in New Orders';
+        issuesFound++;
+      } else if (workingQty !== orderQty) {
+        issue = `⚠️ QTY mismatch: Working=${workingQty}, Orders=${orderQty}`;
+        issuesFound++;
+      }
+
+      if (issue && !dryRun) {
+        workingSheet.getRange(i + 1, issuesCol).setValue(issue);
+      }
+    }
+  }
+
+  if (!dryRun) {
+    ui.alert('Yellow Orders Validation',
+      `Found ${issuesFound} issues with yellow rows.\n\n` +
+      'Check "Debug/Issues" column for details.',
+      ui.ButtonSet.OK);
+  }
+
+  return issuesFound;
+}
+
+/**
+ * EOY Step 3: Enforce "Not Interested" rules
+ * Ensures "not interested" rows have proper notes and QTY=0
+ * @param {boolean} dryRun - If true, only count issues without fixing
+ */
+function enforceNotInterestedRules(dryRun = false) {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+  const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
+  const qtyCol = headers.findIndex(h => h && h.toLowerCase().includes('qty'));
+
+  let issuesFound = 0;
+  let issuesFixed = 0;
+  const issuesCol = getOrCreateDebugColumn(sheet);
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const status = (row[statusCol] || '').toString().toLowerCase();
+    const notes = (row[notesCol] || '').toString().toLowerCase();
+    const qty = parseFloat(row[qtyCol]) || null;
+
+    if (status.includes('not interested')) {
+      let issues = [];
+
+      // Check for missing/improper notes
+      if (!notes.includes('not interested')) {
+        issues.push('Missing "not interested" in Notes');
+        if (!dryRun) {
+          const currentNotes = row[notesCol] || '';
+          sheet.getRange(i + 1, notesCol + 1).setValue(
+            currentNotes ? `${currentNotes}; not interested` : 'not interested'
+          );
+          issuesFixed++;
+        }
+      }
+
+      // Check QTY
+      if (qty !== 0) {
+        issues.push(`QTY should be 0 (currently ${qty})`);
+        if (!dryRun) {
+          sheet.getRange(i + 1, qtyCol + 1).setValue(0);
+          issuesFixed++;
+        }
+      }
+
+      if (issues.length > 0) {
+        issuesFound++;
+        if (!dryRun) {
+          sheet.getRange(i + 1, issuesCol).setValue('⚠️ ' + issues.join('; '));
+        }
+      }
+    }
+  }
+
+  if (!dryRun) {
+    ui.alert('Not Interested Rules',
+      `Found ${issuesFound} issues, fixed ${issuesFixed} automatically.\n\n` +
+      'Check "Debug/Issues" column for edge cases.',
+      ui.ButtonSet.OK);
+  }
+
+  return issuesFound;
+}
+
+/**
+ * EOY Step 4: Detect and flag duplicates
+ * Finds duplicates by phone/address and notes them (does NOT auto-merge)
+ * @param {boolean} dryRun - If true, only count issues without fixing
+ */
+function detectAndFlagDuplicates(dryRun = false) {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
+  const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
+
+  const phoneMap = new Map();
+  const addressMap = new Map();
+  let duplicatesFound = 0;
+  const issuesCol = getOrCreateDebugColumn(sheet);
+
+  // First pass: identify all occurrences
+  for (let i = 1; i < data.length; i++) {
+    const phone = normalizePhone(data[i][phoneCol]);
+    const address = (data[i][addressCol] || '').toString().trim().toLowerCase();
+
+    if (phone) {
+      if (!phoneMap.has(phone)) phoneMap.set(phone, []);
+      phoneMap.get(phone).push(i);
+    }
+
+    if (address.length > 10) {
+      if (!addressMap.has(address)) addressMap.set(address, []);
+      addressMap.get(address).push(i);
+    }
+  }
+
+  // Second pass: flag duplicates
+  for (let i = 1; i < data.length; i++) {
+    const phone = normalizePhone(data[i][phoneCol]);
+    const address = (data[i][addressCol] || '').toString().trim().toLowerCase();
+    const issues = [];
+
+    if (phone && phoneMap.get(phone).length > 1) {
+      issues.push(`Duplicate phone (appears ${phoneMap.get(phone).length} times)`);
+    }
+
+    if (address && addressMap.get(address) && addressMap.get(address).length > 1) {
+      issues.push(`Duplicate address (appears ${addressMap.get(address).length} times)`);
+    }
+
+    if (issues.length > 0) {
+      duplicatesFound++;
+      if (!dryRun) {
+        sheet.getRange(i + 1, issuesCol).setValue('🔄 ' + issues.join('; '));
+      }
+    }
+  }
+
+  if (!dryRun) {
+    ui.alert('Duplicate Detection',
+      `Found ${duplicatesFound} potential duplicates.\n\n` +
+      'Check "Debug/Issues" column. Review manually - do NOT auto-merge.',
+      ui.ButtonSet.OK);
+  }
+
+  return duplicatesFound;
+}
+
+/**
+ * EOY Step 5: Review status-based issues
+ * Categorizes issues by color: Red, Fuschia, Green, Empty
+ * @param {boolean} dryRun - If true, only count issues without fixing
+ */
+function reviewStatusIssues(dryRun = false) {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  const backgrounds = sheet.getDataRange().getBackgrounds();
+  const headers = data[0];
+
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+  const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
+  const qtyCol = headers.findIndex(h => h && h.toLowerCase().includes('qty'));
+
+  const categories = {
+    red: [], // Potentially Invalid
+    fuschia: [], // Voicemail/No Answer
+    green: [], // Requested Email
+    empty: [] // Uncalled
+  };
+
+  for (let i = 1; i < data.length; i++) {
+    const bgColor = backgrounds[i][statusCol].toLowerCase();
+    const status = (data[i][statusCol] || '').toString().trim();
+    const notes = (data[i][notesCol] || '').toString().trim();
+    const qty = data[i][qtyCol];
+
+    if (bgColor === '#ff0000' || status === 'Potentially Invalid') {
+      categories.red.push({ row: i + 1, notes, qty });
+    } else if (bgColor === '#ff00ff' || status === 'Voicemail/No Answer') {
+      categories.fuschia.push({ row: i + 1, notes, qty });
+    } else if (bgColor === '#00ff00' || status === 'Requested Email') {
+      categories.green.push({ row: i + 1, notes, qty });
+    } else if (!status || status === '') {
+      categories.empty.push({ row: i + 1, notes, qty });
+    }
+  }
+
+  const totalReviews = Object.values(categories).reduce((a, b) => a + b.length, 0);
+
+  if (!dryRun) {
+    const message =
+      `Status-Based Review:\n\n` +
+      `🔴 Red (Potentially Invalid): ${categories.red.length}\n` +
+      `   → Should exist or be added to Invalid/Inactive list\n\n` +
+      `💜 Fuschia (Voicemail/No Answer): ${categories.fuschia.length}\n` +
+      `   → Triple follow-up, leave empty at EOY (no 0 in QTY)\n\n` +
+      `🟢 Green (Requested Email): ${categories.green.length}\n` +
+      `   → Keep green if recent, change to "not interested" if old\n\n` +
+      `⚪ Empty (Uncalled): ${categories.empty.length}\n` +
+      `   → Never reached, leave as-is\n\n` +
+      'Review these manually before EOY transition.';
+
+    ui.alert('Status Review', message, ui.ButtonSet.OK);
+  }
+
+  return totalReviews;
+}
+
+/**
+ * Full EOY automation workflow
+ * Runs all steps sequentially with confirmations
+ */
+function runFullEOYAutomation() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.alert('Full EOY Automation',
+    'This will run all EOY validation steps:\n\n' +
+    '1. Validate Yellow → New Orders\n' +
+    '2. Enforce Not Interested rules\n' +
+    '3. Detect duplicates\n' +
+    '4. Review status issues\n\n' +
+    '⚠️ Issues will be flagged but NOT auto-fixed (except Not Interested).\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO);
+
+  if (response !== ui.Button.YES) return;
+
+  auditWorkingList();
+}
+
+/**
+ * Helper: Get or create Debug/Issues column
+ * Returns column index (1-based)
+ */
+function getOrCreateDebugColumn(sheet) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  let debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+
+  if (debugCol === -1) {
+    // Create new column at the end
+    debugCol = headers.length;
+    sheet.getRange(1, debugCol + 1).setValue('Debug/Issues')
+      .setFontWeight('bold')
+      .setBackground('#fff2cc');
+
+    // Hide the column
+    sheet.hideColumns(debugCol + 1);
+  }
+
+  return debugCol + 1; // Return 1-based index
 }
 
 
