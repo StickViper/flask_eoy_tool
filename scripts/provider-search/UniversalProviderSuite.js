@@ -393,6 +393,12 @@ function processBatch(inputSheet, startRow, endRow, apiKey) {
     const state = row[colMap['State']];
     const phone = row[colMap['Phone Number']];
 
+    // STATE FILTER: Skip rows not matching target state
+    if (config.TARGET_STATE && state && state.toString().trim().toUpperCase() !== config.TARGET_STATE.toUpperCase()) {
+      logMessage(`Skipping row ${actualRow}: State '${state}' does not match target '${config.TARGET_STATE}'`);
+      return;
+    }
+
     if (!officeName || !address) {
       recordError(actualRow, row, colMap, 'Missing required data');
       return;
