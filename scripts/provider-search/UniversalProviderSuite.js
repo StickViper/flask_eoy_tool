@@ -49,8 +49,10 @@ function saveConfig(configData) {
   if (configData.apiKey) {
     props.setProperty('PLACES_API_KEY', configData.apiKey);
   }
-  if (configData.states) {
-    props.setProperty('targetStates', configData.states);  // Save comma-separated string
+  // Accept both 'states' (new wizard) and 'state' (old wizard) for backward compat
+  if (configData.states || configData.state) {
+    const statesValue = configData.states || configData.state;
+    props.setProperty('targetStates', statesValue);  // Save comma-separated string
   }
   if (configData.providerType) {
     props.setProperty('providerType', configData.providerType);
@@ -555,8 +557,17 @@ function recordResult(rowNumber, rowData, colMap, verification) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   if (verification.success) {
-    // Add to verified sheet
-    const verifiedSheet = getOrCreateSheet(sheets.VERIFIED, getVerifiedHeaders());
+    // Determine target sheet based on output mode
+    let targetSheetName;
+    if (config.USE_UNIFIED_OUTPUT) {
+      targetSheetName = sheets.VERIFIED;  // "All_Verified_Providers"
+    } else {
+      // Separate mode: Create state-specific sheet
+      const state = rowData[colMap['State']];
+      targetSheetName = `${config.PROVIDER_TYPE}_${state}_verified`;
+    }
+
+    const verifiedSheet = getOrCreateSheet(targetSheetName, getVerifiedHeaders());
     const newRow = [
       rowData[colMap['Office Name']],
       rowData[colMap['Phone Number']],
@@ -605,8 +616,19 @@ function recordResult(rowNumber, rowData, colMap, verification) {
 function recordError(rowNumber, rowData, colMap, errorMessage) {
   const config = getConfig();
   const sheets = getSheetNames();
-  const errorSheet = getOrCreateSheet(sheets.ERRORS, getErrorHeaders());
-  
+
+  // Determine target sheet based on output mode
+  let targetSheetName;
+  if (config.USE_UNIFIED_OUTPUT) {
+    targetSheetName = sheets.ERRORS;  // "All_Provider_Errors"
+  } else {
+    // Separate mode: Create state-specific error sheet
+    const state = rowData[colMap['State']] || 'UNKNOWN';
+    targetSheetName = `${config.PROVIDER_TYPE}_${state}_errors`;
+  }
+
+  const errorSheet = getOrCreateSheet(targetSheetName, getErrorHeaders());
+
   const newRow = [
     rowData[colMap['Office Name']] || '',
     rowData[colMap['Address']] || '',
@@ -618,7 +640,7 @@ function recordError(rowNumber, rowData, colMap, errorMessage) {
     errorMessage,
     new Date()
   ];
-  
+
   errorSheet.appendRow(newRow);
 }
 

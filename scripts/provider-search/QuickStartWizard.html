@@ -4,138 +4,354 @@
   <base target="_top">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-      padding: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      padding: 0;
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
       min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    
+
     .wizard-container {
-      background: white;
-      border-radius: 12px;
-      padding: 30px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-      max-width: 500px;
-      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      max-width: 600px;
+      width: 100%;
+      border: 1px solid #2a4a6b;
     }
-    
-    h1 { color: #1a73e8; margin-bottom: 10px; font-size: 24px; }
-    .subtitle { color: #5f6368; margin-bottom: 30px; font-size: 14px; }
-    
-    .step-indicators { display: flex; justify-content: space-between; margin-bottom: 30px; }
-    .step { flex: 1; text-align: center; position: relative; }
-    
-    .step:not(:last-child)::after {
-      content: ''; position: absolute; top: 15px; right: -50%;
-      width: 100%; height: 2px; background: #e0e0e0; z-index: 0;
+
+    h1 {
+      color: #1e3a5f;
+      margin-bottom: 8px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
     }
-    
-    .step.active::after { background: #1a73e8; }
-    
+
+    .subtitle {
+      color: #64748b;
+      margin-bottom: 32px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .step-indicators {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      position: relative;
+    }
+
+    .step-indicators::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 60px;
+      right: 60px;
+      height: 2px;
+      background: #e2e8f0;
+      z-index: 0;
+    }
+
+    .step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
     .step-circle {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: #e0e0e0; color: white;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-weight: bold; position: relative; z-index: 1; margin-bottom: 5px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #94a3b8;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 8px;
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
     }
-    
-    .step.active .step-circle { background: #1a73e8; }
-    .step.completed .step-circle { background: #34a853; }
-    .step-label { font-size: 12px; color: #5f6368; }
-    .step.active .step-label { color: #1a73e8; font-weight: 600; }
-    
-    .wizard-content { min-height: 250px; }
-    .form-group { margin-bottom: 20px; }
-    
+
+    .step.active .step-circle {
+      background: #00bcd4;
+      color: white;
+      transform: scale(1.1);
+    }
+
+    .step.completed .step-circle {
+      background: #4caf50;
+      color: white;
+    }
+
+    .step-label {
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .step.active .step-label { color: #00bcd4; }
+    .step.completed .step-label { color: #4caf50; }
+
+    .wizard-content { min-height: 320px; }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
     label {
-      display: block; margin-bottom: 8px;
-      font-weight: 600; color: #202124; font-size: 14px;
+      display: block;
+      margin-bottom: 10px;
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    
+
     input, select, textarea {
-      width: 100%; padding: 10px;
-      border: 1px solid #dadce0; border-radius: 4px;
-      font-size: 14px; transition: all 0.3s;
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 15px;
+      transition: all 0.2s;
+      font-family: inherit;
+      background: #f8fafc;
     }
-    
+
     input:focus, select:focus, textarea:focus {
-      outline: none; border-color: #1a73e8;
-      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+      outline: none;
+      border-color: #00bcd4;
+      background: white;
+      box-shadow: 0 0 0 4px rgba(0, 188, 212, 0.1);
     }
-    
+
+    input.monospace {
+      font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
     .info-box {
-      background: #e8f0fe; border: 1px solid #1a73e8;
-      border-radius: 8px; padding: 15px; margin: 20px 0;
-      font-size: 13px; color: #174ea6;
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 6px;
+      padding: 16px;
+      margin: 20px 0;
+      font-size: 13px;
+      color: #1e40af;
+      line-height: 1.6;
     }
-    
-    .success-box { background: #e6f4ea; border-color: #34a853; color: #0d652d; }
-    .error-box { background: #fce8e6; border-color: #ea4335; color: #b31412; }
-    
+
+    .success-box {
+      background: #f0fdf4;
+      border-left-color: #4caf50;
+      color: #166534;
+    }
+
+    .error-box {
+      background: #fef2f2;
+      border-left-color: #f44336;
+      color: #991b1b;
+    }
+
+    .warning-box {
+      background: #fffbeb;
+      border-left-color: #f59e0b;
+      color: #92400e;
+    }
+
+    .validation-msg {
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      min-height: 20px;
+    }
+
+    .validation-msg.valid { color: #4caf50; }
+    .validation-msg.invalid { color: #f44336; }
+
     .button-group {
-      display: flex; gap: 10px; margin-top: 30px;
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
       justify-content: space-between;
     }
-    
+
     button {
-      padding: 10px 20px; border: none; border-radius: 4px;
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      transition: all 0.3s; min-width: 100px;
-    }
-    
-    .btn-primary { background: #1a73e8; color: white; }
-    .btn-primary:hover { background: #1557b0; }
-    .btn-secondary { background: #f8f9fa; color: #5f6368; border: 1px solid #dadce0; }
-    .btn-secondary:hover { background: #e8eaed; }
-    .btn-success { background: #34a853; color: white; }
-    .btn-success:hover { background: #2d8e47; }
-    
-    .state-grid {
-      display: grid; grid-template-columns: repeat(5, 1fr);
-      gap: 8px; margin-top: 10px; max-height: 200px; overflow-y: auto;
-    }
-    
-    .state-button {
-      padding: 8px; text-align: center;
-      border: 1px solid #dadce0; border-radius: 4px;
-      background: white; cursor: pointer; font-size: 12px;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
       transition: all 0.2s;
+      min-width: 120px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-family: inherit;
     }
-    
-    .state-button:hover { background: #f8f9fa; border-color: #1a73e8; }
-    .state-button.selected { background: #1a73e8; color: white; }
-    
+
+    .btn-primary {
+      background: #00bcd4;
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: #00acc1;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 188, 212, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #475569;
+      border: 2px solid #cbd5e1;
+    }
+
+    .btn-secondary:hover {
+      background: #cbd5e1;
+      border-color: #94a3b8;
+    }
+
+    .btn-success {
+      background: #4caf50;
+      color: white;
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+
+    .btn-success:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .code-pill {
+      display: inline-block;
+      background: #1e3a5f;
+      color: #00ff41;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0 4px;
+      letter-spacing: 1px;
+    }
+
+    .config-summary {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .config-summary p {
+      margin: 8px 0;
+      font-size: 14px;
+      color: #334155;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .config-summary strong {
+      color: #1e293b;
+      font-weight: 700;
+    }
+
+    .help-text {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
     .spinner {
-      border: 3px solid #f3f3f3; border-top: 3px solid #1a73e8;
-      border-radius: 50%; width: 40px; height: 40px;
-      animation: spin 1s linear infinite; margin: 20px auto;
+      border: 4px solid #e2e8f0;
+      border-top: 4px solid #00bcd4;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 0.8s linear infinite;
+      margin: 20px auto;
     }
-    
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 24px;
+      margin-top: 8px;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+      font-size: 14px;
+      color: #475569;
+    }
+
+    .radio-option input[type="radio"] {
+      width: auto;
+      margin-right: 8px;
+      cursor: pointer;
+    }
+
+    .status-icon {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
   <div class="wizard-container">
-    <h1>🚀 Provider Verification Setup</h1>
-    <p class="subtitle">Quick setup wizard</p>
-    
+    <h1>⚙️ Provider Verification Setup</h1>
+    <p class="subtitle">Professional Configuration Wizard</p>
+
     <div class="step-indicators">
       <div class="step active" id="step-1-indicator">
         <div class="step-circle">1</div>
-        <div class="step-label">Configuration</div>
+        <div class="step-label">Config</div>
       </div>
       <div class="step" id="step-2-indicator">
         <div class="step-circle">2</div>
-        <div class="step-label">API Setup</div>
+        <div class="step-label">API Key</div>
       </div>
       <div class="step" id="step-3-indicator">
         <div class="step-circle">3</div>
         <div class="step-label">Ready</div>
       </div>
     </div>
-    
+
     <div class="wizard-content" id="wizard-content">
       <!-- Step 1: Configuration -->
       <div id="step-1" class="step-content">
@@ -147,151 +363,195 @@
             <option value="SPECIALIST">Other Specialists</option>
           </select>
         </div>
-        
+
         <div class="form-group">
-          <label for="state">Target State</label>
-          <input type="text" id="state" placeholder="Enter 2-letter state code (e.g., TX)" 
-                 maxlength="2" style="text-transform: uppercase" 
-                 onkeyup="this.value = this.value.toUpperCase()">
-          <div class="state-grid" id="state-grid"></div>
-        </div>
-        
-        <div class="form-group">
-          <label>Output Mode</label>
-          <div style="display: flex; gap: 20px;">
-            <label style="display: flex; align-items: center; font-weight: normal;">
-              <input type="radio" name="output-mode" value="unified" checked style="width: auto; margin-right: 8px;">
-              Unified (All states together)
-            </label>
-            <label style="display: flex; align-items: center; font-weight: normal;">
-              <input type="radio" name="output-mode" value="separate" style="width: auto; margin-right: 8px;">
-              Separate by state
-            </label>
+          <label for="states">Target State(s)</label>
+          <input type="text" id="states" class="monospace"
+                 placeholder="TX or TX,WA,CO,PA"
+                 oninput="validateAndFormatStates()">
+          <div id="state-validation" class="validation-msg"></div>
+          <div class="help-text">
+            <strong>Single state:</strong> <span class="code-pill">TX</span><br>
+            <strong>Multi-state:</strong> <span class="code-pill">TX,WA,CO,PA</span> (comma-separated)
           </div>
         </div>
-        
+
         <div class="form-group">
-          <label for="max-batches">Max Batches Per Execution</label>
+          <label>Output Mode</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="output-mode" value="unified" checked>
+              Unified (All_Verified_Providers)
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="output-mode" value="separate">
+              Separate by State
+            </label>
+          </div>
+          <div class="help-text">
+            <strong>Unified:</strong> All states → one sheet<br>
+            <strong>Separate:</strong> Each state → own verified/error sheets
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="max-batches">Max Batches Per Run</label>
           <input type="number" id="max-batches" value="0" min="0" max="100">
-          <small style="color: #5f6368; display: block; margin-top: 5px;">
-            0 = Unlimited (process until time limit). Set 1-20 to limit batches per run.
-          </small>
+          <div class="help-text">
+            <strong>0:</strong> Unlimited (process until time limit)<br>
+            <strong>1-20:</strong> Limit batches per execution (better for large datasets)
+          </div>
         </div>
 
         <div id="api-status-box"></div>
       </div>
-      
+
       <!-- Step 2: API Setup -->
       <div id="step-2" class="step-content" style="display: none;">
         <div class="form-group">
           <label for="api-key">Google Places API Key</label>
-          <input type="password" id="api-key" placeholder="Enter your API key">
-          <small style="color: #5f6368; display: block; margin-top: 5px;">
-            Get one from <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a>
-          </small>
+          <input type="password" id="api-key" placeholder="AIzaSy..." class="monospace">
+          <div class="help-text">
+            Get from <a href="https://console.cloud.google.com" target="_blank" style="color: #00bcd4; font-weight: 600;">Google Cloud Console</a> → Enable "Places API (New)" → Create API Key
+          </div>
         </div>
-        
+
         <div class="info-box">
-          <strong>How to get an API key:</strong><br>
-          1. Go to Google Cloud Console<br>
-          2. Create or select a project<br>
+          <strong>📋 Quick Setup:</strong><br>
+          1. Visit Google Cloud Console<br>
+          2. Create/select project<br>
           3. Enable "Places API (New)"<br>
-          4. Create credentials (API Key)<br>
-          5. Copy and paste here
+          4. Create API Key credentials<br>
+          5. Copy & paste above
         </div>
-        
-        <button class="btn-secondary" onclick="testApiKey()" style="width: 100%;">Test API Key</button>
+
+        <button class="btn-secondary" onclick="testApiKey()" style="width: 100%;">🔍 Test API Key</button>
         <div id="api-test-result" style="margin-top: 10px;"></div>
       </div>
-      
+
       <!-- Step 3: Ready -->
       <div id="step-3" class="step-content" style="display: none;">
         <div class="success-box">
-          <h3>✅ Setup Complete!</h3>
-          <p style="margin-top: 10px;">Ready to start verification.</p>
+          <h3 style="margin-bottom: 8px;">✅ Configuration Complete</h3>
+          <p>System is ready for verification.</p>
         </div>
-        
-        <div style="margin: 20px 0;">
-          <h4 style="margin-bottom: 10px;">Summary:</h4>
-          <div style="font-size: 13px;">
-            <p><strong>Provider Type:</strong> <span id="summary-provider"></span></p>
-            <p><strong>Target State:</strong> <span id="summary-state"></span></p>
-            <p><strong>Output Mode:</strong> <span id="summary-mode"></span></p>
-            <p><strong>Input Sheet:</strong> <span id="summary-input"></span></p>
-            <p><strong>Max Batches:</strong> <span id="summary-batches"></span></p>
-          </div>
+
+        <div class="config-summary">
+          <h4 style="margin-bottom: 16px; color: #1e293b; font-size: 16px;">Configuration Summary</h4>
+          <p><strong>Provider Type:</strong> <span id="summary-provider"></span></p>
+          <p><strong>Target States:</strong> <span id="summary-states"></span></p>
+          <p><strong>Output Mode:</strong> <span id="summary-mode"></span></p>
+          <p><strong>Input Sheet:</strong> <span id="summary-input"></span></p>
+          <p><strong>Output Sheets:</strong> <span id="summary-output"></span></p>
+          <p><strong>Max Batches:</strong> <span id="summary-batches"></span></p>
         </div>
-        
+
         <div class="info-box">
-          <strong>What happens next:</strong><br>
-          1. Click "Start Verification"<br>
-          2. System will process providers in batches<br>
-          3. Check verified, review, and error sheets for results
+          <strong>🚀 Next Steps:</strong><br>
+          1. Click "Start Verification" below<br>
+          2. System processes providers in batches<br>
+          3. Results appear in verified/review/error sheets<br>
+          4. Check progress via menu: Provider Suite → Stats Report
         </div>
       </div>
     </div>
-    
+
     <div class="button-group">
-      <button class="btn-secondary" id="btn-back" onclick="previousStep()" style="display: none;">Back</button>
-      <button class="btn-primary" id="btn-next" onclick="nextStep()">Next</button>
-      <button class="btn-success" id="btn-finish" onclick="finishSetup()" style="display: none;">Start Verification</button>
+      <button class="btn-secondary" id="btn-back" onclick="previousStep()" style="display: none;">← Back</button>
+      <button class="btn-primary" id="btn-next" onclick="nextStep()">Next →</button>
+      <button class="btn-success" id="btn-finish" onclick="finishSetup()" style="display: none;">🚀 Start Verification</button>
     </div>
   </div>
-  
+
   <script>
     let currentStep = 1;
     const totalSteps = 3;
     let config = {
       providerType: 'PCP',
-      state: 'TX',
+      states: 'TX',
       outputMode: 'unified',
       maxBatchesPerRun: 0,
       apiKey: ''
     };
     let skipApiSetup = false;
 
-    const states = [
-      'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-      'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-      'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-      'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-      'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
-    ];
-    
     window.onload = function() {
-      populateStateGrid();
+      loadCurrentConfig();
       checkApiKey();
     };
-    
-    function populateStateGrid() {
-      const grid = document.getElementById('state-grid');
-      states.forEach(state => {
-        const btn = document.createElement('div');
-        btn.className = 'state-button';
-        btn.textContent = state;
-        btn.onclick = function() { selectState(state); };
-        grid.appendChild(btn);
-      });
+
+    function loadCurrentConfig() {
+      google.script.run
+        .withSuccessHandler(serverConfig => {
+          if (serverConfig && serverConfig.TARGET_STATES) {
+            // Load existing config
+            document.getElementById('states').value = serverConfig.TARGET_STATES;
+            document.getElementById('provider-type').value = serverConfig.PROVIDER_TYPE || 'PCP';
+            document.getElementById('max-batches').value = serverConfig.MAX_BATCHES_PER_RUN || 0;
+
+            if (serverConfig.USE_UNIFIED_OUTPUT !== undefined) {
+              const mode = serverConfig.USE_UNIFIED_OUTPUT ? 'unified' : 'separate';
+              document.querySelector(`input[name="output-mode"][value="${mode}"]`).checked = true;
+            }
+
+            config.states = serverConfig.TARGET_STATES;
+            config.providerType = serverConfig.PROVIDER_TYPE || 'PCP';
+            config.maxBatchesPerRun = serverConfig.MAX_BATCHES_PER_RUN || 0;
+            config.outputMode = serverConfig.USE_UNIFIED_OUTPUT ? 'unified' : 'separate';
+
+            validateAndFormatStates();
+          }
+        })
+        .withFailureHandler(err => {
+          console.log('Could not load config:', err);
+          // Continue with defaults
+        })
+        .getConfig();
     }
-    
-    function selectState(state) {
-      document.getElementById('state').value = state;
-      config.state = state;
-      document.querySelectorAll('.state-button').forEach(btn => {
-        btn.classList.toggle('selected', btn.textContent === state);
-      });
-    }
-    
+
     function checkApiKey() {
       google.script.run.withSuccessHandler(hasKey => {
         skipApiSetup = hasKey;
         const box = document.getElementById('api-status-box');
         if (hasKey) {
-          box.innerHTML = '<div class="success-box">✅ API Key Found! Will skip API setup.</div>';
+          box.innerHTML = '<div class="success-box"><span class="status-icon">✓</span><strong>API Key Configured</strong> - Will skip API setup step</div>';
+        } else {
+          box.innerHTML = '<div class="warning-box"><span class="status-icon">⚠</span><strong>No API Key Found</strong> - You\'ll need to set one up</div>';
         }
       }).checkApiKeyExists();
     }
-    
+
+    function validateAndFormatStates() {
+      const input = document.getElementById('states');
+      const validationDiv = document.getElementById('state-validation');
+      const value = input.value.toUpperCase().trim();
+
+      if (!value) {
+        validationDiv.className = 'validation-msg invalid';
+        validationDiv.textContent = '✗ State(s) required';
+        return false;
+      }
+
+      // Split and validate
+      const states = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const invalid = states.filter(s => s.length !== 2);
+
+      if (invalid.length > 0) {
+        validationDiv.className = 'validation-msg invalid';
+        validationDiv.textContent = `✗ Invalid: ${invalid.join(', ')} (must be 2 letters)`;
+        return false;
+      }
+
+      // Valid
+      const formatted = states.join(',');
+      input.value = formatted;
+      config.states = formatted;
+
+      validationDiv.className = 'validation-msg valid';
+      validationDiv.textContent = `✓ ${states.length} state${states.length > 1 ? 's' : ''} selected: ${formatted}`;
+      return true;
+    }
+
     function updateStepIndicators() {
       for (let i = 1; i <= totalSteps; i++) {
         const indicator = document.getElementById(`step-${i}-indicator`);
@@ -300,34 +560,32 @@
         else if (i === currentStep) indicator.classList.add('active');
       }
     }
-    
+
     function showStep(step) {
       for (let i = 1; i <= totalSteps; i++) {
         const content = document.getElementById(`step-${i}`);
         if (content) content.style.display = i === step ? 'block' : 'none';
       }
-      
+
       document.getElementById('btn-back').style.display = step > 1 ? 'block' : 'none';
       document.getElementById('btn-next').style.display = step < totalSteps ? 'block' : 'none';
       document.getElementById('btn-finish').style.display = step === totalSteps ? 'block' : 'none';
-      
+
       updateStepIndicators();
     }
-    
+
     function validateCurrentStep() {
       if (currentStep === 1) {
         config.providerType = document.getElementById('provider-type').value;
-        config.state = document.getElementById('state').value;
         config.outputMode = document.querySelector('input[name="output-mode"]:checked').value;
         config.maxBatchesPerRun = parseInt(document.getElementById('max-batches').value) || 0;
-        
-        if (!config.state || config.state.length !== 2) {
-          alert('Please enter a valid 2-letter state code');
+
+        if (!validateAndFormatStates()) {
           return false;
         }
         return true;
       }
-      
+
       if (currentStep === 2) {
         config.apiKey = document.getElementById('api-key').value;
         if (!config.apiKey) {
@@ -336,13 +594,13 @@
         }
         return true;
       }
-      
+
       return true;
     }
-    
+
     function nextStep() {
       if (!validateCurrentStep()) return;
-      
+
       if (currentStep < totalSteps) {
         if (currentStep === 1 && skipApiSetup) {
           currentStep = 3;
@@ -353,7 +611,7 @@
         showStep(currentStep);
       }
     }
-    
+
     function previousStep() {
       if (currentStep > 1) {
         if (currentStep === 3 && skipApiSetup) {
@@ -364,20 +622,20 @@
         showStep(currentStep);
       }
     }
-    
+
     function testApiKey() {
       const apiKey = document.getElementById('api-key').value;
       const resultDiv = document.getElementById('api-test-result');
-      
+
       if (!apiKey) {
         resultDiv.className = 'error-box';
-        resultDiv.textContent = 'Please enter an API key';
+        resultDiv.textContent = '❌ Please enter an API key';
         return;
       }
-      
+
       resultDiv.className = 'info-box';
-      resultDiv.innerHTML = '<div class="spinner"></div> Testing...';
-      
+      resultDiv.innerHTML = '<div class="spinner"></div> Testing API key...';
+
       google.script.run
         .withSuccessHandler(result => {
           if (result.valid) {
@@ -394,35 +652,57 @@
         })
         .testApiKeyValid(apiKey);
     }
-    
+
     function updateSummary() {
+      const statesArray = config.states.split(',').map(s => s.trim());
+      const stateLabel = statesArray.length === 1 ? statesArray[0] : 'MultiState';
+
       document.getElementById('summary-provider').textContent = config.providerType;
-      document.getElementById('summary-state').textContent = config.state;
-      document.getElementById('summary-mode').textContent = config.outputMode === 'unified' ? 'Unified' : 'Separate';
-      document.getElementById('summary-input').textContent = `${config.providerType}_${config.state}_import`;
+      document.getElementById('summary-states').innerHTML = statesArray.map(s =>
+        `<span class="code-pill">${s}</span>`
+      ).join(' ');
+      document.getElementById('summary-mode').textContent = config.outputMode === 'unified' ? 'Unified' : 'Separate by State';
+
+      // Input sheet name
+      document.getElementById('summary-input').innerHTML = `<span class="code-pill">${config.providerType}_${stateLabel}_import</span>`;
+
+      // Output sheet names
+      let outputSheets;
+      if (config.outputMode === 'unified') {
+        outputSheets = '<span class="code-pill">All_Verified_Providers</span>, <span class="code-pill">All_Provider_Errors</span>';
+      } else {
+        outputSheets = statesArray.map(s =>
+          `<span class="code-pill">${config.providerType}_${s}_*</span>`
+        ).join(', ');
+      }
+      document.getElementById('summary-output').innerHTML = outputSheets;
+
       document.getElementById('summary-batches').textContent = config.maxBatchesPerRun === 0 ? 'Unlimited' : config.maxBatchesPerRun;
     }
-    
+
     function finishSetup() {
       const btn = document.getElementById('btn-finish');
       btn.disabled = true;
-      btn.textContent = 'Starting...';
-      
+      btn.textContent = 'Saving...';
+
       google.script.run
         .withSuccessHandler(result => {
           if (result.success) {
-            alert('Setup complete! Close this window and start verification from the menu.');
-            google.script.host.close();
+            btn.textContent = '✓ Complete!';
+            setTimeout(() => {
+              alert('Setup complete! Close this window and start verification from the menu:\nProvider Suite → Automated Verification → Start Verification');
+              google.script.host.close();
+            }, 500);
           } else {
             alert('Error: ' + (result.error || 'Unknown error'));
             btn.disabled = false;
-            btn.textContent = 'Start Verification';
+            btn.textContent = '🚀 Start Verification';
           }
         })
         .withFailureHandler(err => {
           alert('Error: ' + err.message);
           btn.disabled = false;
-          btn.textContent = 'Start Verification';
+          btn.textContent = '🚀 Start Verification';
         })
         .saveConfigAndStart(config);
     }
