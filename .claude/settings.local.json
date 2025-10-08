@@ -14,7 +14,8 @@
       "Bash(cp:*)",
       "Bash(clasp status:*)",
       "Bash(clasp push:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

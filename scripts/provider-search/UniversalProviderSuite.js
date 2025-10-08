@@ -9,7 +9,7 @@
 
 const DEFAULT_CONFIG = {
   PROVIDER_TYPE: 'PCP',
-  TARGET_STATE: 'TX',
+  TARGET_STATES: 'TX',  // Comma-separated: 'TX' or 'TX,WA,CO,PA' or empty for all
   USE_UNIFIED_OUTPUT: true,
   MAX_BATCHES_PER_RUN: 0,
   BATCH_SIZE: 25,
@@ -25,10 +25,12 @@ const DEFAULT_CONFIG = {
 
 function getConfig() {
   const props = PropertiesService.getScriptProperties();
-  
+  const targetStatesStr = props.getProperty('targetStates') || DEFAULT_CONFIG.TARGET_STATES;
+
   return {
     PROVIDER_TYPE: props.getProperty('providerType') || DEFAULT_CONFIG.PROVIDER_TYPE,
-    TARGET_STATE: props.getProperty('targetState') || DEFAULT_CONFIG.TARGET_STATE,
+    TARGET_STATES: targetStatesStr,  // Keep as string for storage
+    TARGET_STATES_ARRAY: targetStatesStr ? targetStatesStr.split(',').map(s => s.trim().toUpperCase()) : [],  // Parsed array
     USE_UNIFIED_OUTPUT: (props.getProperty('outputMode') || 'unified') === 'unified',
     MAX_BATCHES_PER_RUN: parseInt(props.getProperty('maxBatchesPerRun') || '0'),
     BATCH_SIZE: DEFAULT_CONFIG.BATCH_SIZE,
@@ -43,12 +45,12 @@ function getConfig() {
 
 function saveConfig(configData) {
   const props = PropertiesService.getScriptProperties();
-  
+
   if (configData.apiKey) {
     props.setProperty('PLACES_API_KEY', configData.apiKey);
   }
-  if (configData.state) {
-    props.setProperty('targetState', configData.state);
+  if (configData.states) {
+    props.setProperty('targetStates', configData.states);  // Save comma-separated string
   }
   if (configData.providerType) {
     props.setProperty('providerType', configData.providerType);
@@ -63,7 +65,9 @@ function saveConfig(configData) {
 
 function getSheetNames() {
   const config = getConfig();
-  const prefix = `${config.PROVIDER_TYPE}_${config.TARGET_STATE}`;
+  // For single state: PCP_TX, for multi: PCP_MultiState
+  const stateLabel = config.TARGET_STATES_ARRAY.length === 1 ? config.TARGET_STATES_ARRAY[0] : 'MultiState';
+  const prefix = `${config.PROVIDER_TYPE}_${stateLabel}`;
   
   return {
     INPUT: `${prefix}_import`,
@@ -82,7 +86,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   const config = getConfig();
   
-  ui.createMenu(`⚡ Provider Suite (${config.PROVIDER_TYPE} - ${config.TARGET_STATE})`)
+  ui.createMenu(`⚡ Provider Suite (${config.PROVIDER_TYPE} - ${config.TARGET_STATES})`)
     .addItem('🚀 Quick Start Wizard', 'showQuickStartWizard')
     .addItem('📋 View Configuration', 'showCurrentConfig')
     .addSeparator()
@@ -188,9 +192,9 @@ function showCurrentConfig() {
   const apiKey = getApiKey() ? '✅ Configured' : '❌ Not Set';
   const batchLimit = config.MAX_BATCHES_PER_RUN === 0 ? 'Unlimited' : `${config.MAX_BATCHES_PER_RUN} batches`;
 
-  ui.alert('Current Configuration', 
+  ui.alert('Current Configuration',
     `Provider Type: ${config.PROVIDER_TYPE}\n` +
-    `Target State: ${config.TARGET_STATE}\n` +
+    `Target States: ${config.TARGET_STATES}\n` +
     `Output Mode: ${config.USE_UNIFIED_OUTPUT ? 'Unified' : 'Separate'}\n` +
     `API Key: ${apiKey}\n\n` +
     `Batch Size: ${config.BATCH_SIZE} rows\n` +
@@ -271,7 +275,7 @@ function startProcessing() {
   }
 
   const response = ui.alert('Start Verification',
-    `Ready to process ${config.PROVIDER_TYPE} providers in ${config.TARGET_STATE}\n\n` +
+    `Ready to process ${config.PROVIDER_TYPE} providers in ${config.TARGET_STATES}\n\n` +
     `Input: ${sheets.INPUT}\n` +
     `Output: ${sheets.VERIFIED}\n` +
     `Rows to process: ${rowsToProcess}\n` +
@@ -285,11 +289,30 @@ function startProcessing() {
   resetProcessingProgress();
   initializeOutputSheets();
 
+  // Show starting alert BEFORE processing
+  ui.alert('Starting Verification',
+    `Processing first batch of ${Math.min(config.BATCH_SIZE, rowsToProcess)} rows...\n\n` +
+    'This may take 2-5 minutes. Please wait.',
+    ui.ButtonSet.OK);
+
   processNextBatch();
 
-  ui.alert('Processing Started',
-    'Verification is running in the background.\n\nYou can close this sheet.',
-    ui.ButtonSet.OK);
+  // Show progress AFTER first batch completes
+  const progress = getProcessingProgress();
+  const remaining = rowsToProcess - progress.lastProcessedRow;
+
+  if (remaining > 0) {
+    ui.alert('First Batch Complete',
+      `Processed: ${progress.lastProcessedRow} of ${rowsToProcess} rows\n` +
+      `Remaining: ${remaining} rows\n\n` +
+      'Processing will continue automatically every 2 minutes.\n' +
+      'Keep this sheet open to see the final completion alert.\n\n' +
+      'Check the verified/review/error sheets for results so far.',
+      ui.ButtonSet.OK);
+  } else {
+    // All done in first batch
+    finishProcessing();
+  }
 }
 
 function processNextBatch() {
@@ -393,10 +416,13 @@ function processBatch(inputSheet, startRow, endRow, apiKey) {
     const state = row[colMap['State']];
     const phone = row[colMap['Phone Number']];
 
-    // STATE FILTER: Skip rows not matching target state
-    if (config.TARGET_STATE && state && state.toString().trim().toUpperCase() !== config.TARGET_STATE.toUpperCase()) {
-      logMessage(`Skipping row ${actualRow}: State '${state}' does not match target '${config.TARGET_STATE}'`);
-      return;
+    // STATE FILTER: Skip rows not in target states list
+    if (config.TARGET_STATES_ARRAY.length > 0 && state) {
+      const stateUpper = state.toString().trim().toUpperCase();
+      if (!config.TARGET_STATES_ARRAY.includes(stateUpper)) {
+        logMessage(`Skipping row ${actualRow}: State '${state}' not in target states [${config.TARGET_STATES}]`);
+        return;
+      }
     }
 
     if (!officeName || !address) {
@@ -542,7 +568,7 @@ function recordResult(rowNumber, rowData, colMap, verification) {
       verification.correctedPhone,
       verification.correctedAddress,
       verification.placeId,
-      config.TARGET_STATE,
+      rowData[colMap['State']],  // Use actual state from row, not config
       config.PROVIDER_TYPE,
       verification.confidence,
       new Date()
@@ -670,7 +696,7 @@ function buildColumnMap(headers) {
 function getProcessingProgress() {
   const props = PropertiesService.getScriptProperties();
   const config = getConfig();
-  const key = `progress_${config.PROVIDER_TYPE}_${config.TARGET_STATE}`;
+  const key = `progress_${config.PROVIDER_TYPE}_${config.TARGET_STATES}`;
   
   return {
     lastProcessedRow: parseInt(props.getProperty(key) || '1')
@@ -680,14 +706,14 @@ function getProcessingProgress() {
 function saveProcessingProgress(row) {
   const props = PropertiesService.getScriptProperties();
   const config = getConfig();
-  const key = `progress_${config.PROVIDER_TYPE}_${config.TARGET_STATE}`;
+  const key = `progress_${config.PROVIDER_TYPE}_${config.TARGET_STATES}`;
   props.setProperty(key, row.toString());
 }
 
 function resetProcessingProgress() {
   const props = PropertiesService.getScriptProperties();
   const config = getConfig();
-  const key = `progress_${config.PROVIDER_TYPE}_${config.TARGET_STATE}`;
+  const key = `progress_${config.PROVIDER_TYPE}_${config.TARGET_STATES}`;
   props.setProperty(key, '1');
 }
 
@@ -791,7 +817,7 @@ function getActiveRowData() {
     row: row,
     sheetName: sheet.getName(),
     providerType: config.PROVIDER_TYPE,
-    state: config.TARGET_STATE,
+    states: config.TARGET_STATES,
     searchUrl: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
     confidence: data['Confidence_Score'] || 0
   };
@@ -879,7 +905,12 @@ function calculateSimilarity(str1, str2) {
 
 function normalizePhone(phone) {
   if (!phone) return '';
-  return phone.toString().replace(/\D/g, '').slice(-10);
+  // Extract main phone number before extension (matches ToolboxSuite logic)
+  const phoneStr = phone.toString();
+  // Split at 'x' or 'ext' to remove extension, then strip non-digits
+  const mainPhone = phoneStr.split(/\s*[xX]|ext/i)[0].replace(/\D/g, '');
+  // Return last 10 digits (handles country codes like +1)
+  return mainPhone.slice(-10);
 }
 
 function logMessage(message) {
@@ -1080,9 +1111,9 @@ function generateStatsReport() {
   const errors = ss.getSheetByName(sheets.ERRORS);
   const review = ss.getSheetByName(sheets.REVIEW);
 
-  const stats = 
+  const stats =
     `Provider Type: ${config.PROVIDER_TYPE}\n` +
-    `Target State: ${config.TARGET_STATE}\n\n` +
+    `Target States: ${config.TARGET_STATES}\n\n` +
     `Verified: ${verified ? verified.getLastRow() - 1 : 0}\n` +
     `Needs Review: ${review ? review.getLastRow() - 1 : 0}\n` +
     `Errors: ${errors ? errors.getLastRow() - 1 : 0}`;
