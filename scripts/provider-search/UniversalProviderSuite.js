@@ -556,6 +556,14 @@ function recordResult(rowNumber, rowData, colMap, verification) {
   const sheets = getSheetNames();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  // Apply capitalization fixes if enabled
+  const officeName = config.FIX_CAPITALIZATION ?
+    fixCapitalization(rowData[colMap['Office Name']]) :
+    rowData[colMap['Office Name']];
+  const correctedName = config.FIX_CAPITALIZATION && verification.correctedName ?
+    fixCapitalization(verification.correctedName) :
+    verification.correctedName;
+
   if (verification.success) {
     // Determine target sheet based on output mode
     let targetSheetName;
@@ -569,13 +577,13 @@ function recordResult(rowNumber, rowData, colMap, verification) {
 
     const verifiedSheet = getOrCreateSheet(targetSheetName, getVerifiedHeaders());
     const newRow = [
-      rowData[colMap['Office Name']],
+      officeName,
       rowData[colMap['Phone Number']],
       rowData[colMap['Address']],
       rowData[colMap['City']],
       rowData[colMap['State']],
       rowData[colMap['ZIP']],
-      verification.correctedName,
+      correctedName,
       verification.correctedPhone,
       verification.correctedAddress,
       verification.placeId,
@@ -591,7 +599,7 @@ function recordResult(rowNumber, rowData, colMap, verification) {
     const priority = Math.round((1 - verification.confidence) * 100);
     const newRow = [
       rowNumber,
-      rowData[colMap['Office Name']],
+      officeName,
       rowData[colMap['Phone Number']],
       rowData[colMap['Address']],
       rowData[colMap['City']],
@@ -617,6 +625,11 @@ function recordError(rowNumber, rowData, colMap, errorMessage) {
   const config = getConfig();
   const sheets = getSheetNames();
 
+  // Apply capitalization fixes if enabled
+  const officeName = config.FIX_CAPITALIZATION && rowData[colMap['Office Name']] ?
+    fixCapitalization(rowData[colMap['Office Name']]) :
+    (rowData[colMap['Office Name']] || '');
+
   // Determine target sheet based on output mode
   let targetSheetName;
   if (config.USE_UNIFIED_OUTPUT) {
@@ -630,7 +643,7 @@ function recordError(rowNumber, rowData, colMap, errorMessage) {
   const errorSheet = getOrCreateSheet(targetSheetName, getErrorHeaders());
 
   const newRow = [
-    rowData[colMap['Office Name']] || '',
+    officeName,
     rowData[colMap['Address']] || '',
     rowData[colMap['City']] || '',
     rowData[colMap['State']] || '',

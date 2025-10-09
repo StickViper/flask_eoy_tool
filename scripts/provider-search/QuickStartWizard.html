@@ -524,27 +524,30 @@
     function validateAndFormatStates() {
       const input = document.getElementById('states');
       const validationDiv = document.getElementById('state-validation');
-      const value = input.value.toUpperCase().trim();
+      const rawValue = input.value.trim();
+      const value = rawValue.toUpperCase();
 
       if (!value) {
         validationDiv.className = 'validation-msg invalid';
         validationDiv.textContent = '✗ State(s) required';
+        config.states = '';
         return false;
       }
 
-      // Split and validate
+      // Split and validate (don't filter empty yet - user might be typing)
       const states = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
       const invalid = states.filter(s => s.length !== 2);
 
       if (invalid.length > 0) {
         validationDiv.className = 'validation-msg invalid';
         validationDiv.textContent = `✗ Invalid: ${invalid.join(', ')} (must be 2 letters)`;
+        // Still save what they're typing for partial validation
+        config.states = states.join(',');
         return false;
       }
 
-      // Valid
+      // Valid - save to config but DON'T modify input (let user finish typing)
       const formatted = states.join(',');
-      input.value = formatted;
       config.states = formatted;
 
       validationDiv.className = 'validation-msg valid';
@@ -583,6 +586,16 @@
         if (!validateAndFormatStates()) {
           return false;
         }
+
+        // Final formatting: clean up the input field when validation passes
+        const input = document.getElementById('states');
+        const states = input.value.toUpperCase().trim().split(',')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        const formatted = states.join(',');
+        input.value = formatted;
+        config.states = formatted;
+
         return true;
       }
 
