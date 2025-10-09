@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
+      color: #ffffff;
+      padding: 16px;
+      min-height: 100vh;
+    }
+
+    .sidebar-header {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #00bcd4;
+      margin-bottom: 4px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .row-info {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      border-left: 4px solid #00bcd4;
+    }
+
+    .row-info-line {
+      font-size: 13px;
+      margin: 4px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .row-info-label {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .row-info-value {
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-yellow { background: #fbbf24; color: #78350f; }
+    .status-fuschia { background: #e879f9; color: #701a75; }
+    .status-red { background: #f87171; color: #7f1d1d; }
+    .status-green { background: #4ade80; color: #14532d; }
+    .status-white { background: #e2e8f0; color: #334155; }
+
+    .issues-container {
+      margin-bottom: 16px;
+    }
+
+    .issue-card {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .issue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .issue-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #00bcd4;
+    }
+
+    .issue-severity {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .severity-critical { background: #f87171; color: #fff; }
+    .severity-warning { background: #fbbf24; color: #78350f; }
+    .severity-info { background: #60a5fa; color: #1e3a8a; }
+
+    .issue-body {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .comparison-box {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 4px;
+      padding: 8px;
+      margin: 8px 0;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 12px;
+    }
+
+    .comparison-line {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .comparison-label {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .comparison-value {
+      color: #00ff41;
+      font-weight: 500;
+    }
+
+    .fuzzy-score {
+      display: inline-block;
+      background: linear-gradient(90deg, #00bcd4 0%, #4ade80 100%);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: #00bcd4;
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: #00acc1;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 188, 212, 0.4);
+    }
+
+    .btn-success {
+      background: #4ade80;
+      color: #14532d;
+    }
+
+    .btn-success:hover {
+      background: #22c55e;
+      transform: translateY(-2px);
+    }
+
+    .btn-warning {
+      background: #fbbf24;
+      color: #78350f;
+    }
+
+    .btn-warning:hover {
+      background: #f59e0b;
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: #f87171;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #ef4444;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 11px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .action-buttons {
+      position: sticky;
+      bottom: 0;
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
+      padding: 12px 0;
+      border-top: 2px solid rgba(0, 188, 212, 0.3);
+      margin-top: 16px;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 13px;
+      font-family: inherit;
+      margin: 8px 0;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: #00bcd4;
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.2);
+    }
+
+    textarea.input-field {
+      min-height: 80px;
+      resize: vertical;
+      font-family: inherit;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      font-size: 13px;
+      color: #cbd5e1;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top: 3px solid #00bcd4;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 0.8s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .alert {
+      padding: 12px;
+      border-radius: 6px;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .alert-success {
+      background: rgba(74, 222, 128, 0.2);
+      border: 1px solid #4ade80;
+      color: #4ade80;
+    }
+
+    .alert-error {
+      background: rgba(248, 113, 113, 0.2);
+      border: 1px solid #f87171;
+      color: #f87171;
+    }
+
+    .alert-warning {
+      background: rgba(251, 191, 36, 0.2);
+      border: 1px solid #fbbf24;
+      color: #fbbf24;
+    }
+
+    .expandable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .expandable::before {
+      content: '▶ ';
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+
+    .expandable.expanded::before {
+      transform: rotate(90deg);
+    }
+
+    .expandable-content {
+      display: none;
+      margin-top: 8px;
+    }
+
+    .expandable-content.show {
+      display: block;
+    }
+
+    .code-pill {
+      display: inline-block;
+      background: #1e3a5f;
+      color: #00ff41;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      margin: 0 2px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #64748b;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-text {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar-header">
+    <h2>🔧 Debug Repair</h2>
+    <p class="subtitle">Safe Data Repair Tools</p>
+  </div>
+
+  <div id="content">
+    <div class="empty-state">
+      <div class="empty-state-icon">🔍</div>
+      <div class="empty-state-title">Select a Row to Debug</div>
+      <div class="empty-state-text">
+        Click on any row in your Working List to see available repair options.
+        <br><br>
+        This tool will analyze the row and suggest safe fixes.
+      </div>
+    </div>
+  </div>
+
+  <div class="action-buttons">
+    <div class="button-group">
+      <button class="btn-primary" onclick="loadCurrentRow()">🔄 Refresh</button>
+      <button class="btn-secondary" onclick="nextDebugRow()">➡️ Next Issue</button>
+    </div>
+  </div>
+
+  <script>
+    let currentRowData = null;
+    let currentSheet = null;
+
+    // Load current row data on sidebar open
+    window.onload = function() {
+      loadCurrentRow();
+    };
+
+    function loadCurrentRow() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(displayRowData)
+        .withFailureHandler(showError)
+        .getDebugRowData();
+    }
+
+    function displayRowData(data) {
+      if (data.error) {
+        showEmptyState(data.error);
+        return;
+      }
+
+      currentRowData = data;
+      currentSheet = data.sheetName;
+
+      let html = `
+        <div class="row-info">
+          <div class="row-info-line">
+            <span class="row-info-label">Row:</span>
+            <span class="row-info-value">${data.row}</span>
+          </div>
+          <div class="row-info-line">
+            <span class="row-info-label">Office:</span>
+            <span class="row-info-value">${data.data['Office Name'] || 'N/A'}</span>
+          </div>
+          <div class="row-info-line">
+            <span class="row-info-label">Phone:</span>
+            <span class="row-info-value">${data.data['Phone Number'] || 'N/A'}</span>
+          </div>
+          <div class="row-info-line">
+            <span class="row-info-label">Status:</span>
+            <span class="row-info-value">${getStatusBadge(data.callStatus)}</span>
+          </div>
+        </div>
+      `;
+
+      if (data.issues && data.issues.length > 0) {
+        html += '<div class="issues-container">';
+        data.issues.forEach((issue, i) => {
+          html += renderIssueCard(issue, i);
+        });
+        html += '</div>';
+      } else {
+        html += `
+          <div class="alert alert-success">
+            ✅ No issues detected for this row!
+          </div>
+        `;
+      }
+
+      // Add quick actions
+      html += renderQuickActions(data);
+
+      document.getElementById('content').innerHTML = html;
+    }
+
+    function getStatusBadge(status) {
+      const statusMap = {
+        'Successful Order': 'status-yellow',
+        'Voicemail/No Answer': 'status-fuschia',
+        'Potentially Invalid': 'status-red',
+        'Requested Email': 'status-green',
+        '': 'status-white'
+      };
+      const className = statusMap[status] || 'status-white';
+      return `<span class="status-badge ${className}">${status || 'None'}</span>`;
+    }
+
+    function renderIssueCard(issue, index) {
+      return `
+        <div class="issue-card">
+          <div class="issue-header">
+            <span class="issue-title">${issue.title}</span>
+            <span class="issue-severity severity-${issue.severity}">${issue.severity}</span>
+          </div>
+          <div class="issue-body">
+            ${issue.description}
+            ${issue.comparison ? renderComparison(issue.comparison) : ''}
+          </div>
+          <div class="button-group">
+            ${renderIssueActions(issue, index)}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderComparison(comparison) {
+      return `
+        <div class="comparison-box">
+          ${Object.keys(comparison).map(key => `
+            <div class="comparison-line">
+              <span class="comparison-label">${key}:</span>
+              <span class="comparison-value">${comparison[key]}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderIssueActions(issue, index) {
+      // Dynamic actions based on issue type
+      let actions = '';
+
+      if (issue.actions) {
+        issue.actions.forEach(action => {
+          const btnClass = action.type === 'primary' ? 'btn-primary' :
+                          action.type === 'success' ? 'btn-success' :
+                          action.type === 'warning' ? 'btn-warning' :
+                          action.type === 'danger' ? 'btn-danger' : 'btn-secondary';
+          actions += `<button class="${btnClass} btn-small" onclick="${action.handler}">${action.label}</button>`;
+        });
+      }
+
+      return actions;
+    }
+
+    function renderQuickActions(data) {
+      let actions = '<div class="issue-card"><div class="issue-title">Quick Actions</div><div class="button-group">';
+
+      actions += `<button class="btn-secondary btn-small" onclick="googleSearch()">🔍 Google Search</button>`;
+
+      if (data.callStatus === 'Requested Email') {
+        actions += `<button class="btn-secondary btn-small" onclick="openGmail()">📧 Check Email</button>`;
+      }
+
+      if (data.callStatus) {
+        actions += `<button class="btn-warning btn-small" onclick="clearRowColor()">🗑️ Clear Color</button>`;
+      }
+
+      actions += `<button class="btn-secondary btn-small" onclick="editNotes()">📝 Edit Notes</button>`;
+      actions += '</div></div>';
+
+      return actions;
+    }
+
+    function showLoading() {
+      document.getElementById('content').innerHTML = `
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading row data...</p>
+        </div>
+      `;
+    }
+
+    function showError(error) {
+      document.getElementById('content').innerHTML = `
+        <div class="alert alert-error">
+          ❌ Error: ${error.message}
+        </div>
+      `;
+    }
+
+    function showEmptyState(message) {
+      document.getElementById('content').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <div class="empty-state-title">No Row Selected</div>
+          <div class="empty-state-text">${message || 'Please select a data row to analyze.'}</div>
+        </div>
+      `;
+    }
+
+    function googleSearch() {
+      if (!currentRowData) return;
+      const query = [
+        currentRowData.data['Office Name'],
+        currentRowData.data['Address'],
+        currentRowData.data['City'],
+        currentRowData.data['State']
+      ].filter(Boolean).join(' ');
+      const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      window.open(url, '_blank');
+    }
+
+    function openGmail() {
+      // Try to extract email from notes
+      const notes = currentRowData.data['Notes'] || '';
+      const emailMatch = notes.match(/[\w.-]+@[\w.-]+\.\w+/);
+      let url = 'https://mail.google.com/mail/u/0/#inbox';
+      if (emailMatch) {
+        url = `https://mail.google.com/mail/u/0/#search/from:${encodeURIComponent(emailMatch[0])}`;
+      }
+      window.open(url, '_blank');
+    }
+
+    function clearRowColor() {
+      if (!confirm('Clear the color/status for this row?')) return;
+      google.script.run
+        .withSuccessHandler(() => {
+          showSuccess('Row color cleared!');
+          loadCurrentRow();
+        })
+        .withFailureHandler(showError)
+        .clearRowColor(currentRowData.row, currentSheet);
+    }
+
+    function editNotes() {
+      const currentNotes = currentRowData.data['Notes'] || '';
+      const newNotes = prompt('Edit notes:', currentNotes);
+      if (newNotes === null) return; // User cancelled
+
+      google.script.run
+        .withSuccessHandler(() => {
+          showSuccess('Notes updated!');
+          loadCurrentRow();
+        })
+        .withFailureHandler(showError)
+        .updateNotes(currentRowData.row, currentSheet, newNotes);
+    }
+
+    function nextDebugRow() {
+      google.script.run
+        .withSuccessHandler(() => {
+          loadCurrentRow();
+        })
+        .withFailureHandler(showError)
+        .moveToNextDebugRow();
+    }
+
+    function showSuccess(message) {
+      const alert = document.createElement('div');
+      alert.className = 'alert alert-success';
+      alert.textContent = '✅ ' + message;
+      document.getElementById('content').insertAdjacentElement('afterbegin', alert);
+      setTimeout(() => alert.remove(), 3000);
+    }
+
+    // Expandable sections
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('expandable')) {
+        e.target.classList.toggle('expanded');
+        const content = e.target.nextElementSibling;
+        if (content && content.classList.contains('expandable-content')) {
+          content.classList.toggle('show');
+        }
+      }
+    });
+  </script>
+</body>
+</html>

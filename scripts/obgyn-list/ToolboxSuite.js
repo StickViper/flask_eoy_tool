@@ -26,11 +26,19 @@ function onOpen() {
   ui.createMenu('Misc. Tools')
     .addItem('🔗 Create Search Links', 'createGoogleSearchLinks')
     .addSeparator()
+    .addItem('🔧 Open Debug Repair Tool', 'showDebugRepairSidebar')
+    .addSeparator()
     .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
     .addSeparator()
     .addSubMenu(ui.createMenu('🔍 Validation & Debugging')
       .addItem('Find Issues in Current Sheet', 'validateCurrentSheet')
       .addItem('Check for Duplicates', 'findDuplicatesInSheet'))
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🗑️ Bulk Clear Colors')
+      .addItem('Clear All Yellow Rows', 'clearAllYellow')
+      .addItem('Clear All Fuschia Rows', 'clearAllFuschia')
+      .addItem('Clear All Green Rows', 'clearAllGreen')
+      .addItem('Clear All Colors (Keep Data)', 'clearAllColors'))
     .addSeparator()
     .addSubMenu(ui.createMenu('🎯 End-of-Year Workflow')
       .addItem('📋 Step 1: Audit Working List', 'auditWorkingList')
@@ -41,6 +49,16 @@ function onOpen() {
       .addSeparator()
       .addItem('🚀 Run Full EOY Automation', 'runFullEOYAutomation'))
     .addToUi();
+}
+
+/**
+ * Shows the Debug Repair sidebar
+ */
+function showDebugRepairSidebar() {
+  const html = HtmlService.createHtmlOutputFromFile('DebugRepairSidebar')
+    .setTitle('Debug Repair Tool')
+    .setWidth(350);
+  SpreadsheetApp.getUi().showSidebar(html);
 }
 
 /**
@@ -1213,4 +1231,444 @@ function updateAllCallStatusBasedOnColor() {
     sheet.getRange(2, statusColumn, newStatuses.length, 1).setValues(newStatuses);
     SpreadsheetApp.getUi().alert('Synchronization complete.');
   }
+}
+
+
+// ====================================================================================
+// DEBUG REPAIR SIDEBAR - BACKEND FUNCTIONS
+// ====================================================================================
+
+/**
+ * Get debug data for the currently selected row
+ * Analyzes the row and identifies all potential issues
+ */
+function getDebugRowData() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const activeRange = sheet.getActiveRange();
+
+    if (!activeRange || activeRange.getRow() <= 1) {
+      return { error: 'Please select a data row (not the header)' };
+    }
+
+    const row = activeRange.getRow();
+    const data = sheet.getDataRange().getValues();
+    const backgrounds = sheet.getDataRange().getBackgrounds();
+    const headers = data[0];
+    const rowData = data[row - 1];
+    const rowBg = backgrounds[row - 1][0];
+
+    // Find column indices
+    const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
+    const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
+    const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
+    const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+    const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
+    const qtyCol = findMostRecentQtyColumn(headers);
+
+    // Extract row values
+    const officeName = rowData[officeCol] || '';
+    const phone = rowData[phoneCol] || '';
+    const address = rowData[addressCol] || '';
+    const status = rowData[statusCol] || '';
+    const notes = rowData[notesCol] || '';
+    const qty = rowData[qtyCol] || '';
+    const color = rowBg.toLowerCase();
+
+    // Determine row type
+    let rowType = 'white';
+    if (color === '#ffff00') rowType = 'yellow';
+    else if (color === '#ff00ff') rowType = 'fuschia';
+    else if (color === '#ff0000') rowType = 'red';
+    else if (color === '#00ff00') rowType = 'green';
+
+    // Analyze issues
+    const issues = [];
+    let fuzzyMatches = null;
+
+    // YELLOW ROW CHECKS
+    if (rowType === 'yellow') {
+      const newOrdersSheet = findNewOrdersSheet(SpreadsheetApp.getActiveSpreadsheet());
+      if (newOrdersSheet) {
+        fuzzyMatches = fuzzyMatchNewOrders(phone, officeName, address, newOrdersSheet);
+
+        if (fuzzyMatches.exactMatch) {
+          if (fuzzyMatches.qtyMatch) {
+            issues.push({ severity: 'success', message: '✓ Verified in New Orders with matching QTY' });
+          } else {
+            issues.push({
+              severity: 'warning',
+              message: `QTY mismatch: Working List=${qty}, New Orders=${fuzzyMatches.matchedQty}`,
+              action: 'update_qty'
+            });
+          }
+        } else if (fuzzyMatches.bestMatch && fuzzyMatches.confidence >= 0.80) {
+          issues.push({
+            severity: 'warning',
+            message: `Possible match in New Orders (${Math.round(fuzzyMatches.confidence * 100)}% confidence)`,
+            detail: `${fuzzyMatches.matchedName} - ${fuzzyMatches.matchedPhone}`,
+            action: 'review_match'
+          });
+        } else {
+          issues.push({
+            severity: 'error',
+            message: 'Not found in New Orders (yellow row should be verified order)',
+            action: 'add_to_orders'
+          });
+        }
+      }
+
+      if (qty == 0 || !qty) {
+        issues.push({ severity: 'error', message: 'QTY is 0 or empty for successful order' });
+      }
+    }
+
+    // FUSCHIA ROW CHECKS
+    if (rowType === 'fuschia') {
+      const commonPatterns = ['vm x2', 'vm x3', 'vm', 'voicemail', 'office closed', 'no answer', 'left message'];
+      const hasCommonNote = commonPatterns.some(p => notes.toLowerCase().includes(p));
+
+      if (hasCommonNote) {
+        issues.push({
+          severity: 'info',
+          message: 'Common voicemail note detected',
+          action: 'strip_note',
+          suggestions: commonPatterns.filter(p => notes.toLowerCase().includes(p))
+        });
+      }
+
+      if (notes.trim() === '') {
+        issues.push({ severity: 'warning', message: 'No notes for voicemail row' });
+      }
+    }
+
+    // RED ROW CHECKS
+    if (rowType === 'red') {
+      issues.push({
+        severity: 'info',
+        message: 'Potentially invalid office - consider adding to Invalid/Inactive list',
+        action: 'add_to_invalid'
+      });
+    }
+
+    // GREEN ROW CHECKS
+    if (rowType === 'green') {
+      issues.push({
+        severity: 'info',
+        message: 'Email requested - check Gmail for reply',
+        action: 'open_gmail'
+      });
+    }
+
+    // WHITE/EMPTY ROW CHECKS
+    if (rowType === 'white' && status === '') {
+      issues.push({
+        severity: 'info',
+        message: 'Uncalled row (no status set)',
+        action: 'none'
+      });
+    }
+
+    return {
+      success: true,
+      row: row,
+      rowType: rowType,
+      data: {
+        officeName: officeName,
+        phone: phone,
+        address: address,
+        status: status,
+        notes: notes,
+        qty: qty,
+        color: color
+      },
+      issues: issues,
+      fuzzyMatches: fuzzyMatches
+    };
+
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Enhanced fuzzy matching for New Orders validation
+ * Returns confidence score and best match details
+ */
+function fuzzyMatchNewOrders(phone, officeName, address, newOrdersSheet) {
+  const ordersData = newOrdersSheet.getDataRange().getValues();
+  const ordersHeaders = ordersData[0];
+
+  const ordersPhoneCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const ordersOfficeCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('office'));
+  const ordersAddressCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('address'));
+  const ordersQtyCol = findMostRecentQtyColumn(ordersHeaders);
+
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedOfficeName = normalizeOfficeName(officeName);
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  // Search through New Orders
+  ordersData.slice(1).forEach((orderRow, idx) => {
+    const orderPhone = normalizePhone(orderRow[ordersPhoneCol]);
+    const orderOfficeName = normalizeOfficeName(orderRow[ordersOfficeCol]);
+    const orderAddress = (orderRow[ordersAddressCol] || '').toString().trim().toLowerCase();
+    const orderQty = orderRow[ordersQtyCol] || 0;
+
+    let score = 0;
+    let phoneMatch = false;
+    let nameMatch = false;
+    let addressMatch = false;
+
+    // Layer 1: Phone match (40% weight)
+    if (normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
+      score += 0.40;
+      phoneMatch = true;
+    }
+
+    // Layer 2: Office name match (40% weight)
+    if (normalizedOfficeName && orderOfficeName) {
+      // Exact normalized match
+      if (normalizedOfficeName === orderOfficeName) {
+        score += 0.40;
+        nameMatch = true;
+      } else {
+        // Fuzzy match using Levenshtein
+        const nameSimilarity = calculateSimilarity(normalizedOfficeName, orderOfficeName);
+        if (nameSimilarity >= 0.85) {
+          score += 0.40 * nameSimilarity;
+          if (nameSimilarity >= 0.90) nameMatch = true;
+        }
+      }
+    }
+
+    // Layer 3: Address match (20% weight)
+    if (address && orderAddress) {
+      const normalizedAddress = address.toLowerCase().trim();
+      if (normalizedAddress === orderAddress || orderAddress.includes(normalizedAddress) || normalizedAddress.includes(orderAddress)) {
+        score += 0.20;
+        addressMatch = true;
+      }
+    }
+
+    // Track best match
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = {
+        name: orderRow[ordersOfficeCol],
+        phone: orderRow[ordersPhoneCol],
+        address: orderRow[ordersAddressCol],
+        qty: orderQty,
+        phoneMatch: phoneMatch,
+        nameMatch: nameMatch,
+        addressMatch: addressMatch,
+        score: score
+      };
+    }
+  });
+
+  return {
+    bestMatch: bestMatch,
+    confidence: bestScore,
+    exactMatch: bestMatch && bestScore >= 0.95,
+    matchedName: bestMatch ? bestMatch.name : null,
+    matchedPhone: bestMatch ? bestMatch.phone : null,
+    matchedQty: bestMatch ? bestMatch.qty : null,
+    qtyMatch: bestMatch && bestMatch.qty.toString() === qty.toString()
+  };
+}
+
+/**
+ * Normalize office name for matching
+ * Strips common variations (LLC, Dr., punctuation, etc.)
+ */
+function normalizeOfficeName(name) {
+  if (!name) return '';
+
+  let normalized = name.toString().toLowerCase().trim();
+
+  // Remove common legal suffixes
+  normalized = normalized.replace(/\b(llc|pc|pllc|inc|corp|ltd|dba|and associates|associates|group)\b/gi, '');
+
+  // Remove titles
+  normalized = normalized.replace(/\b(dr\.?|doctor|drs\.?)\s*/gi, '');
+
+  // Normalize "and" vs "&"
+  normalized = normalized.replace(/\s+&\s+/g, ' and ');
+  normalized = normalized.replace(/\s+\+\s+/g, ' and ');
+
+  // Remove punctuation except hyphens and apostrophes
+  normalized = normalized.replace(/[^a-z0-9\s\-']/g, '');
+
+  // Collapse multiple spaces
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
+}
+
+/**
+ * Clear color from current row (safe operation)
+ */
+function clearRowColor(rowNumber, sheetName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getActiveSheet();
+
+    if (!sheet) return { error: 'Sheet not found' };
+
+    const range = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn());
+    range.setBackground('#ffffff');
+
+    // Also clear status if it exists
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+    if (statusCol !== -1) {
+      sheet.getRange(rowNumber, statusCol + 1).setValue('');
+    }
+
+    return { success: true, message: `Cleared color for row ${rowNumber}` };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Update notes for current row
+ */
+function updateRowNotes(rowNumber, sheetName, newNotes) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getActiveSheet();
+
+    if (!sheet) return { error: 'Sheet not found' };
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
+
+    if (notesCol === -1) return { error: 'Notes column not found' };
+
+    sheet.getRange(rowNumber, notesCol + 1).setValue(newNotes);
+
+    return { success: true, message: 'Notes updated' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Move to next row with debug issues
+ */
+function moveToNextDebugRow() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const currentRow = sheet.getActiveRange().getRow();
+    const lastRow = sheet.getLastRow();
+
+    // Find next row with issues (colored or with notes)
+    for (let i = currentRow + 1; i <= lastRow; i++) {
+      const bg = sheet.getRange(i, 1).getBackground();
+      if (bg !== '#ffffff') {
+        sheet.getRange(i, 1).activate();
+        return { success: true, row: i };
+      }
+    }
+
+    return { success: false, message: 'No more debug rows found' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Bulk clear all yellow rows
+ */
+function clearAllYellow() {
+  return bulkClearColor('#ffff00', 'yellow (Successful Order)');
+}
+
+/**
+ * Bulk clear all fuschia rows
+ */
+function clearAllFuschia() {
+  return bulkClearColor('#ff00ff', 'fuschia (Voicemail/No Answer)');
+}
+
+/**
+ * Bulk clear all green rows
+ */
+function clearAllGreen() {
+  return bulkClearColor('#00ff00', 'green (Requested Email)');
+}
+
+/**
+ * Bulk clear all colors (keep data)
+ */
+function clearAllColors() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+
+  const response = ui.alert(
+    'Clear All Colors',
+    'This will remove ALL row colors but keep all data.\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  // Clear all backgrounds except header
+  sheet.getRange(2, 1, lastRow - 1, lastCol).setBackground('#ffffff');
+
+  // Clear all status values
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+  if (statusCol !== -1) {
+    sheet.getRange(2, statusCol + 1, lastRow - 1, 1).setValue('');
+  }
+
+  ui.alert('Success', `Cleared all colors from ${lastRow - 1} rows`, ui.ButtonSet.OK);
+}
+
+/**
+ * Helper: Bulk clear specific color
+ */
+function bulkClearColor(targetColor, colorName) {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+
+  const response = ui.alert(
+    `Clear ${colorName} Rows`,
+    `This will remove color from all ${colorName} rows but keep the data.\n\nContinue?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const data = sheet.getDataRange();
+  const backgrounds = data.getBackgrounds();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+
+  let clearedCount = 0;
+
+  for (let i = 1; i < backgrounds.length; i++) {
+    const rowColor = backgrounds[i][0].toLowerCase();
+    if (rowColor === targetColor) {
+      const rowRange = sheet.getRange(i + 1, 1, 1, sheet.getLastColumn());
+      rowRange.setBackground('#ffffff');
+
+      // Clear status
+      if (statusCol !== -1) {
+        sheet.getRange(i + 1, statusCol + 1).setValue('');
+      }
+
+      clearedCount++;
+    }
+  }
+
+  ui.alert('Success', `Cleared color from ${clearedCount} ${colorName} rows`, ui.ButtonSet.OK);
 }
