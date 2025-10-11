@@ -483,7 +483,7 @@ function buildSearchRequest(query, apiKey) {
     contentType: 'application/json',
     headers: {
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.businessStatus'
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.businessStatus,places.types,places.primaryType'
     },
     payload: JSON.stringify({ textQuery: query }),
     muteHttpExceptions: true
@@ -502,13 +502,15 @@ function verifyPlace(apiResult, rowInfo) {
 
   const config = getConfig();
   const place = apiResult.places[0];
-  
+
   const result = {
     placeId: place.id,
     status: place.businessStatus || 'UNKNOWN',
     correctedName: place.displayName?.text || '',
     correctedPhone: place.nationalPhoneNumber || '',
     correctedAddress: place.formattedAddress || '',
+    businessTypes: place.types || [],
+    primaryType: place.primaryType || '',
     confidence: 0
   };
 
@@ -537,7 +539,30 @@ function verifyPlace(apiResult, rowInfo) {
     points += 15;
   }
 
-  result.confidence = points / maxPoints;
+  // Business type penalty (NEW - prevents specialists from passing)
+  const excludedTypes = [
+    'dentist',
+    'veterinary_care',
+    'physiotherapist',
+    'chiropractor',
+    'optometrist',
+    'pharmacy',
+    'hospital',
+    'beauty_salon',
+    'spa'
+  ];
+
+  const hasExcludedType = result.businessTypes.some(t =>
+    excludedTypes.includes(t.toLowerCase())
+  ) || (result.primaryType && excludedTypes.includes(result.primaryType.toLowerCase()));
+
+  if (hasExcludedType) {
+    points -= 40; // Heavy penalty - prevents 96% from becoming 56%
+    const excludedType = result.businessTypes.find(t => excludedTypes.includes(t.toLowerCase())) || result.primaryType;
+    result.notes = `Wrong specialty detected: ${excludedType}`;
+  }
+
+  result.confidence = Math.max(0, points / maxPoints); // Ensure non-negative
 
   // Determine success
   result.success = result.confidence >= config.HIGH_CONFIDENCE_THRESHOLD && 
