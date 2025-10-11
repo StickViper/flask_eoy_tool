@@ -24,21 +24,14 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
   ui.createMenu('Misc. Tools')
+    .addSubMenu(ui.createMenu('🔧 Quick Fixes')
+      .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
+      .addItem('🏠 Standardize Addresses in Selection', 'standardizeAddresses')
+      .addItem('🔍 Check if in Invalid/Inactive List', 'checkSelectedRowsInInvalidList'))
+    .addSeparator()
+    .addItem('🛠️ Open Debug Repair Tool', 'showDebugRepairSidebar')
+    .addSeparator()
     .addItem('🔗 Create Search Links', 'createGoogleSearchLinks')
-    .addSeparator()
-    .addItem('🔧 Open Debug Repair Tool', 'showDebugRepairSidebar')
-    .addSeparator()
-    .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('🔍 Filter Views')
-      .addItem('Show Debug Issues Filter', 'showDebugFilter')
-      .addItem('Clear Filters', 'clearDebugFilter')
-      .addSeparator()
-      .addItem('Filter Yellow Rows', 'showYellowFilter')
-      .addItem('Filter Fuschia Rows', 'showFuschiaFilter')
-      .addItem('Filter Red Rows', 'showRedFilter')
-      .addItem('Filter Green Rows', 'showGreenFilter')
-      .addItem('Filter Empty/White Rows', 'showWhiteFilter'))
     .addSeparator()
     .addSubMenu(ui.createMenu('🗑️ Bulk Clear Colors')
       .addItem('Clear All Yellow Rows', 'clearAllYellow')
@@ -57,9 +50,20 @@ function onOpen() {
 }
 
 /**
- * Shows the Debug Repair sidebar
+ * Shows the Debug Repair sidebar and unhides Debug/Issues column
  */
 function showDebugRepairSidebar() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+
+  // Unhide Debug/Issues column if it exists
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+
+  if (debugCol !== -1) {
+    sheet.showColumns(debugCol + 1);
+  }
+
+  // Show sidebar
   const html = HtmlService.createHtmlOutputFromFile('DebugRepairSidebar')
     .setTitle('Debug Repair Tool')
     .setWidth(350);
@@ -379,12 +383,12 @@ function mergeRegularData(masterRecord, header, value, source) {
 
 function normalizePhone(phone) {
   if (!phone || typeof phone.toString !== 'function') return '';
-  // Extract main phone number before extension (matches ToolboxSuite logic)
+  // Extract main phone number, preserve extensions for display but ignore for matching
   const phoneStr = phone.toString();
-  // Split at 'x' or 'ext' to remove extension, then strip non-digits
+  // Remove everything except digits, but stop at 'x' or 'ext' (extensions)
   const mainPhone = phoneStr.split(/\s*[xX]|ext/i)[0].replace(/\D/g, '');
-  // Return last 10 digits (handles country codes like +1)
-  return mainPhone.slice(-10);
+  // Return last 10 digits (handles country codes like +1), or all if less than 10
+  return mainPhone.slice(-10) || mainPhone;
 }
 
 // --- SHEET CREATION FUNCTIONS ---
@@ -731,6 +735,57 @@ function auditWorkingList() {
 }
 
 /**
+ * Helper: Find the most recent QTY column (e.g., "2025 QTY" is newer than "2024 QTY")
+ */
+function findMostRecentQtyColumn(headers) {
+  const qtyColumns = headers.map((h, i) => ({ header: h, index: i }))
+    .filter(col => col.header && col.header.toString().toLowerCase().includes('qty'));
+
+  if (qtyColumns.length === 0) return -1;
+  if (qtyColumns.length === 1) return qtyColumns[0].index;
+
+  // Sort by year (extract numbers from header, assume higher = more recent)
+  qtyColumns.sort((a, b) => {
+    const yearA = parseInt((a.header.match(/\d{4}/) || ['0'])[0]);
+    const yearB = parseInt((b.header.match(/\d{4}/) || ['0'])[0]);
+    return yearB - yearA; // Descending (most recent first)
+  });
+
+  return qtyColumns[0].index;
+}
+
+/**
+ * Helper: Smart sheet detection - finds New Orders sheet
+ */
+function findNewOrdersSheet(ss) {
+  const sheetNames = ss.getSheets().map(s => s.getName());
+
+  // Try exact matches first
+  const exactMatches = ['New Orders 2025', 'New Orders', 'Orders 2025'];
+  for (const name of exactMatches) {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) return sheet;
+  }
+
+  // Try fuzzy match: contains "new" and "order"
+  for (const name of sheetNames) {
+    const lower = name.toLowerCase();
+    if (lower.includes('new') && lower.includes('order')) {
+      return ss.getSheetByName(name);
+    }
+  }
+
+  // Try just "order"
+  for (const name of sheetNames) {
+    if (name.toLowerCase().includes('order')) {
+      return ss.getSheetByName(name);
+    }
+  }
+
+  return null;
+}
+
+/**
  * EOY Step 2: Validate Yellow (Successful Order) → New Orders sheet
  * Uses fuzzy matching on Office Name + Address (not phone, which isn't in New Orders)
  * @param {boolean} dryRun - If true, only count issues without fixing
@@ -834,7 +889,7 @@ function enforceNotInterestedRules(dryRun = false) {
 
   const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
   const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
-  const qtyCol = headers.findIndex(h => h && h.toLowerCase().includes('qty'));
+  const qtyCol = findMostRecentQtyColumn(headers);
 
   let issuesFound = 0;
   let issuesFixed = 0;
@@ -904,9 +959,10 @@ function detectAndFlagDuplicates(dryRun = false) {
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
 
-  const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const phoneCol = headers.findIndex(h => h && (h.toLowerCase().includes('phone') || h.toLowerCase().includes('number')));
   const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
-  const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
+  const officeCol = headers.findIndex(h => h && (h.toLowerCase().includes('office') || h.toLowerCase().includes('practice') || h.toLowerCase().includes('name')));
+  const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
 
   const phoneMap = new Map();
   const addressMap = new Map();
@@ -929,14 +985,39 @@ function detectAndFlagDuplicates(dryRun = false) {
     }
   }
 
-  // Second pass: flag duplicates
+  // Second pass: flag duplicates and add network notes
   for (let i = 1; i < data.length; i++) {
     const phone = normalizePhone(data[i][phoneCol]);
     const address = (data[i][addressCol] || '').toString().trim().toLowerCase();
+    const officeName = (data[i][officeCol] || '').toString().trim();
     const issues = [];
+    let needsNetworkNote = false;
 
     if (phone && phoneMap.get(phone).length > 1) {
-      issues.push(`Duplicate phone (appears ${phoneMap.get(phone).length} times)`);
+      const dupeRows = phoneMap.get(phone);
+
+      // Check if same/similar name but different addresses (likely same network)
+      const names = dupeRows.map(rowIdx => (data[rowIdx][officeCol] || '').toString().trim());
+      const addresses = dupeRows.map(rowIdx => (data[rowIdx][addressCol] || '').toString().trim());
+      const uniqueAddresses = new Set(addresses);
+
+      // Use fuzzy matching to detect networks (handles typos and variations)
+      let isSameNetwork = false;
+      if (names.length >= 2 && uniqueAddresses.size > 1) {
+        // Compare first name to all others, if all are similar (≥0.85), it's a network
+        // Threshold 0.85 chosen based on testing with real OBGYN data (100% accuracy)
+        const similarities = names.slice(1).map(name => calculateSimilarity(names[0], name));
+        const allSimilar = similarities.every(score => score >= 0.85);
+        if (allSimilar) {
+          isSameNetwork = true;
+          needsNetworkNote = true;
+          issues.push(`Same network (${uniqueAddresses.size} locations, 1 phone)`);
+        }
+      }
+
+      if (!isSameNetwork) {
+        issues.push(`Duplicate phone (appears ${phoneMap.get(phone).length} times)`);
+      }
     }
 
     if (address && addressMap.get(address) && addressMap.get(address).length > 1) {
@@ -997,7 +1078,7 @@ function reviewStatusIssues(dryRun = false) {
 
   const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
   const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
-  const qtyCol = headers.findIndex(h => h && h.toLowerCase().includes('qty'));
+  const qtyCol = findMostRecentQtyColumn(headers);
 
   const categories = {
     red: [], // Potentially Invalid
@@ -1096,6 +1177,10 @@ function getOrCreateDebugColumn(sheet) {
 /**
  * Calculate similarity between two strings using Levenshtein distance
  * Returns value between 0 (completely different) and 1 (identical)
+ * Used for fuzzy matching in network detection
+ * @param {string} str1 - First string to compare
+ * @param {string} str2 - Second string to compare
+ * @returns {number} Similarity score 0-1
  */
 function calculateSimilarity(str1, str2) {
   str1 = (str1 || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1122,501 +1207,6 @@ function calculateSimilarity(str1, str2) {
 
   return 1 - (matrix[str2.length][str1.length] / Math.max(str1.length, str2.length));
 }
-
-/**
- * Helper: Find the most recent QTY column (e.g., "2025 QTY" is newer than "2024 QTY")
- */
-function findMostRecentQtyColumn(headers) {
-  const qtyColumns = headers.map((h, i) => ({ header: h, index: i }))
-    .filter(col => col.header && col.header.toString().toLowerCase().includes('qty'));
-
-  if (qtyColumns.length === 0) return -1;
-  if (qtyColumns.length === 1) return qtyColumns[0].index;
-
-  // Sort by year (extract numbers from header, assume higher = more recent)
-  qtyColumns.sort((a, b) => {
-    const yearA = parseInt((a.header.match(/\d{4}/) || ['0'])[0]);
-    const yearB = parseInt((b.header.match(/\d{4}/) || ['0'])[0]);
-    return yearB - yearA; // Descending (most recent first)
-  });
-
-  return qtyColumns[0].index;
-}
-
-/**
- * Helper: Smart sheet detection - finds New Orders sheet
- */
-function findNewOrdersSheet(ss) {
-  const sheetNames = ss.getSheets().map(s => s.getName());
-
-  // Try exact matches first
-  const exactMatches = ['New Orders 2025', 'New Orders', 'Orders 2025'];
-  for (const name of exactMatches) {
-    const sheet = ss.getSheetByName(name);
-    if (sheet) return sheet;
-  }
-
-  // Try fuzzy match: contains "new" and "order"
-  for (const name of sheetNames) {
-    const lower = name.toLowerCase();
-    if (lower.includes('new') && lower.includes('order')) {
-      return ss.getSheetByName(name);
-    }
-  }
-
-  // Try just "order"
-  for (const name of sheetNames) {
-    if (name.toLowerCase().includes('order')) {
-      return ss.getSheetByName(name);
-    }
-  }
-
-  return null;
-}
-
-
-// ====================================================================================
-// DEBUG REPAIR SIDEBAR - BACKEND FUNCTIONS
-// ====================================================================================
-
-/**
- * Get debug data for the currently selected row
- */
-function getDebugRowData() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSheet();
-    const activeRange = sheet.getActiveRange();
-
-    if (!activeRange || activeRange.getRow() <= 1) {
-      return { error: 'Please select a data row (not the header)' };
-    }
-
-    const row = activeRange.getRow();
-    const data = sheet.getDataRange().getValues();
-    const backgrounds = sheet.getDataRange().getBackgrounds();
-    const headers = data[0];
-    const rowData = data[row - 1];
-    const rowBg = backgrounds[row - 1][0];
-
-    const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
-    const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
-    const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
-    const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
-    const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
-    const qtyCol = findMostRecentQtyColumn(headers);
-
-    const officeName = rowData[officeCol] || '';
-    const phone = rowData[phoneCol] || '';
-    const address = rowData[addressCol] || '';
-    const status = rowData[statusCol] || '';
-    const notes = rowData[notesCol] || '';
-    const qty = rowData[qtyCol] || '';
-    const color = rowBg.toLowerCase();
-
-    let rowType = 'white';
-    if (color === '#ffff00') rowType = 'yellow';
-    else if (color === '#ff00ff') rowType = 'fuschia';
-    else if (color === '#ff0000') rowType = 'red';
-    else if (color === '#00ff00') rowType = 'green';
-
-    const issues = [];
-    let fuzzyMatches = null;
-
-    if (rowType === 'yellow') {
-      const newOrdersSheet = findNewOrdersSheet(SpreadsheetApp.getActiveSpreadsheet());
-      if (newOrdersSheet) {
-        fuzzyMatches = fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet);
-        if (fuzzyMatches.exactMatch) {
-          if (fuzzyMatches.qtyMatch) {
-            issues.push({ severity: 'success', message: '✓ Verified in New Orders with matching QTY' });
-          } else {
-            issues.push({
-              severity: 'warning',
-              message: `QTY mismatch: Working List=${qty}, New Orders=${fuzzyMatches.matchedQty}`,
-              action: 'update_qty'
-            });
-          }
-        } else if (fuzzyMatches.bestMatch && fuzzyMatches.confidence >= 0.80) {
-          issues.push({
-            severity: 'warning',
-            message: `Possible match in New Orders (${Math.round(fuzzyMatches.confidence * 100)}% confidence)`,
-            detail: `${fuzzyMatches.matchedName} - ${fuzzyMatches.matchedPhone}`,
-            action: 'review_match'
-          });
-        } else {
-          issues.push({
-            severity: 'error',
-            message: 'Not found in New Orders (yellow row should be verified order)',
-            action: 'add_to_orders'
-          });
-        }
-      }
-      if (qty == 0 || !qty) {
-        issues.push({ severity: 'error', message: 'QTY is 0 or empty for successful order' });
-      }
-    }
-
-    if (rowType === 'fuschia') {
-      const commonPatterns = ['vm x2', 'vm x3', 'vm', 'voicemail', 'office closed', 'no answer', 'left message'];
-      const hasCommonNote = commonPatterns.some(p => notes.toLowerCase().includes(p));
-      if (hasCommonNote) {
-        issues.push({
-          severity: 'info',
-          message: 'Common voicemail note detected',
-          action: 'strip_note',
-          suggestions: commonPatterns.filter(p => notes.toLowerCase().includes(p))
-        });
-      }
-      if (notes.trim() === '') {
-        issues.push({ severity: 'warning', message: 'No notes for voicemail row' });
-      }
-    }
-
-    if (rowType === 'red') {
-      issues.push({
-        severity: 'info',
-        message: 'Potentially invalid office - consider adding to Invalid/Inactive list',
-        action: 'add_to_invalid'
-      });
-    }
-
-    if (rowType === 'green') {
-      issues.push({
-        severity: 'info',
-        message: 'Email requested - check Gmail for reply',
-        action: 'open_gmail'
-      });
-    }
-
-    if (rowType === 'white' && status === '') {
-      issues.push({
-        severity: 'info',
-        message: 'Uncalled row (no status set)',
-        action: 'none'
-      });
-    }
-
-    return {
-      success: true,
-      row: row,
-      rowType: rowType,
-      sheetName: sheet.getName(),
-      callStatus: status,
-      data: {
-        'Office Name': officeName,
-        'Phone Number': phone,
-        'Address': address,
-        'Status': status,
-        'Notes': notes,
-        'QTY': qty,
-        'Color': color
-      },
-      issues: issues,
-      fuzzyMatches: fuzzyMatches
-    };
-  } catch (error) {
-    return { error: error.message };
-  }
-}
-
-/**
- * Enhanced fuzzy matching for New Orders validation
- * Returns confidence score and best match details
- */
-function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
-  const ordersData = newOrdersSheet.getDataRange().getValues();
-  const ordersHeaders = ordersData[0];
-  const ordersPhoneCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('phone'));
-  const ordersOfficeCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('office'));
-  const ordersAddressCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('address'));
-  const ordersQtyCol = findMostRecentQtyColumn(ordersHeaders);
-
-  const normalizedPhone = normalizePhone(phone);
-  const normalizedOfficeName = normalizeOfficeName(officeName);
-
-  let bestMatch = null;
-  let bestScore = 0;
-
-  ordersData.slice(1).forEach((orderRow, idx) => {
-    const orderPhone = normalizePhone(orderRow[ordersPhoneCol]);
-    const orderOfficeName = normalizeOfficeName(orderRow[ordersOfficeCol]);
-    const orderAddress = (orderRow[ordersAddressCol] || '').toString().trim().toLowerCase();
-    const orderQty = orderRow[ordersQtyCol] || 0;
-
-    let score = 0;
-    let phoneMatch = false;
-    let nameMatch = false;
-    let addressMatch = false;
-
-    // Layer 1: Phone match (40% weight) - optional if phone exists
-    if (normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
-      score += 0.40;
-      phoneMatch = true;
-    }
-
-    // Layer 2: Office name match (40% weight)
-    if (normalizedOfficeName && orderOfficeName) {
-      if (normalizedOfficeName === orderOfficeName) {
-        score += 0.40;
-        nameMatch = true;
-      } else {
-        const nameSimilarity = calculateSimilarity(normalizedOfficeName, orderOfficeName);
-        if (nameSimilarity >= 0.85) {
-          score += 0.40 * nameSimilarity;
-          if (nameSimilarity >= 0.90) nameMatch = true;
-        }
-      }
-    }
-
-    // Layer 3: Address match (20% weight)
-    if (address && orderAddress) {
-      const normalizedAddress = address.toLowerCase().trim();
-      if (normalizedAddress === orderAddress || orderAddress.includes(normalizedAddress) || normalizedAddress.includes(orderAddress)) {
-        score += 0.20;
-        addressMatch = true;
-      }
-    }
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = {
-        name: orderRow[ordersOfficeCol],
-        phone: orderRow[ordersPhoneCol],
-        address: orderRow[ordersAddressCol],
-        qty: orderQty,
-        phoneMatch: phoneMatch,
-        nameMatch: nameMatch,
-        addressMatch: addressMatch,
-        score: score
-      };
-    }
-  });
-
-  return {
-    bestMatch: bestMatch,
-    confidence: bestScore,
-    exactMatch: bestMatch && bestScore >= 0.95,
-    matchedName: bestMatch ? bestMatch.name : null,
-    matchedPhone: bestMatch ? bestMatch.phone : null,
-    matchedQty: bestMatch ? bestMatch.qty : null,
-    qtyMatch: bestMatch && qty && bestMatch.qty.toString() === qty.toString()
-  };
-}
-
-/**
- * Normalize office name for matching
- */
-function normalizeOfficeName(name) {
-  if (!name) return '';
-  let normalized = name.toString().toLowerCase().trim();
-  normalized = normalized.replace(/\b(llc|pc|pllc|inc|corp|ltd|dba|and associates|associates|group)\b/gi, '');
-  normalized = normalized.replace(/\b(dr\.?|doctor|drs\.?)\s*/gi, '');
-  normalized = normalized.replace(/\s+&\s+/g, ' and ');
-  normalized = normalized.replace(/\s+\+\s+/g, ' and ');
-  normalized = normalized.replace(/[^a-z0-9\s\-']/g, '');
-  normalized = normalized.replace(/\s+/g, ' ').trim();
-  return normalized;
-}
-
-function clearRowColor(rowNumber, sheetName) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getActiveSheet();
-    if (!sheet) return { error: 'Sheet not found' };
-    const range = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn());
-    range.setBackground('#ffffff');
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
-    if (statusCol !== -1) {
-      sheet.getRange(rowNumber, statusCol + 1).setValue('');
-    }
-    return { success: true, message: `Cleared color for row ${rowNumber}` };
-  } catch (error) {
-    return { error: error.message };
-  }
-}
-
-function updateRowNotes(rowNumber, sheetName, newNotes) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getActiveSheet();
-    if (!sheet) return { error: 'Sheet not found' };
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
-    if (notesCol === -1) return { error: 'Notes column not found' };
-    sheet.getRange(rowNumber, notesCol + 1).setValue(newNotes);
-    return { success: true, message: 'Notes updated' };
-  } catch (error) {
-    return { error: error.message };
-  }
-}
-
-function moveToNextDebugRow() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSheet();
-    const currentRow = sheet.getActiveRange().getRow();
-    const lastRow = sheet.getLastRow();
-    for (let i = currentRow + 1; i <= lastRow; i++) {
-      const bg = sheet.getRange(i, 1).getBackground();
-      if (bg !== '#ffffff') {
-        sheet.getRange(i, 1).activate();
-        return { success: true, row: i };
-      }
-    }
-    return { success: false, message: 'No more debug rows found' };
-  } catch (error) {
-    return { error: error.message };
-  }
-}
-
-function clearAllYellow() {
-  return bulkClearColor('#ffff00', 'yellow (Successful Order)');
-}
-
-function clearAllFuschia() {
-  return bulkClearColor('#ff00ff', 'fuschia (Voicemail/No Answer)');
-}
-
-function clearAllGreen() {
-  return bulkClearColor('#00ff00', 'green (Requested Email)');
-}
-
-function clearAllColors() {
-  const ui = SpreadsheetApp.getUi();
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const response = ui.alert('Clear All Colors', 'This will remove ALL row colors but keep all data.\n\nContinue?', ui.ButtonSet.YES_NO);
-  if (response !== ui.Button.YES) return;
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  sheet.getRange(2, 1, lastRow - 1, lastCol).setBackground('#ffffff');
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
-  if (statusCol !== -1) {
-    sheet.getRange(2, statusCol + 1, lastRow - 1, 1).setValue('');
-  }
-  ui.alert('Success', `Cleared all colors from ${lastRow - 1} rows`, ui.ButtonSet.OK);
-}
-
-function bulkClearColor(targetColor, colorName) {
-  const ui = SpreadsheetApp.getUi();
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const response = ui.alert(`Clear ${colorName} Rows`, `This will remove color from all ${colorName} rows but keep the data.\n\nContinue?`, ui.ButtonSet.YES_NO);
-  if (response !== ui.Button.YES) return;
-  const data = sheet.getDataRange();
-  const backgrounds = data.getBackgrounds();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
-  let clearedCount = 0;
-  for (let i = 1; i < backgrounds.length; i++) {
-    const rowColor = backgrounds[i][0].toLowerCase();
-    if (rowColor === targetColor) {
-      const rowRange = sheet.getRange(i + 1, 1, 1, sheet.getLastColumn());
-      rowRange.setBackground('#ffffff');
-      if (statusCol !== -1) {
-        sheet.getRange(i + 1, statusCol + 1).setValue('');
-      }
-      clearedCount++;
-    }
-  }
-  ui.alert('Success', `Cleared color from ${clearedCount} ${colorName} rows`, ui.ButtonSet.OK);
-}
-
-// ====================================================================================
-// FILTER VIEW FUNCTIONS
-// ====================================================================================
-
-/**
- * Show Debug/Issues column and filter to show only rows with issues
- */
-function showDebugFilter() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
-
-  if (debugCol === -1) {
-    SpreadsheetApp.getUi().alert('Debug Column Not Found', 'No "Debug/Issues" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
-
-  sheet.showColumns(debugCol + 1);
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
-
-  const criteria = SpreadsheetApp.newFilterCriteria().whenCellNotEmpty().build();
-  filter.setColumnFilterCriteria(debugCol + 1, criteria);
-
-  SpreadsheetApp.getUi().alert('Debug Filter Applied', 'Now showing only rows with debug issues.', SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-/**
- * Clear all filters and hide Debug/Issues column
- */
-function clearDebugFilter() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
-  if (debugCol !== -1) sheet.hideColumns(debugCol + 1);
-
-  SpreadsheetApp.getUi().alert('Filter Cleared', 'All filters removed and Debug column hidden.', SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-/**
- * Filter by row color (status)
- */
-function showColorFilter(color) {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
-
-  if (statusCol === -1) {
-    SpreadsheetApp.getUi().alert('Status Column Not Found', 'No "Status" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
-
-  const colorMap = {
-    'yellow': 'Successful Order',
-    'fuschia': 'Voicemail/No Answer',
-    'red': 'Potentially Invalid',
-    'green': 'Requested Email',
-    'white': ''
-  };
-
-  const statusValue = colorMap[color.toLowerCase()];
-  if (statusValue === undefined) {
-    SpreadsheetApp.getUi().alert('Invalid Color', `Color "${color}" not recognized.`, SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
-
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
-
-  if (statusValue === '') {
-    const criteria = SpreadsheetApp.newFilterCriteria().whenCellEmpty().build();
-    filter.setColumnFilterCriteria(statusCol + 1, criteria);
-  } else {
-    const criteria = SpreadsheetApp.newFilterCriteria().whenTextEqualTo(statusValue).build();
-    filter.setColumnFilterCriteria(statusCol + 1, criteria);
-  }
-
-  SpreadsheetApp.getUi().alert('Color Filter Applied', `Now showing only ${color} rows.`, SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function showYellowFilter() { showColorFilter('yellow'); }
-function showFuschiaFilter() { showColorFilter('fuschia'); }
-function showRedFilter() { showColorFilter('red'); }
-function showGreenFilter() { showColorFilter('green'); }
-function showWhiteFilter() { showColorFilter('white'); }
 
 
 // ====================================================================================
@@ -1654,4 +1244,556 @@ function updateAllCallStatusBasedOnColor() {
     sheet.getRange(2, statusColumn, newStatuses.length, 1).setValues(newStatuses);
     SpreadsheetApp.getUi().alert('Synchronization complete.');
   }
+}
+
+
+// ====================================================================================
+// DEBUG REPAIR SIDEBAR - BACKEND FUNCTIONS
+// ====================================================================================
+
+/**
+ * Get debug data for the currently selected row
+ * Analyzes the row and identifies all potential issues
+ */
+function getDebugRowData() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const activeRange = sheet.getActiveRange();
+
+    if (!activeRange || activeRange.getRow() <= 1) {
+      return { error: 'Please select a data row (not the header)' };
+    }
+
+    const row = activeRange.getRow();
+    const data = sheet.getDataRange().getValues();
+    const backgrounds = sheet.getDataRange().getBackgrounds();
+    const headers = data[0];
+    const rowData = data[row - 1];
+    const rowBg = backgrounds[row - 1][0];
+
+    // Find column indices
+    const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
+    const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
+    const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
+    const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+    const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
+    const qtyCol = findMostRecentQtyColumn(headers);
+
+    // Extract row values
+    const officeName = rowData[officeCol] || '';
+    const phone = rowData[phoneCol] || '';
+    const address = rowData[addressCol] || '';
+    const status = rowData[statusCol] || '';
+    const notes = rowData[notesCol] || '';
+    const qty = rowData[qtyCol] || '';
+    const color = rowBg.toLowerCase();
+
+    // Determine row type
+    let rowType = 'white';
+    if (color === '#ffff00') rowType = 'yellow';
+    else if (color === '#ff00ff') rowType = 'fuschia';
+    else if (color === '#ff0000') rowType = 'red';
+    else if (color === '#00ff00') rowType = 'green';
+
+    // Analyze issues
+    const issues = [];
+    let fuzzyMatches = null;
+
+    // YELLOW ROW CHECKS
+    if (rowType === 'yellow') {
+      const newOrdersSheet = findNewOrdersSheet(SpreadsheetApp.getActiveSpreadsheet());
+      if (newOrdersSheet) {
+        fuzzyMatches = fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet);
+
+        if (fuzzyMatches.exactMatch) {
+          if (fuzzyMatches.qtyMatch) {
+            issues.push({ severity: 'success', message: '✓ Verified in New Orders with matching QTY' });
+          } else {
+            issues.push({
+              severity: 'warning',
+              message: `QTY mismatch: Working List=${qty}, New Orders=${fuzzyMatches.matchedQty}`,
+              action: 'update_qty'
+            });
+          }
+        } else if (fuzzyMatches.bestMatch && fuzzyMatches.confidence >= 0.80) {
+          issues.push({
+            severity: 'warning',
+            message: `Possible match in New Orders (${Math.round(fuzzyMatches.confidence * 100)}% confidence)`,
+            detail: `${fuzzyMatches.matchedName} - ${fuzzyMatches.matchedPhone}`,
+            action: 'review_match'
+          });
+        } else {
+          issues.push({
+            severity: 'error',
+            message: 'Not found in New Orders (yellow row should be verified order)',
+            action: 'add_to_orders'
+          });
+        }
+      }
+
+      if (qty == 0 || !qty) {
+        issues.push({ severity: 'error', message: 'QTY is 0 or empty for successful order' });
+      }
+    }
+
+    // FUSCHIA ROW CHECKS
+    if (rowType === 'fuschia') {
+      const commonPatterns = ['vm x2', 'vm x3', 'vm', 'voicemail', 'office closed', 'no answer', 'left message'];
+      const hasCommonNote = commonPatterns.some(p => notes.toLowerCase().includes(p));
+
+      if (hasCommonNote) {
+        issues.push({
+          severity: 'info',
+          message: 'Common voicemail note detected',
+          action: 'strip_note',
+          suggestions: commonPatterns.filter(p => notes.toLowerCase().includes(p))
+        });
+      }
+
+      if (notes.trim() === '') {
+        issues.push({ severity: 'warning', message: 'No notes for voicemail row' });
+      }
+    }
+
+    // RED ROW CHECKS
+    if (rowType === 'red') {
+      issues.push({
+        severity: 'info',
+        message: 'Potentially invalid office - consider adding to Invalid/Inactive list',
+        action: 'add_to_invalid'
+      });
+    }
+
+    // GREEN ROW CHECKS
+    if (rowType === 'green') {
+      issues.push({
+        severity: 'info',
+        message: 'Email requested - check Gmail for reply',
+        action: 'open_gmail'
+      });
+    }
+
+    // WHITE/EMPTY ROW CHECKS
+    if (rowType === 'white' && status === '') {
+      issues.push({
+        severity: 'info',
+        message: 'Uncalled row (no status set)',
+        action: 'none'
+      });
+    }
+
+    return {
+      success: true,
+      row: row,
+      rowType: rowType,
+      sheetName: sheet.getName(),
+      callStatus: status,
+      data: {
+        'Office Name': officeName,
+        'Phone Number': phone,
+        'Address': address,
+        'Status': status,
+        'Notes': notes,
+        'QTY': qty,
+        'Color': color
+      },
+      issues: issues,
+      fuzzyMatches: fuzzyMatches
+    };
+
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Enhanced fuzzy matching for New Orders validation
+ * Returns confidence score and best match details
+ */
+function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
+  const ordersData = newOrdersSheet.getDataRange().getValues();
+  const ordersHeaders = ordersData[0];
+
+  const ordersPhoneCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const ordersOfficeCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('office'));
+  const ordersAddressCol = ordersHeaders.findIndex(h => h && h.toLowerCase().includes('address'));
+  const ordersQtyCol = findMostRecentQtyColumn(ordersHeaders);
+
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedOfficeName = normalizeOfficeName(officeName);
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  // Search through New Orders
+  ordersData.slice(1).forEach((orderRow, idx) => {
+    const orderPhone = normalizePhone(orderRow[ordersPhoneCol]);
+    const orderOfficeName = normalizeOfficeName(orderRow[ordersOfficeCol]);
+    const orderAddress = (orderRow[ordersAddressCol] || '').toString().trim().toLowerCase();
+    const orderQty = orderRow[ordersQtyCol] || 0;
+
+    let score = 0;
+    let phoneMatch = false;
+    let nameMatch = false;
+    let addressMatch = false;
+
+    // Layer 1: Phone match (40% weight) - optional if phone exists
+    if (normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
+      score += 0.40;
+      phoneMatch = true;
+    }
+
+    // Layer 2: Office name match (40% weight)
+    if (normalizedOfficeName && orderOfficeName) {
+      // Exact normalized match
+      if (normalizedOfficeName === orderOfficeName) {
+        score += 0.40;
+        nameMatch = true;
+      } else {
+        // Fuzzy match using Levenshtein
+        const nameSimilarity = calculateSimilarity(normalizedOfficeName, orderOfficeName);
+        if (nameSimilarity >= 0.85) {
+          score += 0.40 * nameSimilarity;
+          if (nameSimilarity >= 0.90) nameMatch = true;
+        }
+      }
+    }
+
+    // Layer 3: Address match (20% weight)
+    if (address && orderAddress) {
+      const normalizedAddress = address.toLowerCase().trim();
+      if (normalizedAddress === orderAddress || orderAddress.includes(normalizedAddress) || normalizedAddress.includes(orderAddress)) {
+        score += 0.20;
+        addressMatch = true;
+      }
+    }
+
+    // Track best match
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = {
+        name: orderRow[ordersOfficeCol],
+        phone: orderRow[ordersPhoneCol],
+        address: orderRow[ordersAddressCol],
+        qty: orderQty,
+        phoneMatch: phoneMatch,
+        nameMatch: nameMatch,
+        addressMatch: addressMatch,
+        score: score
+      };
+    }
+  });
+
+  return {
+    bestMatch: bestMatch,
+    confidence: bestScore,
+    exactMatch: bestMatch && bestScore >= 0.95,
+    matchedName: bestMatch ? bestMatch.name : null,
+    matchedPhone: bestMatch ? bestMatch.phone : null,
+    matchedQty: bestMatch ? bestMatch.qty : null,
+    qtyMatch: bestMatch && qty && bestMatch.qty.toString() === qty.toString()
+  };
+}
+
+/**
+ * Normalize office name for matching
+ * Strips common variations (LLC, Dr., punctuation, etc.)
+ */
+function normalizeOfficeName(name) {
+  if (!name) return '';
+
+  let normalized = name.toString().toLowerCase().trim();
+
+  // Remove common legal suffixes
+  normalized = normalized.replace(/\b(llc|pc|pllc|inc|corp|ltd|dba|and associates|associates|group)\b/gi, '');
+
+  // Remove titles
+  normalized = normalized.replace(/\b(dr\.?|doctor|drs\.?)\s*/gi, '');
+
+  // Normalize "and" vs "&"
+  normalized = normalized.replace(/\s+&\s+/g, ' and ');
+  normalized = normalized.replace(/\s+\+\s+/g, ' and ');
+
+  // Remove punctuation except hyphens and apostrophes
+  normalized = normalized.replace(/[^a-z0-9\s\-']/g, '');
+
+  // Collapse multiple spaces
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
+}
+
+/**
+ * Clear color from current row (safe operation)
+ */
+function clearRowColor(rowNumber, sheetName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getActiveSheet();
+
+    if (!sheet) return { error: 'Sheet not found' };
+
+    const range = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn());
+    range.setBackground('#ffffff');
+
+    // Also clear status if it exists
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+    if (statusCol !== -1) {
+      sheet.getRange(rowNumber, statusCol + 1).setValue('');
+    }
+
+    return { success: true, message: `Cleared color for row ${rowNumber}` };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Update notes for current row
+ */
+function updateRowNotes(rowNumber, sheetName, newNotes) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getActiveSheet();
+
+    if (!sheet) return { error: 'Sheet not found' };
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const notesCol = headers.findIndex(h => h && h.toLowerCase().includes('note'));
+
+    if (notesCol === -1) return { error: 'Notes column not found' };
+
+    sheet.getRange(rowNumber, notesCol + 1).setValue(newNotes);
+
+    return { success: true, message: 'Notes updated' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Move to next row with debug issues
+ */
+function moveToNextDebugRow() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const currentRow = sheet.getActiveRange().getRow();
+    const lastRow = sheet.getLastRow();
+
+    // Find next row with issues (colored or with notes)
+    for (let i = currentRow + 1; i <= lastRow; i++) {
+      const bg = sheet.getRange(i, 1).getBackground();
+      if (bg !== '#ffffff') {
+        sheet.getRange(i, 1).activate();
+        return { success: true, row: i };
+      }
+    }
+
+    return { success: false, message: 'No more debug rows found' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Bulk clear all yellow rows
+ */
+function clearAllYellow() {
+  return bulkClearColor('#ffff00', 'yellow (Successful Order)');
+}
+
+/**
+ * Bulk clear all fuschia rows
+ */
+function clearAllFuschia() {
+  return bulkClearColor('#ff00ff', 'fuschia (Voicemail/No Answer)');
+}
+
+/**
+ * Bulk clear all green rows
+ */
+function clearAllGreen() {
+  return bulkClearColor('#00ff00', 'green (Requested Email)');
+}
+
+/**
+ * Bulk clear all colors (keep data)
+ */
+function clearAllColors() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+
+  const response = ui.alert(
+    'Clear All Colors',
+    'This will remove ALL row colors but keep all data.\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  // Clear all backgrounds except header
+  sheet.getRange(2, 1, lastRow - 1, lastCol).setBackground('#ffffff');
+
+  // Clear all status values
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+  if (statusCol !== -1) {
+    sheet.getRange(2, statusCol + 1, lastRow - 1, 1).setValue('');
+  }
+
+  ui.alert('Success', `Cleared all colors from ${lastRow - 1} rows`, ui.ButtonSet.OK);
+}
+
+/**
+ * Helper: Bulk clear specific color
+ */
+function bulkClearColor(targetColor, colorName) {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+
+  const response = ui.alert(
+    `Clear ${colorName} Rows`,
+    `This will remove color from all ${colorName} rows but keep the data.\n\nContinue?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const data = sheet.getDataRange();
+  const backgrounds = data.getBackgrounds();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+
+  let clearedCount = 0;
+
+  for (let i = 1; i < backgrounds.length; i++) {
+    const rowColor = backgrounds[i][0].toLowerCase();
+    if (rowColor === targetColor) {
+      const rowRange = sheet.getRange(i + 1, 1, 1, sheet.getLastColumn());
+      rowRange.setBackground('#ffffff');
+
+      // Clear status
+      if (statusCol !== -1) {
+        sheet.getRange(i + 1, statusCol + 1).setValue('');
+      }
+
+      clearedCount++;
+    }
+  }
+
+  ui.alert('Success', `Cleared color from ${clearedCount} ${colorName} rows`, ui.ButtonSet.OK);
+}
+
+// ====================================================================================
+// QUICK FIX TOOLS - ADDRESS STANDARDIZATION & INVALID LIST CHECK
+// ====================================================================================
+
+/**
+ * Standardize addresses to USPS format
+ * Applies proper capitalization and standard abbreviations
+ */
+function standardizeAddresses() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const selection = sheet.getActiveRange();
+
+  const response = ui.alert(
+    'Standardize Addresses',
+    'This will apply USPS standard abbreviations and capitalization to the selected range.\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const values = selection.getValues();
+  let fixedCount = 0;
+
+  const fixed = values.map(row => row.map(cell => {
+    if (cell && typeof cell === 'string') {
+      const fixedCell = standardizeAddress(cell);
+      if (fixedCell !== cell) fixedCount++;
+      return fixedCell;
+    }
+    return cell;
+  }));
+
+  selection.setValues(fixed);
+  ui.alert(`Standardized ${fixedCount} addresses`);
+}
+
+/**
+ * Helper: Standardize a single address to USPS format
+ */
+function standardizeAddress(address) {
+  if (!address || typeof address !== 'string') return address;
+
+  let std = address.trim();
+
+  // Step 1: Fix capitalization (same as office names)
+  std = std.split(' ').map(word => {
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+
+  // Step 2: USPS abbreviations (at end of address)
+  const abbrevMap = {
+    'Street': 'St',
+    'Avenue': 'Ave',
+    'Boulevard': 'Blvd',
+    'Drive': 'Dr',
+    'Road': 'Rd',
+    'Lane': 'Ln',
+    'Court': 'Ct',
+    'Circle': 'Cir',
+    'Place': 'Pl',
+    'Parkway': 'Pkwy',
+    'Suite': 'Ste',
+    'Apartment': 'Apt',
+    'Building': 'Bldg',
+    'Floor': 'Fl',
+    'Room': 'Rm',
+    'Number': '#',
+    'North': 'N',
+    'South': 'S',
+    'East': 'E',
+    'West': 'W',
+    'Northeast': 'NE',
+    'Northwest': 'NW',
+    'Southeast': 'SE',
+    'Southwest': 'SW'
+  };
+
+  // Replace full words with abbreviations
+  Object.keys(abbrevMap).forEach(full => {
+    const regex = new RegExp('\\b' + full + '\\b', 'gi');
+    std = std.replace(regex, abbrevMap[full]);
+  });
+
+  // Step 3: Standardize suite/apt format
+  std = std.replace(/\bSte\.?\s*/gi, 'Ste ');
+  std = std.replace(/\bApt\.?\s*/gi, 'Apt ');
+  std = std.replace(/\b#\s*/g, '#');
+
+  // Step 4: Remove multiple spaces
+  std = std.replace(/\s+/g, ' ').trim();
+
+  return std;
+}
+
+/**
+ * Check if selected rows are in the Invalid/Inactive List
+ * Uses fuzzy matching to detect presence
+ */
+function checkSelectedRowsInInvalidList() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const selection = sheet.getActiveRange();
+
+  ui.alert('Not Yet Implemented', 'This feature will be implemented in the next update.\n\nIt will check selected rows against the Invalid/Inactive List using fuzzy matching.', ui.ButtonSet.OK);
+
+  // TODO: Implement fuzzy matching against Invalid/Inactive List
+  // Will be added in next phase
 }

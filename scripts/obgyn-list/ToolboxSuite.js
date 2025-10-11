@@ -24,21 +24,14 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
   ui.createMenu('Misc. Tools')
+    .addSubMenu(ui.createMenu('🔧 Quick Fixes')
+      .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
+      .addItem('🏠 Standardize Addresses in Selection', 'standardizeAddresses')
+      .addItem('🔍 Check if in Invalid/Inactive List', 'checkSelectedRowsInInvalidList'))
+    .addSeparator()
+    .addItem('🛠️ Open Debug Repair Tool', 'showDebugRepairSidebar')
+    .addSeparator()
     .addItem('🔗 Create Search Links', 'createGoogleSearchLinks')
-    .addSeparator()
-    .addItem('🔧 Open Debug Repair Tool', 'showDebugRepairSidebar')
-    .addSeparator()
-    .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('🔍 Filter Views')
-      .addItem('Show Debug Issues Filter', 'showDebugFilter')
-      .addItem('Clear Filters', 'clearDebugFilter')
-      .addSeparator()
-      .addItem('Filter Yellow Rows', 'showYellowFilter')
-      .addItem('Filter Fuschia Rows', 'showFuschiaFilter')
-      .addItem('Filter Red Rows', 'showRedFilter')
-      .addItem('Filter Green Rows', 'showGreenFilter')
-      .addItem('Filter Empty/White Rows', 'showWhiteFilter'))
     .addSeparator()
     .addSubMenu(ui.createMenu('🗑️ Bulk Clear Colors')
       .addItem('Clear All Yellow Rows', 'clearAllYellow')
@@ -57,9 +50,20 @@ function onOpen() {
 }
 
 /**
- * Shows the Debug Repair sidebar
+ * Shows the Debug Repair sidebar and unhides Debug/Issues column
  */
 function showDebugRepairSidebar() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+
+  // Unhide Debug/Issues column if it exists
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+
+  if (debugCol !== -1) {
+    sheet.showColumns(debugCol + 1);
+  }
+
+  // Show sidebar
   const html = HtmlService.createHtmlOutputFromFile('DebugRepairSidebar')
     .setTitle('Debug Repair Tool')
     .setWidth(350);
@@ -1685,98 +1689,111 @@ function bulkClearColor(targetColor, colorName) {
 }
 
 // ====================================================================================
-// FILTER VIEW FUNCTIONS
+// QUICK FIX TOOLS - ADDRESS STANDARDIZATION & INVALID LIST CHECK
 // ====================================================================================
 
 /**
- * Show Debug/Issues column and filter to show only rows with issues
+ * Standardize addresses to USPS format
+ * Applies proper capitalization and standard abbreviations
  */
-function showDebugFilter() {
+function standardizeAddresses() {
+  const ui = SpreadsheetApp.getUi();
   const sheet = SpreadsheetApp.getActiveSheet();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+  const selection = sheet.getActiveRange();
 
-  if (debugCol === -1) {
-    SpreadsheetApp.getUi().alert('Debug Column Not Found', 'No "Debug/Issues" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
+  const response = ui.alert(
+    'Standardize Addresses',
+    'This will apply USPS standard abbreviations and capitalization to the selected range.\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
 
-  sheet.showColumns(debugCol + 1);
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
+  if (response !== ui.Button.YES) return;
 
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+  const values = selection.getValues();
+  let fixedCount = 0;
 
-  const criteria = SpreadsheetApp.newFilterCriteria().whenCellNotEmpty().build();
-  filter.setColumnFilterCriteria(debugCol + 1, criteria);
+  const fixed = values.map(row => row.map(cell => {
+    if (cell && typeof cell === 'string') {
+      const fixedCell = standardizeAddress(cell);
+      if (fixedCell !== cell) fixedCount++;
+      return fixedCell;
+    }
+    return cell;
+  }));
 
-  SpreadsheetApp.getUi().alert('Debug Filter Applied', 'Now showing only rows with debug issues.', SpreadsheetApp.getUi().ButtonSet.OK);
+  selection.setValues(fixed);
+  ui.alert(`Standardized ${fixedCount} addresses`);
 }
 
 /**
- * Clear all filters and hide Debug/Issues column
+ * Helper: Standardize a single address to USPS format
  */
-function clearDebugFilter() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
+function standardizeAddress(address) {
+  if (!address || typeof address !== 'string') return address;
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
-  if (debugCol !== -1) sheet.hideColumns(debugCol + 1);
+  let std = address.trim();
 
-  SpreadsheetApp.getUi().alert('Filter Cleared', 'All filters removed and Debug column hidden.', SpreadsheetApp.getUi().ButtonSet.OK);
-}
+  // Step 1: Fix capitalization (same as office names)
+  std = std.split(' ').map(word => {
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
 
-/**
- * Filter by row color (status)
- */
-function showColorFilter(color) {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
-
-  if (statusCol === -1) {
-    SpreadsheetApp.getUi().alert('Status Column Not Found', 'No "Status" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
-
-  const colorMap = {
-    'yellow': 'Successful Order',
-    'fuschia': 'Voicemail/No Answer',
-    'red': 'Potentially Invalid',
-    'green': 'Requested Email',
-    'white': ''
+  // Step 2: USPS abbreviations (at end of address)
+  const abbrevMap = {
+    'Street': 'St',
+    'Avenue': 'Ave',
+    'Boulevard': 'Blvd',
+    'Drive': 'Dr',
+    'Road': 'Rd',
+    'Lane': 'Ln',
+    'Court': 'Ct',
+    'Circle': 'Cir',
+    'Place': 'Pl',
+    'Parkway': 'Pkwy',
+    'Suite': 'Ste',
+    'Apartment': 'Apt',
+    'Building': 'Bldg',
+    'Floor': 'Fl',
+    'Room': 'Rm',
+    'Number': '#',
+    'North': 'N',
+    'South': 'S',
+    'East': 'E',
+    'West': 'W',
+    'Northeast': 'NE',
+    'Northwest': 'NW',
+    'Southeast': 'SE',
+    'Southwest': 'SW'
   };
 
-  const statusValue = colorMap[color.toLowerCase()];
-  if (statusValue === undefined) {
-    SpreadsheetApp.getUi().alert('Invalid Color', `Color "${color}" not recognized.`, SpreadsheetApp.getUi().ButtonSet.OK);
-    return;
-  }
+  // Replace full words with abbreviations
+  Object.keys(abbrevMap).forEach(full => {
+    const regex = new RegExp('\\b' + full + '\\b', 'gi');
+    std = std.replace(regex, abbrevMap[full]);
+  });
 
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
+  // Step 3: Standardize suite/apt format
+  std = std.replace(/\bSte\.?\s*/gi, 'Ste ');
+  std = std.replace(/\bApt\.?\s*/gi, 'Apt ');
+  std = std.replace(/\b#\s*/g, '#');
 
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+  // Step 4: Remove multiple spaces
+  std = std.replace(/\s+/g, ' ').trim();
 
-  if (statusValue === '') {
-    const criteria = SpreadsheetApp.newFilterCriteria().whenCellEmpty().build();
-    filter.setColumnFilterCriteria(statusCol + 1, criteria);
-  } else {
-    const criteria = SpreadsheetApp.newFilterCriteria().whenTextEqualTo(statusValue).build();
-    filter.setColumnFilterCriteria(statusCol + 1, criteria);
-  }
-
-  SpreadsheetApp.getUi().alert('Color Filter Applied', `Now showing only ${color} rows.`, SpreadsheetApp.getUi().ButtonSet.OK);
+  return std;
 }
 
-function showYellowFilter() { showColorFilter('yellow'); }
-function showFuschiaFilter() { showColorFilter('fuschia'); }
-function showRedFilter() { showColorFilter('red'); }
-function showGreenFilter() { showColorFilter('green'); }
-function showWhiteFilter() { showColorFilter('white'); }
+/**
+ * Check if selected rows are in the Invalid/Inactive List
+ * Uses fuzzy matching to detect presence
+ */
+function checkSelectedRowsInInvalidList() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const selection = sheet.getActiveRange();
+
+  ui.alert('Not Yet Implemented', 'This feature will be implemented in the next update.\n\nIt will check selected rows against the Invalid/Inactive List using fuzzy matching.', ui.ButtonSet.OK);
+
+  // TODO: Implement fuzzy matching against Invalid/Inactive List
+  // Will be added in next phase
+}
