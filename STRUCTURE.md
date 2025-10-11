@@ -1,109 +1,92 @@
 # JGDC Project Structure
 
+## Root Directory - Active Documentation
+
 ```
 JGDC/
-├── .git/                      # Git version control
-├── .gitignore                 # Excludes CSVs, API keys, NPPES bulk data
+├── README.md                           # Main project overview
+├── TODO.md                             # Current task tracker (living document)
+├── MASTER_SYSTEM_DOCUMENTATION.md      # Complete system reference
+├── DEBUG_REPAIR_SYSTEM_SPEC.md         # Debug sidebar specification
+├── OBGYN_CLEANUP_CHECKLIST.md          # EOY operational guide
+├── STRUCTURE.md                        # This file
 │
-├── README.md                  # Main project documentation
-├── TODO.md                    # Master task list
-├── STRUCTURE.md               # This file
+├── data/                               # Data files (gitignored)
+│   ├── exports/                        # CSV exports from Google Sheets
+│   └── nppes/                          # NPPES bulk data + filter scripts
+│       └── NPPES_Data.../              # 9.1M provider records
 │
-├── scripts/                   # Google Apps Script code
-│   ├── provider-search/       # For Provider Search/Verification sheet
-│   │   ├── README.md
-│   │   ├── UniversalProviderSuite.js   # Main verification logic
+├── docs/                               # Documentation & guides
+│   ├── CLASP_SETUP.md                  # Apps Script CLI setup
+│   └── archive/                        # Historical documentation
+│       ├── sessions/                   # Session summaries
+│       │   ├── SESSION_SUMMARY_20251003.md
+│       │   └── OBGYN_FILTERING_SUMMARY_20251003.md
+│       └── config-fixes/               # Configuration fix logs
+│           ├── CONFIG_AUDIT_REPORT.md
+│           └── CONFIG_FIX_TIMELOG.md
+│
+├── scripts/                            # Google Apps Script code
+│   ├── provider-search/                # Verification automation
+│   │   ├── UniversalProviderSuite.js   # Main verification engine (v8.0)
 │   │   ├── QuickStartWizard.html       # Setup wizard UI
 │   │   ├── VerificationSidebar.html    # Manual verification UI
-│   │   ├── Code.js                     # (clasp-generated)
 │   │   ├── appsscript.json             # Apps Script manifest
-│   │   └── .clasp.json                 # (created when you run clasp clone)
+│   │   └── .clasp.json                 # (gitignored - script ID)
 │   │
-│   └── pcp-list/              # For Working List sheets (year-over-year tracking)
-│       ├── README.md
-│       ├── ToolboxSuite.js             # Main utilities
-│       └── .clasp.json                 # (created when you run clasp clone)
-│
-├── data/                      # All data files (gitignored)
-│   ├── exports/               # CSV exports from Google Sheets
-│   │   ├── PCP List 2025 - Use This List! - Working List 2025.csv
-│   │   ├── PCP List 2025 - Use This List! - STATS.tsv
-│   │   └── NPPES Provider Search - All_Verified_Providers.csv
+│   ├── obgyn-list/                     # OBGYN Working List automation
+│   │   ├── ToolboxSuite.js             # Main utilities (v10.0)
+│   │   ├── DebugRepairSidebar.html     # Debug repair UI
+│   │   ├── appsscript.json
+│   │   ├── .clasp.json                 # (gitignored)
+│   │   └── archive/                    # Old/deprecated scripts
+│   │       ├── fix_caps_consolidated.js
+│   │       ├── addHyperlink.js
+│   │       ├── Code.js
+│   │       └── status cells.js
 │   │
-│   └── nppes/                 # NPPES bulk data
-│       ├── README.md
-│       └── PCP Hunt/
-│           └── NPPES_Data_Dissemination_September_2025_V2/
-│               ├── nppes_filter_pcps.py              # v3.0 Filter script ⭐
-│               ├── npidata_pfile_*.csv               # Raw NPPES data (HUGE)
-│               ├── FILTERED_pcps_TX_20250927.csv    # Filtered outputs
-│               ├── FILTERED_pcps_TN_20250929.csv
-│               ├── FILTERED_pcps_OK_20250929.csv
-│               └── FILTERED_pcps_OR_20250929.csv
+│   ├── pcp-list/                       # PCP Working List automation
+│   │   ├── ToolboxSuite.js             # Same as OBGYN version
+│   │   ├── DebugRepairSidebar.html
+│   │   ├── appsscript.json
+│   │   └── .clasp.json                 # (gitignored)
+│   │
+│   └── nppes-filter/                   # NPPES filtering scripts
+│       └── nppes_filter_pcps.py        # Python filter script (v3.0)
 │
-└── docs/                      # Documentation
-    └── CLASP_SETUP.md         # How to link Apps Script with Git
+└── test-data/                          # Test scripts and data
+    ├── README.md
+    ├── similarity-test.js              # Fuzzy matching tests
+    └── ToolboxSuite.test.js            # Unit tests
 ```
 
 ---
 
-## Quick Start
+## Quick Reference
 
-### 1. Set up Google Apps Script sync (clasp)
+### Active Scripts
+| File | Purpose | Sheet |
+|------|---------|-------|
+| `scripts/provider-search/UniversalProviderSuite.js` | API verification | Provider Search |
+| `scripts/obgyn-list/ToolboxSuite.js` | EOY automation + utilities | OBGYN Working List |
+| `scripts/pcp-list/ToolboxSuite.js` | EOY automation + utilities | PCP Working List |
+| `scripts/nppes-filter/nppes_filter_pcps.py` | NPPES filtering | Local execution |
 
-```bash
-# Install clasp
-npm install -g @google/clasp
+### Active Documentation
+| File | Purpose | Audience |
+|------|---------|----------|
+| `TODO.md` | Current tasks | Development |
+| `DEBUG_REPAIR_SYSTEM_SPEC.md` | Debug sidebar spec | Development |
+| `MASTER_SYSTEM_DOCUMENTATION.md` | Complete system | Operations |
+| `OBGYN_CLEANUP_CHECKLIST.md` | EOY workflow | Operations |
 
-# Login
-clasp login
-
-# Setup Provider Search script
-cd scripts/provider-search
-clasp clone <PROVIDER_SEARCH_SCRIPT_ID>
-
-# Setup PCP List script
-cd ../pcp-list
-clasp clone <PCP_LIST_SCRIPT_ID>
-```
-
-### 2. Run NPPES filter
-
-```bash
-cd data/nppes/PCP\ Hunt/NPPES_Data_Dissemination_September_2025_V2
-python3 nppes_filter_pcps.py
-```
-
-### 3. Import to Google Sheets
-
-Manually import the filtered CSVs to your Google Sheets.
-
----
-
-## File Locations Quick Reference
-
-| What you need | Where it is |
-|--------------|-------------|
-| Provider verification script | `scripts/provider-search/UniversalProviderSuite.js` |
-| Working List utilities | `scripts/pcp-list/ToolboxSuite.js` |
-| NPPES filter script | `data/nppes/PCP Hunt/.../nppes_filter_pcps.py` |
-| Filtered provider CSVs | `data/nppes/PCP Hunt/.../FILTERED_pcps_*.csv` |
-| Exported working lists | `data/exports/*.csv` |
-| Setup guides | `docs/` and `scripts/*/README.md` |
-
----
-
-## Which Script for Which Sheet?
-
-### Provider Search Sheet
-- **Scripts:** `scripts/provider-search/`
-- **Purpose:** API-based verification of providers
-- **Outputs:** `nppes_verified`, `nppes_errors`, `nppes_formatted`
-
-### Working List Sheets (e.g., "Working List 2025")
-- **Scripts:** `scripts/pcp-list/`
-- **Purpose:** Outreach tracking, consolidation, utilities
-- **Features:** Color coding, search links, capitalization fix
+### Archived Documentation
+| File | Purpose | Date |
+|------|---------|------|
+| `docs/archive/sessions/SESSION_SUMMARY_20251003.md` | OBGYN campaign setup | Oct 3, 2025 |
+| `docs/archive/sessions/OBGYN_FILTERING_SUMMARY_20251003.md` | Filtering results | Oct 3, 2025 |
+| `docs/archive/config-fixes/CONFIG_AUDIT_REPORT.md` | Wizard bugs audit | Oct 7, 2025 |
+| `docs/archive/config-fixes/CONFIG_FIX_TIMELOG.md` | Wizard redesign log | Oct 7, 2025 |
 
 ---
 
@@ -111,18 +94,41 @@ Manually import the filtered CSVs to your Google Sheets.
 
 ```bash
 # Make changes to scripts locally
-cd scripts/pcp-list
+cd scripts/obgyn-list
 # Edit ToolboxSuite.js
 
-# Test in Google Sheets
+# Deploy to Google Sheets
 clasp push
 
-# Once working, commit to git
+# Commit to git
 git add ToolboxSuite.js
-git commit -m "Add validation function"
-
-# Push stays in Google Sheets (no separate push needed)
+git commit -m "Add feature X"
 ```
+
+---
+
+## Organization Principles
+
+### Root Directory
+- **Active specs only** (README, TODO, MASTER_SYSTEM_DOCUMENTATION, DEBUG_REPAIR_SYSTEM_SPEC)
+- **Operational guides** (OBGYN_CLEANUP_CHECKLIST)
+- **No session logs or historical reports** (archived in docs/archive/)
+
+### Scripts Folder
+- **One folder per script deployment** (maps to Google Apps Script projects)
+- **Active files only** (old/deprecated → archive subfolder)
+- **Consistent naming** (ToolboxSuite.js, DebugRepairSidebar.html)
+
+### Docs Folder
+- **Setup guides** (CLASP_SETUP.md)
+- **Archive subfolder** for historical documentation
+  - `sessions/` - Session summaries and filtering results
+  - `config-fixes/` - Bug fixes and audits
+
+### Data Folder
+- **Gitignored** (too large, sensitive)
+- **exports/** - CSV exports from Sheets
+- **nppes/** - NPPES bulk data (9.1M rows, 3 GB)
 
 ---
 
@@ -130,5 +136,6 @@ git commit -m "Add validation function"
 
 - All `.csv` files are gitignored (too large)
 - `.clasp.json` files are gitignored (contain project IDs)
-- Python script is tracked in git
-- Documentation and code are tracked in git
+- Python scripts are tracked in git
+- Session summaries archived after work complete
+- Deprecated scripts moved to `archive/` subfolders

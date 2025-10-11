@@ -30,9 +30,15 @@ function onOpen() {
     .addSeparator()
     .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
     .addSeparator()
-    .addSubMenu(ui.createMenu('🔍 Validation & Debugging')
-      .addItem('Find Issues in Current Sheet', 'validateCurrentSheet')
-      .addItem('Check for Duplicates', 'findDuplicatesInSheet'))
+    .addSubMenu(ui.createMenu('🔍 Filter Views')
+      .addItem('Show Debug Issues Filter', 'showDebugFilter')
+      .addItem('Clear Filters', 'clearDebugFilter')
+      .addSeparator()
+      .addItem('Filter Yellow Rows', 'showYellowFilter')
+      .addItem('Filter Fuschia Rows', 'showFuschiaFilter')
+      .addItem('Filter Red Rows', 'showRedFilter')
+      .addItem('Filter Green Rows', 'showGreenFilter')
+      .addItem('Filter Empty/White Rows', 'showWhiteFilter'))
     .addSeparator()
     .addSubMenu(ui.createMenu('🗑️ Bulk Clear Colors')
       .addItem('Clear All Yellow Rows', 'clearAllYellow')
@@ -43,9 +49,8 @@ function onOpen() {
     .addSubMenu(ui.createMenu('🎯 End-of-Year Workflow')
       .addItem('📋 Step 1: Audit Working List', 'auditWorkingList')
       .addItem('✅ Step 2: Validate Yellow → New Orders', 'validateYellowOrders')
-      .addItem('📝 Step 3: Enforce Not Interested Rules', 'enforceNotInterestedRules')
-      .addItem('🔍 Step 4: Detect Duplicates', 'detectAndFlagDuplicates')
-      .addItem('🎨 Step 5: Review Status-Based Issues', 'reviewStatusIssues')
+      .addItem('🔍 Step 3: Detect Duplicates', 'detectAndFlagDuplicates')
+      .addItem('🎨 Step 4: Review Status-Based Issues', 'reviewStatusIssues')
       .addSeparator()
       .addItem('🚀 Run Full EOY Automation', 'runFullEOYAutomation'))
     .addToUi();
@@ -622,9 +627,13 @@ function fixCapitalization(name) {
     // Apostrophes (o'donnell → O'Donnell)
     else if (cleanWord.includes("'")) {
       const parts = cleanWord.split("'");
-      const formatted = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase() +
-        "'" + (parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase() : '');
-      fixed.push(formatted + punctuation);
+      let afterApostrophe = '';
+      if (parts[1]) {
+        // If just possessive 's', keep lowercase; otherwise capitalize (O'Donnell)
+        afterApostrophe = parts[1].toLowerCase() === 's' ? 's' : parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+      }
+      const formatted = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase() + "'" + afterApostrophe;
+      fixed.push(formatted + punctuation);
     }
     // Regular word
     else {
@@ -677,78 +686,47 @@ function fixCapitalizationInColumn() {
 
 
 // ====================================================================================
-// VALIDATION & DEBUGGING TOOLS (STUBS - TO BE IMPLEMENTED)
-// ====================================================================================
-
-/**
- * Find common data issues in the current sheet
- * TODO: Implement validation checks
- */
-function validateCurrentSheet() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Validation Tool', 'This feature is under development.', ui.ButtonSet.OK);
-
-  // TODO: Check for:
-  // - Yellow rows not in New Orders
-  // - "Not interested" without notes or 0 in QTY
-  // - Potential duplicates (same phone/address)
-  // - QTY mismatches vs New Orders
-  // - Missing required data
-}
-
-/**
- * Find duplicate entries by phone/address
- * TODO: Implement duplicate detection
- */
-function findDuplicatesInSheet() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Duplicate Finder', 'This feature is under development.', ui.ButtonSet.OK);
-
-  // TODO: Group by phone + address, flag duplicates
-}
-
-
-// ====================================================================================
 // END-OF-YEAR AUTOMATION SUITE
 // ====================================================================================
 
 /**
  * EOY Step 1: Comprehensive audit of Working List
- * Identifies all issues that need attention before year-end transition
+ * Runs all validation checks and populates Debug/Issues column with findings
  */
 function auditWorkingList() {
   const ui = SpreadsheetApp.getUi();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 
-  ui.alert('Starting Audit',
-    'This will scan the current sheet for common issues.\n\n' +
-    'Issues will be flagged in a "Debug/Issues" column.',
-    ui.ButtonSet.OK);
+  const response = ui.alert('Start Audit?',
+    'This will scan the current sheet for all common issues and populate the "Debug/Issues" column.\n\n' +
+    '⚠️ This will also auto-fix some issues (Not Interested, QTY mismatches).\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO);
+
+  if (response !== ui.Button.YES) return;
 
   const issues = {
     yellowMissingInOrders: 0,
     notInterestedMissingNotes: 0,
-    notInterestedWrongQty: 0,
     duplicates: 0,
     statusReviewNeeded: 0
   };
 
-  // Run all validation checks
-  issues.yellowMissingInOrders = validateYellowOrders(true);
-  issues.notInterestedMissingNotes = enforceNotInterestedRules(true);
-  issues.duplicates = detectAndFlagDuplicates(true);
-  issues.statusReviewNeeded = reviewStatusIssues(true);
+  // Run all validation checks WITHOUT dry-run (will write to Debug column)
+  issues.yellowMissingInOrders = validateYellowOrders(false);
+  issues.notInterestedMissingNotes = enforceNotInterestedRules(false);
+  issues.duplicates = detectAndFlagDuplicates(false);
+  issues.statusReviewNeeded = reviewStatusIssues(true); // Still dry-run for status review
 
-  const total = Object.values(issues).reduce((a, b) => a + b, 0);
+  const total = issues.yellowMissingInOrders + issues.notInterestedMissingNotes + issues.duplicates;
 
   ui.alert('Audit Complete',
     `Found ${total} total issues:\n\n` +
     `• Yellow rows not in New Orders: ${issues.yellowMissingInOrders}\n` +
-    `• Not Interested missing notes: ${issues.notInterestedMissingNotes}\n` +
-    `• Not Interested wrong QTY: ${issues.notInterestedWrongQty}\n` +
+    `• Not Interested issues: ${issues.notInterestedMissingNotes}\n` +
     `• Duplicate entries: ${issues.duplicates}\n` +
     `• Status reviews needed: ${issues.statusReviewNeeded}\n\n` +
-    'Check the "Debug/Issues" column for details.',
+    'All findings have been written to the "Debug/Issues" column.',
     ui.ButtonSet.OK);
 }
 
@@ -805,7 +783,7 @@ function findNewOrdersSheet(ss) {
 
 /**
  * EOY Step 2: Validate Yellow (Successful Order) → New Orders sheet
- * Checks that yellow rows exist in New Orders with correct QTY
+ * Uses fuzzy matching on Office Name + Address (not phone, which isn't in New Orders)
  * @param {boolean} dryRun - If true, only count issues without fixing
  */
 function validateYellowOrders(dryRun = false) {
@@ -815,7 +793,9 @@ function validateYellowOrders(dryRun = false) {
   const newOrdersSheet = findNewOrdersSheet(ss);
 
   if (!newOrdersSheet) {
-    ui.alert('Error', 'Cannot find New Orders sheet.\n\nLooked for: "New Orders 2025", "New Orders", "Orders 2025", or sheets containing "order"', ui.ButtonSet.OK);
+    if (!dryRun) {
+      ui.alert('Error', 'Cannot find New Orders sheet.\n\nLooked for: "New Orders 2025", "New Orders", "Orders 2025", or sheets containing "order"', ui.ButtonSet.OK);
+    }
     return 0;
   }
 
@@ -825,23 +805,12 @@ function validateYellowOrders(dryRun = false) {
 
   const phoneCol = headers.findIndex(h => h && (h.toLowerCase().includes('phone') || h.toLowerCase().includes('number')));
   const officeCol = headers.findIndex(h => h && (h.toLowerCase().includes('office') || h.toLowerCase().includes('practice') || h.toLowerCase().includes('name')));
+  const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
   const qtyCol = findMostRecentQtyColumn(headers);
   const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
 
-  // Get New Orders data
-  const ordersData = newOrdersSheet.getDataRange().getValues();
-  const ordersHeaders = ordersData[0];
-  const ordersPhoneCol = ordersHeaders.findIndex(h => h && (h.toLowerCase().includes('phone') || h.toLowerCase().includes('number')));
-  const ordersQtyCol = findMostRecentQtyColumn(ordersHeaders);
-
-  const ordersMap = new Map();
-  ordersData.slice(1).forEach(row => {
-    const phone = normalizePhone(row[ordersPhoneCol]);
-    const qty = parseFloat(row[ordersQtyCol]) || 0;
-    if (phone) ordersMap.set(phone, qty);
-  });
-
   let issuesFound = 0;
+  let autoFixed = 0;
   const issuesCol = getOrCreateDebugColumn(workingSheet);
 
   for (let i = 1; i < data.length; i++) {
@@ -850,30 +819,54 @@ function validateYellowOrders(dryRun = false) {
 
     // Check if yellow (Successful Order)
     if (bgColor.toLowerCase() === '#ffff00') {
-      const phone = normalizePhone(row[phoneCol]);
+      const phone = phoneCol !== -1 ? row[phoneCol] : '';
+      const officeName = officeCol !== -1 ? row[officeCol] : '';
+      const address = addressCol !== -1 ? row[addressCol] : '';
       const workingQty = parseFloat(row[qtyCol]) || 0;
-      const orderQty = ordersMap.get(phone) || 0;
+
+      // Use fuzzy matching on Office Name + Address
+      const match = fuzzyMatchNewOrders(phone, officeName, address, workingQty, newOrdersSheet);
 
       let issue = null;
-      if (!ordersMap.has(phone)) {
-        issue = '⚠️ Yellow but NOT in New Orders';
+      let shouldFix = false;
+
+      if (match.exactMatch) {
+        // High confidence match (>=95%)
+        if (!match.qtyMatch) {
+          issue = `⚠️ QTY mismatch: Working=${workingQty}, Orders=${match.matchedQty}`;
+          issuesFound++;
+          // Auto-fix QTY for exact matches
+          if (!dryRun) {
+            workingSheet.getRange(i + 1, qtyCol + 1).setValue(match.matchedQty);
+            autoFixed++;
+          }
+        }
+        // If exact match with correct QTY, no issue (success case)
+      } else if (match.bestMatch && match.confidence >= 0.80) {
+        // Medium confidence (80-95%) - flag for manual review
+        issue = `⚠️ Possible match in Orders (${Math.round(match.confidence * 100)}%): ${match.matchedName}`;
         issuesFound++;
-      } else if (workingQty !== orderQty) {
-        issue = `⚠️ QTY mismatch: Working=${workingQty}, Orders=${orderQty}`;
+      } else {
+        // Low confidence (<80%) or no match - flag as not found
+        issue = '⚠️ Yellow but NOT found in New Orders (check manually)';
         issuesFound++;
       }
 
       if (issue && !dryRun) {
-        workingSheet.getRange(i + 1, issuesCol).setValue(issue);
+        // Append to existing debug issues (don't overwrite)
+        const existingIssues = workingSheet.getRange(i + 1, issuesCol).getValue() || '';
+        const newIssue = existingIssues ? `${existingIssues}; ${issue}` : issue;
+        workingSheet.getRange(i + 1, issuesCol).setValue(newIssue);
       }
     }
   }
 
   if (!dryRun) {
-    ui.alert('Yellow Orders Validation',
-      `Found ${issuesFound} issues with yellow rows.\n\n` +
-      'Check "Debug/Issues" column for details.',
-      ui.ButtonSet.OK);
+    const message = autoFixed > 0
+      ? `Found ${issuesFound} issues with yellow rows.\n\nAuto-fixed ${autoFixed} QTY mismatches.\n\nCheck "Debug/Issues" column for remaining issues.`
+      : `Found ${issuesFound} issues with yellow rows.\n\nCheck "Debug/Issues" column for details.`;
+
+    ui.alert('Yellow Orders Validation', message, ui.ButtonSet.OK);
   }
 
   return issuesFound;
@@ -931,7 +924,11 @@ function enforceNotInterestedRules(dryRun = false) {
       if (issues.length > 0) {
         issuesFound++;
         if (!dryRun) {
-          sheet.getRange(i + 1, issuesCol).setValue('⚠️ ' + issues.join('; '));
+          // Append to existing debug issues (don't overwrite)
+          const existingIssues = sheet.getRange(i + 1, issuesCol).getValue() || '';
+          const newIssue = '⚠️ ' + issues.join('; ');
+          const combined = existingIssues ? `${existingIssues}; ${newIssue}` : newIssue;
+          sheet.getRange(i + 1, issuesCol).setValue(combined);
         }
       }
     }
@@ -1026,14 +1023,26 @@ function detectAndFlagDuplicates(dryRun = false) {
     if (issues.length > 0) {
       duplicatesFound++;
       if (!dryRun) {
-        // Add to Debug/Issues column
-        sheet.getRange(i + 1, issuesCol).setValue('🔄 ' + issues.join('; '));
+        // Append to Debug/Issues column (don't overwrite)
+        const existingIssues = sheet.getRange(i + 1, issuesCol).getValue() || '';
+        const newIssue = '🔄 ' + issues.join('; ');
+        const combined = existingIssues ? `${existingIssues}; ${newIssue}` : newIssue;
+        sheet.getRange(i + 1, issuesCol).setValue(combined);
 
-        // If it's a network, add note to Notes column
+        // If it's a network, add note to Notes column with proper format
         if (needsNetworkNote && notesCol !== -1) {
           const currentNotes = (data[i][notesCol] || '').toString();
           if (!currentNotes.toLowerCase().includes('network') && !currentNotes.toLowerCase().includes('multiple location')) {
-            const newNote = currentNotes ? `${currentNotes}; Same network - multiple locations` : 'Same network - multiple locations';
+            // Extract network name (clean version of office name, lowercase for consistency)
+            const networkName = normalizeOfficeName(officeName).toLowerCase().replace(/\s+/g, '');
+            // Count is number of unique addresses
+            const dupeRows = phoneMap.get(phone);
+            const addresses = dupeRows.map(rowIdx => (data[rowIdx][addressCol] || '').toString().trim());
+            const locationCount = new Set(addresses).size;
+
+            // Format: "network-name network (~count);"
+            const networkNote = `${networkName} network (~${locationCount});`;
+            const newNote = currentNotes ? `${currentNotes}; ${networkNote}` : networkNote;
             sheet.getRange(i + 1, notesCol + 1).setValue(newNote);
           }
         }
@@ -1290,7 +1299,7 @@ function getDebugRowData() {
     if (rowType === 'yellow') {
       const newOrdersSheet = findNewOrdersSheet(SpreadsheetApp.getActiveSpreadsheet());
       if (newOrdersSheet) {
-        fuzzyMatches = fuzzyMatchNewOrders(phone, officeName, address, newOrdersSheet);
+        fuzzyMatches = fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet);
 
         if (fuzzyMatches.exactMatch) {
           if (fuzzyMatches.qtyMatch) {
@@ -1373,14 +1382,16 @@ function getDebugRowData() {
       success: true,
       row: row,
       rowType: rowType,
+      sheetName: sheet.getName(),
+      callStatus: status,
       data: {
-        officeName: officeName,
-        phone: phone,
-        address: address,
-        status: status,
-        notes: notes,
-        qty: qty,
-        color: color
+        'Office Name': officeName,
+        'Phone Number': phone,
+        'Address': address,
+        'Status': status,
+        'Notes': notes,
+        'QTY': qty,
+        'Color': color
       },
       issues: issues,
       fuzzyMatches: fuzzyMatches
@@ -1395,7 +1406,7 @@ function getDebugRowData() {
  * Enhanced fuzzy matching for New Orders validation
  * Returns confidence score and best match details
  */
-function fuzzyMatchNewOrders(phone, officeName, address, newOrdersSheet) {
+function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
   const ordersData = newOrdersSheet.getDataRange().getValues();
   const ordersHeaders = ordersData[0];
 
@@ -1422,7 +1433,7 @@ function fuzzyMatchNewOrders(phone, officeName, address, newOrdersSheet) {
     let nameMatch = false;
     let addressMatch = false;
 
-    // Layer 1: Phone match (40% weight)
+    // Layer 1: Phone match (40% weight) - optional if phone exists
     if (normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
       score += 0.40;
       phoneMatch = true;
@@ -1476,7 +1487,7 @@ function fuzzyMatchNewOrders(phone, officeName, address, newOrdersSheet) {
     matchedName: bestMatch ? bestMatch.name : null,
     matchedPhone: bestMatch ? bestMatch.phone : null,
     matchedQty: bestMatch ? bestMatch.qty : null,
-    qtyMatch: bestMatch && bestMatch.qty.toString() === qty.toString()
+    qtyMatch: bestMatch && qty && bestMatch.qty.toString() === qty.toString()
   };
 }
 
@@ -1672,3 +1683,100 @@ function bulkClearColor(targetColor, colorName) {
 
   ui.alert('Success', `Cleared color from ${clearedCount} ${colorName} rows`, ui.ButtonSet.OK);
 }
+
+// ====================================================================================
+// FILTER VIEW FUNCTIONS
+// ====================================================================================
+
+/**
+ * Show Debug/Issues column and filter to show only rows with issues
+ */
+function showDebugFilter() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+
+  if (debugCol === -1) {
+    SpreadsheetApp.getUi().alert('Debug Column Not Found', 'No "Debug/Issues" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  sheet.showColumns(debugCol + 1);
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) existingFilter.remove();
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+
+  const criteria = SpreadsheetApp.newFilterCriteria().whenCellNotEmpty().build();
+  filter.setColumnFilterCriteria(debugCol + 1, criteria);
+
+  SpreadsheetApp.getUi().alert('Debug Filter Applied', 'Now showing only rows with debug issues.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Clear all filters and hide Debug/Issues column
+ */
+function clearDebugFilter() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) existingFilter.remove();
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+  if (debugCol !== -1) sheet.hideColumns(debugCol + 1);
+
+  SpreadsheetApp.getUi().alert('Filter Cleared', 'All filters removed and Debug column hidden.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Filter by row color (status)
+ */
+function showColorFilter(color) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+
+  if (statusCol === -1) {
+    SpreadsheetApp.getUi().alert('Status Column Not Found', 'No "Status" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  const colorMap = {
+    'yellow': 'Successful Order',
+    'fuschia': 'Voicemail/No Answer',
+    'red': 'Potentially Invalid',
+    'green': 'Requested Email',
+    'white': ''
+  };
+
+  const statusValue = colorMap[color.toLowerCase()];
+  if (statusValue === undefined) {
+    SpreadsheetApp.getUi().alert('Invalid Color', `Color "${color}" not recognized.`, SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) existingFilter.remove();
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+
+  if (statusValue === '') {
+    const criteria = SpreadsheetApp.newFilterCriteria().whenCellEmpty().build();
+    filter.setColumnFilterCriteria(statusCol + 1, criteria);
+  } else {
+    const criteria = SpreadsheetApp.newFilterCriteria().whenTextEqualTo(statusValue).build();
+    filter.setColumnFilterCriteria(statusCol + 1, criteria);
+  }
+
+  SpreadsheetApp.getUi().alert('Color Filter Applied', `Now showing only ${color} rows.`, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function showYellowFilter() { showColorFilter('yellow'); }
+function showFuschiaFilter() { showColorFilter('fuschia'); }
+function showRedFilter() { showColorFilter('red'); }
+function showGreenFilter() { showColorFilter('green'); }
+function showWhiteFilter() { showColorFilter('white'); }

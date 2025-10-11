@@ -15,7 +15,9 @@
       "Bash(clasp status:*)",
       "Bash(clasp push:*)",
       "Bash(python:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebFetch(domain:docs.google.com)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

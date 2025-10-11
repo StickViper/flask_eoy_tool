@@ -2,6 +2,46 @@
 
 ## 🔴 IMMEDIATE PRIORITIES (Current Session)
 
+### 0. Fix Half-Implemented EOY Features (CRITICAL BUGS)
+
+**Status:** In progress - fixing bugs found during codebase audit
+
+#### ✅ COMPLETED:
+- [x] Fix DebugRepairSidebar field name mismatches (backend now returns proper column headers)
+
+#### 🔧 IN PROGRESS:
+- [ ] **EOY Step 2: Rewrite to use fuzzy matching** (CRITICAL BUG)
+  - **Problem:** Currently uses phone-only matching but phone isn't in New Orders
+  - **Reality:** New Orders only has Office Name + Address
+  - **Fix:** Use existing `fuzzyMatchNewOrders()` function with multi-field matching
+  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:815-883`, `scripts/pcp-list/ToolboxSuite.js:764-833`
+
+#### 📋 PENDING:
+- [ ] **EOY Step 1: Actually populate Debug/Issues column**
+  - **Problem:** Only shows alert with counts, doesn't write to Debug column
+  - **Fix:** Modify `auditWorkingList()` to write findings to column (not dry-run mode)
+  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:723-757`, `scripts/pcp-list/ToolboxSuite.js:723-757`
+
+- [ ] **Fix network notation format**
+  - **Current:** "Same network - multiple locations"
+  - **Wanted:** "sunlife network (~8);" with actual network name and location count
+  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1037-1042`, `scripts/pcp-list/ToolboxSuite.js:959-1056`
+
+- [ ] **Implement programmatic filter views**
+  - [ ] `showDebugFilter()` - unhide and filter Debug/Issues column
+  - [ ] `clearDebugFilter()` - restore normal view
+  - [ ] `showColorFilter(color)` - filter by status color
+  - [ ] Add '🔍 Debug Views' submenu to Misc. Tools menu
+
+- [ ] **Menu cleanup**
+  - [ ] Remove unused `validateCurrentSheet()` stub (lines 691-701)
+  - [ ] Remove unused `findDuplicatesInSheet()` stub (lines 707-712)
+  - [ ] Remove '🔍 Validation & Debugging' submenu from menu (lines 33-35)
+
+- [ ] **Move Not Interested to sidebar**
+  - [ ] Add Not Interested handling to DebugRepairSidebar UI
+  - [ ] Remove EOY Step 3 from menu after moving to sidebar
+
 ### 1. Install Python Dependencies (BLOCKING)
 ```bash
 pip install pandas
@@ -20,9 +60,14 @@ pip install pandas
 - **Expected API usage:** ~465 calls (well under 3000 limit)
 
 ### 3. Test EOY Automation on OBGYN Working List
-- **Status:** Code complete, needs real-world testing
+- **Status:** ⚠️ BLOCKED - Critical bugs found, fixing before testing
 - **Menu location:** Misc. Tools → End-of-Year Workflow
-- **Steps to test:**
+- **Blocking issues identified:**
+  1. ❌ Step 1 only shows alerts, doesn't populate Debug column
+  2. ❌ Step 2 uses phone matching but phone not in New Orders (BROKEN)
+  3. ⚠️ Network notation format wrong
+  4. ⚠️ DebugRepairSidebar had field name mismatches (FIXED)
+- **Steps to test (after fixes):**
   1. Open OBGYN Working List 2025
   2. Run "Step 1: Audit Working List"
   3. Review flagged issues in hidden "Debug/Issues" column
@@ -49,12 +94,12 @@ pip install pandas
 ### Data Quality & Validation
 
 - [ ] **Test all 6 EOY automation steps individually**
-  - [x] Step 1: Audit Working List ✅ (code complete)
-  - [x] Step 2: Validate Yellow → New Orders ✅ (code complete)
-  - [x] Step 3: Enforce Not Interested Rules ✅ (code complete)
-  - [x] Step 4: Detect Duplicates ✅ (code complete)
+  - [ ] Step 1: Audit Working List (❌ BUG: doesn't populate Debug column)
+  - [ ] Step 2: Validate Yellow → New Orders (❌ BROKEN: phone not in New Orders)
+  - [x] Step 3: Enforce Not Interested Rules ✅ (works but needs to move to sidebar)
+  - [ ] Step 4: Detect Duplicates (⚠️ works but network notation format wrong)
   - [x] Step 5: Review Status Issues ✅ (code complete)
-  - [ ] Test with real OBGYN data
+  - [ ] Test with real OBGYN data (BLOCKED until bugs fixed)
   - [ ] Identify and document edge cases
 
 - [ ] **Handle EOY transitions (Steps 6-7 - NOT YET AUTOMATED)**
@@ -175,21 +220,28 @@ pip install pandas
 
 ## ✅ RECENTLY COMPLETED (This Session)
 
+### Previous Session:
 - [x] Updated Python config for OBGYN filtering (TX, WA, CO, PA)
 - [x] Changed OUTPUT_PREFIX to 'FILTERED_obgyns'
 - [x] Added centralized API usage tracker (3000 limit)
 - [x] Added pre-flight safety check before verification starts
 - [x] Added in-flight safety check during batch processing
 - [x] Enhanced showApiUsage() with limit status and percentages
-- [x] Built complete EOY automation suite (6 validation steps)
-  - Yellow → New Orders validation
-  - Not Interested rule enforcement
-  - Duplicate detection (flag only, no auto-merge)
-  - Status-based review (Red/Fuschia/Green/Empty)
-  - Hidden Debug/Issues column creation
+- [x] Built EOY automation suite (6 validation steps) - ⚠️ found bugs, see section 0
+  - Yellow → New Orders validation (❌ BROKEN - phone not in New Orders)
+  - Not Interested rule enforcement (✅ works)
+  - Duplicate detection (⚠️ works but network notation format wrong)
+  - Status-based review (✅ works)
+  - Hidden Debug/Issues column creation (✅ works)
 - [x] Added EOY workflow menu to Misc. Tools
 - [x] Pushed all changes to Google Sheets via clasp
 - [x] Verified OBGYN taxonomy codes in filter script
+
+### Current Session (Bug Fixes):
+- [x] Audited codebase for half-implemented features
+- [x] Fixed DebugRepairSidebar field name mismatches
+- [x] Added detailed TODO section for remaining bugs
+- [x] Pushed DebugRepairSidebar fixes to both OBGYN and PCP sheets
 
 ---
 
@@ -279,19 +331,25 @@ pip install pandas
 
 ## 🚨 KNOWN ISSUES & RISKS
 
+### Critical (Must Fix Now)
+- **EOY Step 2 broken:** Uses phone matching but phone not in New Orders sheet
+- **EOY Step 1 incomplete:** Doesn't populate Debug column, only shows alert
+- **Network notation wrong format:** Uses generic text instead of "network-name network (~8);"
+
 ### High Risk
 - **Pandas not installed:** BLOCKING Python script execution
-- **Messy copy-pastes in New Orders:** Yellow validation may find many issues
+- **Messy copy-pastes in New Orders:** Yellow validation will find many issues (once Step 2 fixed)
 - **OBGYN sheet not connected to ToolboxSuite:** EOY automation won't work until connected
 
 ### Medium Risk
+- **Missing filter view functions:** `showDebugFilter()`, `clearDebugFilter()`, `showColorFilter()` not implemented
 - **Edge cases in "not interested" logic:** Need to test variations in Notes column
 - **Duplicate detection false positives:** Phone number formatting variations
 - **Status-based review complexity:** Many edge cases to handle
 
 ### Low Risk
 - **API limit exceeded:** Unlikely with current safeguards (3000 limit, 465 expected usage)
-- **Filter views breaking routes:** User mentioned but using filter views personally
+- **Unused validation menu stubs:** Don't break anything but clutter the menu
 
 ---
 
