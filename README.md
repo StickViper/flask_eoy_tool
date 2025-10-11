@@ -615,3 +615,344 @@ We filter to ONLY family/primary care codes to avoid wasting time calling specia
 
 **For emergencies:**
 Contact: noa.gilbert@gmail.com
+
+---
+
+## 📝 MISC - Additional Context & Knowledge
+
+### Multi-User Considerations
+
+**Who uses these sheets:**
+- 3 volunteers making phone calls (use Working List sheets directly)
+- 1 technical maintainer (uses Misc. Tools menu and Apps Script)
+- Volunteers DON'T use the Misc. Tools menu
+
+**Important implications:**
+- ⚠️ **Never use sheet-wide filters** - they affect all users simultaneously
+- ✅ Per-user filter views are already configured - use those instead
+- ✅ Color coding works for all users (onEdit triggers are global)
+- ✅ Sidebar tools are individual (HTML Service isolates per user)
+
+**Historical note:** Filter functions were removed from the Misc. Tools menu (commit ad88211) because they used `sheet.getFilter()` which creates sheet-wide filters that affected coworkers trying to work simultaneously.
+
+---
+
+### Recent Feature Additions (October 2025)
+
+#### 🔧 Quick Fixes Menu
+**Location:** Misc. Tools → Quick Fixes
+**Added:** October 2025
+
+Three new tools for common data cleanup tasks:
+
+1. **✨ Fix Capitalization in Selection**
+   - Handles: ALL CAPS → Title Case
+   - Mc/Mac names: `MCDONALD` → `McDonald`
+   - Apostrophes: `O'DONNELL` → `O'Donnell`
+   - Credentials: `M.D.` → `MD`, `N.P.` → `NP`
+   - Suffixes: `JR` → `Jr`, `SR` → `Sr`
+
+2. **🏠 Standardize Addresses in Selection**
+   - Applies USPS standard abbreviations
+   - Street → St, Avenue → Ave, Boulevard → Blvd
+   - Directional: North → N, Northeast → NE
+   - Suite/Apartment: Ste., Apt. → Ste, Apt
+   - Removes multiple spaces, fixes capitalization
+
+3. **🔍 Check if in Invalid/Inactive List**
+   - Uses fuzzy matching (40% phone + 40% name + 20% address)
+   - Thresholds: ≥95% = EXACT, ≥80% = LIKELY
+   - Shows confidence percentages
+   - Displays invalid reason from Invalid/Inactive List
+   - Safe: read-only, doesn't modify data
+
+**Use case:** Select a range of cells (office names, addresses, etc.), run the tool, get cleaned data.
+
+---
+
+### Fuzzy Matching Algorithm Details
+
+All fuzzy matching in the system uses consistent scoring:
+- **40% weight:** Phone number (exact match after normalization)
+- **40% weight:** Office name (uses Levenshtein distance)
+- **20% weight:** Address (substring match)
+
+**Thresholds:**
+- ≥ 95% = "Exact match" (auto-fix QTY mismatches)
+- ≥ 85% = Levenshtein similarity threshold (detects networks)
+- ≥ 80% = "Likely match" (flag for manual review)
+
+**Phone normalization:**
+- Strips extensions: `555-1234 x123` → `5551234`
+- Removes all non-digits: `(555) 123-4567` → `5551234567`
+- Takes last 10 digits (handles +1 country code)
+
+**Name normalization:**
+- Removes: LLC, PC, PLLC, INC, Dr., Doctor
+- Standardizes: & → and, + → and
+- Strips punctuation (keeps hyphens and apostrophes)
+
+**Empirically tested:** 85% threshold for network detection achieved 100% accuracy on real OBGYN data.
+
+---
+
+### Keyboard Shortcuts in Sidebars
+
+**Apps Script HTML Service supports keyboard shortcuts!**
+
+**How it works:**
+- Keyboard events work WITHIN the sidebar HTML (`document.addEventListener('keydown')`)
+- Do NOT work globally across Google Sheets (that's a platform limitation)
+- Perfect for navigation within a focused UI tool
+
+**Planned for Debug Repair Sidebar:**
+- `n` = Next debug row
+- `p` = Previous debug row
+- `d` = Dismiss/downgrade issue
+- `c` = Clear issue from Debug column
+
+**Implementation pattern:**
+```html
+<script>
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'n') moveToNextRow();
+  if (e.key === 'p') moveToPreviousRow();
+  // ... etc
+});
+</script>
+```
+
+---
+
+### Debug/Issues Column Behavior
+
+**Auto-created by EOY automation:**
+- Named: "Debug/Issues"
+- Background: Yellow (#fff2cc)
+- **Automatically hidden** after creation
+- To view: Right-click column headers → Unhide columns
+
+**Format:**
+```
+⚠️ Yellow but NOT in New Orders
+🔄 Duplicate phone (appears 2 times)
+ℹ️ Same network (3 locations, 1 phone)
+```
+
+**Why hidden by default:** Prevents clutter for volunteers doing phone calls. Technical maintainer can unhide when needed for debugging.
+
+---
+
+### Network Detection Logic
+
+**Problem:** Healthcare networks often have one central phone for multiple locations.
+
+**Example:**
+```
+Row 1: Women's Health Center, 555-1234, 123 Main St, Austin
+Row 2: Women's Health Center, 555-1234, 456 Oak Ave, Austin
+Row 3: Women's Health Center, 555-1234, 789 Elm St, Round Rock
+```
+
+**Detection:**
+- Same phone number across rows: ✓
+- Same/similar name (≥85% similarity): ✓
+- Different addresses: ✓
+- **Conclusion:** Same network, NOT duplicates
+
+**Auto-action:** Adds to Notes column:
+```
+womenshealthcenter network (~3);
+```
+
+**Format:** Lowercase name (no spaces) + "network" + location count + semicolon
+
+**Why this format:** Consistent, searchable, doesn't conflict with other notes.
+
+---
+
+### OBGYN vs PCP Lists - Keeping in Sync
+
+**Two separate Google Sheets:**
+1. "OBGYN Working List 2025" (uses scripts/obgyn-list/)
+2. "PCP List 2025" (uses scripts/pcp-list/)
+
+**Code synchronization:**
+- ToolboxSuite.js is identical in both folders
+- When making changes: `cp scripts/obgyn-list/ToolboxSuite.js scripts/pcp-list/ToolboxSuite.js`
+- Deploy separately: `clasp push` in each folder
+
+**Why separate scripts:**
+- Different Google Sheet = different Apps Script project
+- Allows per-sheet API key storage (ScriptProperties is per-project)
+- Enables independent testing (can test on PCP without affecting OBGYN)
+
+---
+
+### Invalid/Inactive List Sheet Structure
+
+**Purpose:** Permanent blacklist of providers who are closed, moved, or unreachable.
+
+**When to add:**
+- Phone disconnected (confirmed via multiple calls)
+- Provider retired/closed practice
+- Moved to unknown location
+- Repeatedly unreachable (6+ months of voicemails)
+
+**When NOT to add:**
+- Seasonal closures (vacation, maternity leave)
+- "Not interested" (stays in Working List with white color)
+- Wrong phone number (try to find correct one first)
+
+**Column G (INVALID/INACTIVE) examples:**
+- "Closed - retired"
+- "Phone disconnected"
+- "Moved - no forwarding"
+- "Practice sold/merged"
+- "No longer accepting patients"
+
+---
+
+### Smart Column Detection
+
+**Problem:** Different sheets have different column names.
+
+**Solution:** Code finds columns by searching for keywords (case-insensitive).
+
+**Examples:**
+```javascript
+// Finds "Office" OR "Practice" OR "Name"
+const officeCol = headers.findIndex(h =>
+  h && (h.toLowerCase().includes('office') ||
+        h.toLowerCase().includes('practice') ||
+        h.toLowerCase().includes('name'))
+);
+
+// Finds "Phone" OR "Number"
+const phoneCol = headers.findIndex(h =>
+  h && (h.toLowerCase().includes('phone') ||
+        h.toLowerCase().includes('number'))
+);
+
+// Finds most recent QTY (2025 > 2024 > 2023)
+const qtyCol = findMostRecentQtyColumn(headers);
+```
+
+**Why this matters:** You can rename columns without breaking the code (within reason).
+
+**Works:** "Office Name" → "Practice" → "Office" → "Name"
+**Breaks:** "Provider" (doesn't contain any of the search terms)
+
+---
+
+### Deployment Checklist
+
+When making changes to ToolboxSuite.js:
+
+1. ✅ Edit locally in `scripts/obgyn-list/ToolboxSuite.js`
+2. ✅ Test logic/syntax locally
+3. ✅ Sync to PCP: `cp scripts/obgyn-list/ToolboxSuite.js scripts/pcp-list/ToolboxSuite.js`
+4. ✅ Commit to git: `git add -A && git commit -m "Description"`
+5. ✅ Push to OBGYN sheet: `cd scripts/obgyn-list && clasp push`
+6. ✅ Push to PCP sheet: `cd scripts/pcp-list && clasp push`
+7. ✅ Test in Google Sheets (open both sheets, refresh, try the feature)
+8. ✅ Document changes in TODO.md
+
+**Common mistake:** Forgetting step 3 (sync to PCP) or step 6 (push to PCP sheet).
+
+---
+
+### Taxonomy Codes Quick Reference
+
+**Family Medicine:**
+- 207Q00000X - Family Medicine
+- 208D00000X - General Practice
+- 363LF0000X - Nurse Practitioner, Family
+
+**OBGYN:**
+- 207V00000X - Obstetrics & Gynecology
+- 207VX0000X - Obstetrics
+- 207VX0201X - Gynecology
+
+**Internal Medicine (PCPs):**
+- 207R00000X - Internal Medicine
+- 207RA0000X - Adolescent Medicine
+- 207RG0100X - Geriatric Medicine
+
+**What we EXCLUDE:**
+- 208M00000X - Hospitalist (not outpatient)
+- 207P00000X - Emergency Medicine (not primary care)
+- 208U00000X - Clinical Pharmacology (not prescribers)
+- Anything with "Hospital" in organization name
+
+---
+
+### Color Coding History
+
+**Why these specific colors?**
+
+| Color | Status | Reason for Choice |
+|-------|--------|-------------------|
+| Yellow (#FFFF00) | Successful Order | ✓ High contrast, easy to spot completed work |
+| Green (#00FF00) | Requested Email | ℹ️ "In progress" feel, waiting for reply |
+| Red (#FF0000) | Potentially Invalid | ⚠️ Universal warning color, needs attention |
+| Fuschia (#FF00FF) | Voicemail/No Answer | 💜 Distinct from red (not as urgent), easy to distinguish |
+| White (#FFFFFF) | Not interested / Empty | ⚪ Neutral, blends into sheet background |
+
+**Why NOT blue:** Hard to read black text on blue background
+**Why NOT orange:** Not a standard Google Sheets preset color (requires hex codes)
+
+**User feedback:** "Fuschia is easier to see than light blue" (from volunteer with color vision deficiency)
+
+---
+
+### Common Gotchas
+
+1. **Column J is hardcoded:** onEdit trigger checks `column === 10`. If you move Call Status, update `statusColumn` variable.
+
+2. **Sheet name is hardcoded:** onEdit checks `targetSheetName === 'Working List 2025'`. Update yearly.
+
+3. **Semicolon separators in Notes:** Format is `note1; note2; note3`. Code splits on `;` for deduplication.
+
+4. **Network notation format:** Must be lowercase, no spaces, ends with semicolon: `womenshealthcenter network (~3);`
+
+5. **Extensions in phone numbers:** Keep them for display (`555-1234 x123`) but matching strips them (`5551234`).
+
+6. **QTY = 0 vs empty:**
+   - "Not interested" → QTY = 0 (confirmed rejection)
+   - "Voicemail/No Answer" → QTY = empty (unknown, may order later)
+
+7. **Debug column is 1-based:** Apps Script uses 1-based indexing. `sheet.getRange(row, col)` where col=1 is column A.
+
+8. **clasp push doesn't auto-refresh:** After pushing, you MUST refresh the Google Sheets page (Ctrl+R) to see changes.
+
+---
+
+### Version Numbers Explained
+
+**Python script:** `nppes_filter_pcps.py` v3.0
+**Provider verification:** `UniversalProviderSuite.js` v8.0
+**Working List tools:** `ToolboxSuite.js` v10.0
+
+**Why different versions?**
+- Each component evolves independently
+- v8.0 added API safeguards (major feature)
+- v10.0 added EOY automation (major feature)
+
+**Versioning scheme:** MAJOR.MINOR
+- MAJOR: Breaking changes or significant new features
+- MINOR: Bug fixes, small improvements (not used consistently)
+
+---
+
+### Contact & Collaboration
+
+**Primary maintainer:** noa.gilbert@gmail.com
+**GitHub:** Not currently public (private volunteer project)
+**Contributions:** Contact maintainer if you want to help!
+
+**Skills needed:**
+- Python (data processing)
+- JavaScript/Apps Script (automation)
+- Google Sheets (volunteer work)
+- Healthcare domain knowledge (helpful but not required)
