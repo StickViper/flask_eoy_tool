@@ -10,6 +10,14 @@
 - [x] Fix DebugRepairSidebar field name mismatches (backend now returns proper column headers)
 
 #### 🔧 IN PROGRESS:
+- [ ] **VERIFICATION BUG: No specialty checking** (CRITICAL - False positives like dermatologists)
+  - **Problem:** Verification algorithm only checks name/phone/operational status
+  - **Example:** Dermatologist with 96% confidence passed as PCP
+  - **Reality:** Google Places API returns business types but we don't use them
+  - **Fix:** Add business type checking - penalize non-PCP specialties (dentist, dermatology, veterinary)
+  - **Files:** `scripts/provider-search/UniversalProviderSuite.js:493-540` (verifyPlace function)
+  - **API Field:** Need to add `places.types` to X-Goog-FieldMask
+
 - [ ] **EOY Step 2: Rewrite to use fuzzy matching** (CRITICAL BUG)
   - **Problem:** Currently uses phone-only matching but phone isn't in New Orders
   - **Reality:** New Orders only has Office Name + Address

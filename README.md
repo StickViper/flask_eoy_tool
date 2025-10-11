@@ -874,17 +874,54 @@ When making changes to ToolboxSuite.js:
 
 ---
 
-### Color Coding
+### Color Coding & Status System
 
-**Color scheme:**
+**Trigger:** onEdit on column J (Call Status) in "Working List 2025"
 
-| Color | Status | Hex Code |
-|-------|--------|----------|
-| Yellow | Successful Order | #FFFF00 |
-| Green | Requested Email | #00FF00 |
-| Red | Potentially Invalid | #FF0000 |
-| Fuschia | Voicemail/No Answer | #FF00FF |
-| White | Not interested / Empty | #FFFFFF |
+| Color | Status | Hex Code | Meaning |
+|-------|--------|----------|---------|
+| Yellow | Successful Order | #FFFF00 | Must exist in New Orders sheet |
+| Green | Requested Email | #00FF00 | Awaiting email response |
+| Red | Potentially Invalid | #FF0000 | Closed/disconnected/wrong number |
+| Fuschia | Voicemail/No Answer | #FF00FF | Leave QTY empty (not 0) |
+| White | Not interested | #FFFFFF | Auto-sets QTY=0, adds note |
+
+**Implementation:** `scripts/pcp-list/ToolboxSuite.js` and `scripts/obgyn-list/ToolboxSuite.js` (onEdit function)
+
+---
+
+### Verification Algorithm Limitations
+
+**CRITICAL ISSUE:** The Google Places API verification (UniversalProviderSuite.js) does NOT check specialty type.
+
+**Current scoring (96% confidence for Wassef the dermatologist):**
+- **40%** - Name similarity (Levenshtein distance)
+- **30%** - Phone number match (normalized)
+- **30%** - Business status (OPERATIONAL vs CLOSED)
+
+**What it DOESN'T check:**
+- ❌ Provider specialty (can pass dermatologists, dentists, veterinarians as PCPs)
+- ❌ Business type from Google Places API `types` field
+- ❌ Practice focus (urgent care, specialty clinics)
+
+**Why this matters:** ~25% verification success rate partially due to legitimate specialty mismatches that score high confidence.
+
+**Real example:** Mounir Wassef DO (dermatologist in Wellington, FL)
+- NPPES taxonomy: `207R00000X` (Internal Medicine)
+- Actual practice: Dermatology
+- Verification result: 96% confidence ✅ PASSED (should have failed)
+
+**The fix:** Add business type checking to `verifyPlace()` function:
+```javascript
+// Need to fetch place.types from API
+const excludedTypes = ['dentist', 'veterinary_care'];
+// Check primary_type or types array for specialty mismatch
+if (place.primaryType?.includes('dermatologist')) {
+  points -= 40; // Heavy penalty
+}
+```
+
+**See TODO.md for implementation details.**
 
 ---
 
