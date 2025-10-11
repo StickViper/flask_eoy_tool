@@ -791,25 +791,12 @@ womenshealthcenter network (~3);
 
 ### Invalid/Inactive List Sheet Structure
 
-**Purpose:** Permanent blacklist of providers who are closed, moved, or unreachable.
+**Purpose:** Permanent list of providers who are closed, moved, or unreachable.
 
-**When to add:**
-- Phone disconnected (confirmed via multiple calls)
-- Provider retired/closed practice
-- Moved to unknown location
-- Repeatedly unreachable (6+ months of voicemails)
-
-**When NOT to add:**
-- Seasonal closures (vacation, maternity leave)
-- "Not interested" (stays in Working List with white color)
-- Wrong phone number (try to find correct one first)
-
-**Column G (INVALID/INACTIVE) examples:**
-- "Closed - retired"
-- "Phone disconnected"
-- "Moved - no forwarding"
-- "Practice sold/merged"
-- "No longer accepting patients"
+**Column structure documented in MASTER_SYSTEM_DOCUMENTATION.md:**
+- Columns A-F: Office info (Name, Phone, Address, City, ST, Zip)
+- Column G: INVALID/INACTIVE (reason)
+- Column H: Notes
 
 ---
 
@@ -887,44 +874,33 @@ When making changes to ToolboxSuite.js:
 
 ---
 
-### Color Coding History
+### Color Coding
 
-**Why these specific colors?**
+**Color scheme:**
 
-| Color | Status | Reason for Choice |
-|-------|--------|-------------------|
-| Yellow (#FFFF00) | Successful Order | ✓ High contrast, easy to spot completed work |
-| Green (#00FF00) | Requested Email | ℹ️ "In progress" feel, waiting for reply |
-| Red (#FF0000) | Potentially Invalid | ⚠️ Universal warning color, needs attention |
-| Fuschia (#FF00FF) | Voicemail/No Answer | 💜 Distinct from red (not as urgent), easy to distinguish |
-| White (#FFFFFF) | Not interested / Empty | ⚪ Neutral, blends into sheet background |
-
-**Why NOT blue:** Hard to read black text on blue background
-**Why NOT orange:** Not a standard Google Sheets preset color (requires hex codes)
-
-**User feedback:** "Fuschia is easier to see than light blue" (from volunteer with color vision deficiency)
+| Color | Status | Hex Code |
+|-------|--------|----------|
+| Yellow | Successful Order | #FFFF00 |
+| Green | Requested Email | #00FF00 |
+| Red | Potentially Invalid | #FF0000 |
+| Fuschia | Voicemail/No Answer | #FF00FF |
+| White | Not interested / Empty | #FFFFFF |
 
 ---
 
 ### Common Gotchas
 
-1. **Column J is hardcoded:** onEdit trigger checks `column === 10`. If you move Call Status, update `statusColumn` variable.
+1. **Column J is hardcoded:** onEdit trigger in ToolboxSuite.js checks `statusColumn = 10`. Update if Call Status moves.
 
-2. **Sheet name is hardcoded:** onEdit checks `targetSheetName === 'Working List 2025'`. Update yearly.
+2. **Sheet name is hardcoded:** onEdit checks `targetSheetName = 'Working List 2025'`. Must update yearly.
 
-3. **Semicolon separators in Notes:** Format is `note1; note2; note3`. Code splits on `;` for deduplication.
+3. **Semicolon separators in Notes:** Code splits on `;` for deduplication. Format: `note1; note2; note3`
 
-4. **Network notation format:** Must be lowercase, no spaces, ends with semicolon: `womenshealthcenter network (~3);`
+4. **Network notation format:** Lowercase, no spaces, ends with semicolon: `womenshealthcenter network (~3);`
 
-5. **Extensions in phone numbers:** Keep them for display (`555-1234 x123`) but matching strips them (`5551234`).
+5. **Debug column is 1-based:** Apps Script uses 1-based indexing. `sheet.getRange(row, col)` where col=1 is column A.
 
-6. **QTY = 0 vs empty:**
-   - "Not interested" → QTY = 0 (confirmed rejection)
-   - "Voicemail/No Answer" → QTY = empty (unknown, may order later)
-
-7. **Debug column is 1-based:** Apps Script uses 1-based indexing. `sheet.getRange(row, col)` where col=1 is column A.
-
-8. **clasp push doesn't auto-refresh:** After pushing, you MUST refresh the Google Sheets page (Ctrl+R) to see changes.
+6. **clasp push requires refresh:** After `clasp push`, refresh Google Sheets (Ctrl+R) to see changes.
 
 ---
 
@@ -945,14 +921,6 @@ When making changes to ToolboxSuite.js:
 
 ---
 
-### Contact & Collaboration
+### Contact
 
 **Primary maintainer:** noa.gilbert@gmail.com
-**GitHub:** Not currently public (private volunteer project)
-**Contributions:** Contact maintainer if you want to help!
-
-**Skills needed:**
-- Python (data processing)
-- JavaScript/Apps Script (automation)
-- Google Sheets (volunteer work)
-- Healthcare domain knowledge (helpful but not required)
