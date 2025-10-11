@@ -1791,9 +1791,218 @@ function checkSelectedRowsInInvalidList() {
   const ui = SpreadsheetApp.getUi();
   const sheet = SpreadsheetApp.getActiveSheet();
   const selection = sheet.getActiveRange();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  ui.alert('Not Yet Implemented', 'This feature will be implemented in the next update.\n\nIt will check selected rows against the Invalid/Inactive List using fuzzy matching.', ui.ButtonSet.OK);
+  // Find Invalid/Inactive List sheet
+  const invalidSheet = findInvalidInactiveSheet(ss);
+  if (!invalidSheet) {
+    ui.alert('Error', 'Cannot find "Invalid/Inactive List" sheet.\n\nThis sheet must exist to check for invalid entries.', ui.ButtonSet.OK);
+    return;
+  }
 
-  // TODO: Implement fuzzy matching against Invalid/Inactive List
-  // Will be added in next phase
+  // Get selection data
+  const selectionData = selection.getValues();
+  const selectionStartRow = selection.getRow();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // Find column indices in working sheet
+  const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
+  const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
+
+  if (officeCol === -1 && phoneCol === -1 && addressCol === -1) {
+    ui.alert('Error', 'Could not find Office, Phone, or Address columns in the current sheet.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Check each selected row
+  const results = [];
+  selectionData.forEach((row, idx) => {
+    const rowNumber = selectionStartRow + idx;
+
+    // Get full row data from sheet (not just selection)
+    const fullRow = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const officeName = officeCol !== -1 ? fullRow[officeCol] || '' : '';
+    const phone = phoneCol !== -1 ? fullRow[phoneCol] || '' : '';
+    const address = addressCol !== -1 ? fullRow[addressCol] || '' : '';
+
+    // Skip empty rows
+    if (!officeName && !phone && !address) return;
+
+    const match = fuzzyMatchInvalidList(phone, officeName, address, invalidSheet);
+
+    if (match.bestMatch && match.confidence >= 0.80) {
+      results.push({
+        rowNumber: rowNumber,
+        officeName: officeName,
+        found: true,
+        confidence: match.confidence,
+        matchedName: match.matchedName,
+        matchedReason: match.matchedReason
+      });
+    } else {
+      results.push({
+        rowNumber: rowNumber,
+        officeName: officeName,
+        found: false
+      });
+    }
+  });
+
+  // Display results
+  if (results.length === 0) {
+    ui.alert('No Data', 'No valid rows found in selection.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const foundCount = results.filter(r => r.found).length;
+  const notFoundCount = results.length - foundCount;
+
+  let message = `Checked ${results.length} row(s) against Invalid/Inactive List:\n\n`;
+
+  if (foundCount > 0) {
+    message += `⚠️ FOUND IN INVALID LIST (${foundCount}):\n`;
+    results.filter(r => r.found).forEach(r => {
+      const confidencePercent = Math.round(r.confidence * 100);
+      const matchType = r.confidence >= 0.95 ? 'EXACT' : 'LIKELY';
+      message += `  • Row ${r.rowNumber}: ${r.officeName}\n`;
+      message += `    ${matchType} MATCH (${confidencePercent}%)\n`;
+      message += `    → "${r.matchedName}"\n`;
+      message += `    → Reason: ${r.matchedReason}\n\n`;
+    });
+  }
+
+  if (notFoundCount > 0) {
+    message += `✓ NOT FOUND (${notFoundCount}):\n`;
+    results.filter(r => !r.found).slice(0, 5).forEach(r => {
+      message += `  • Row ${r.rowNumber}: ${r.officeName}\n`;
+    });
+    if (notFoundCount > 5) {
+      message += `  ... and ${notFoundCount - 5} more\n`;
+    }
+  }
+
+  ui.alert('Invalid List Check Results', message, ui.ButtonSet.OK);
+}
+
+/**
+ * Helper: Find the Invalid/Inactive List sheet
+ * Tries exact match first, then fuzzy match
+ */
+function findInvalidInactiveSheet(ss) {
+  const sheetNames = ss.getSheets().map(s => s.getName());
+
+  // Try exact match
+  const exactNames = ['Invalid/Inactive List', 'Invalid-Inactive List', 'Invalid List', 'Inactive List'];
+  for (const name of exactNames) {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) return sheet;
+  }
+
+  // Try fuzzy match: contains both "invalid" and "inactive"
+  for (const name of sheetNames) {
+    const lower = name.toLowerCase();
+    if (lower.includes('invalid') && lower.includes('inactive')) {
+      return ss.getSheetByName(name);
+    }
+  }
+
+  // Try just "invalid"
+  for (const name of sheetNames) {
+    if (name.toLowerCase().includes('invalid')) {
+      return ss.getSheetByName(name);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fuzzy match a row against Invalid/Inactive List
+ * Returns confidence score and best match details
+ * Uses same scoring as fuzzyMatchNewOrders (40% phone, 40% name, 20% address)
+ */
+function fuzzyMatchInvalidList(phone, officeName, address, invalidSheet) {
+  const invalidData = invalidSheet.getDataRange().getValues();
+  const invalidHeaders = invalidData[0];
+
+  // Find columns in Invalid/Inactive List (A=Office, B=Phone, C=Address, G=INVALID/INACTIVE reason)
+  const invalidOfficeCol = invalidHeaders.findIndex(h => h && h.toLowerCase().includes('office'));
+  const invalidPhoneCol = invalidHeaders.findIndex(h => h && h.toLowerCase().includes('phone'));
+  const invalidAddressCol = invalidHeaders.findIndex(h => h && h.toLowerCase().includes('address'));
+  const invalidReasonCol = invalidHeaders.findIndex(h => h && (h.toLowerCase().includes('invalid') || h.toLowerCase().includes('inactive')));
+
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedOfficeName = normalizeOfficeName(officeName);
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  // Search through Invalid/Inactive List
+  invalidData.slice(1).forEach((invalidRow, idx) => {
+    const invalidPhone = normalizePhone(invalidRow[invalidPhoneCol]);
+    const invalidOfficeName = normalizeOfficeName(invalidRow[invalidOfficeCol]);
+    const invalidAddress = (invalidRow[invalidAddressCol] || '').toString().trim().toLowerCase();
+    const invalidReason = (invalidRow[invalidReasonCol] || '').toString().trim();
+
+    let score = 0;
+    let phoneMatch = false;
+    let nameMatch = false;
+    let addressMatch = false;
+
+    // Layer 1: Phone match (40% weight)
+    if (normalizedPhone && invalidPhone && normalizedPhone === invalidPhone) {
+      score += 0.40;
+      phoneMatch = true;
+    }
+
+    // Layer 2: Office name match (40% weight)
+    if (normalizedOfficeName && invalidOfficeName) {
+      // Exact normalized match
+      if (normalizedOfficeName === invalidOfficeName) {
+        score += 0.40;
+        nameMatch = true;
+      } else {
+        // Fuzzy match using Levenshtein
+        const nameSimilarity = calculateSimilarity(normalizedOfficeName, invalidOfficeName);
+        if (nameSimilarity >= 0.85) {
+          score += 0.40 * nameSimilarity;
+          if (nameSimilarity >= 0.90) nameMatch = true;
+        }
+      }
+    }
+
+    // Layer 3: Address match (20% weight)
+    if (address && invalidAddress) {
+      const normalizedAddress = address.toLowerCase().trim();
+      if (normalizedAddress === invalidAddress || invalidAddress.includes(normalizedAddress) || normalizedAddress.includes(invalidAddress)) {
+        score += 0.20;
+        addressMatch = true;
+      }
+    }
+
+    // Track best match
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = {
+        name: invalidRow[invalidOfficeCol],
+        phone: invalidRow[invalidPhoneCol],
+        address: invalidRow[invalidAddressCol],
+        reason: invalidReason || 'No reason provided',
+        phoneMatch: phoneMatch,
+        nameMatch: nameMatch,
+        addressMatch: addressMatch,
+        score: score
+      };
+    }
+  });
+
+  return {
+    bestMatch: bestMatch,
+    confidence: bestScore,
+    exactMatch: bestMatch && bestScore >= 0.95,
+    matchedName: bestMatch ? bestMatch.name : null,
+    matchedPhone: bestMatch ? bestMatch.phone : null,
+    matchedReason: bestMatch ? bestMatch.reason : null
+  };
 }
