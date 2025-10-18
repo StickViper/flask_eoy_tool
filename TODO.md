@@ -9,6 +9,25 @@
 #### ✅ COMPLETED:
 - [x] Fix DebugRepairSidebar field name mismatches (backend now returns proper column headers)
 
+#### ✅ COMPLETED (Oct 18, 2025):
+- [x] **EOY Step 2: Dynamic weight fuzzy matching** (FIXED!)
+  - **Problem:** Max score without phone was 60% (below 80% threshold) → all flagged as "not found"
+  - **Fix:** Dynamic weights - if no phone column detected, redistribute to name (70%) + address (30%)
+  - **Result:** Perfect name+address matches now score 100%, correctly identified as exact matches
+  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1421-1428`, `scripts/pcp-list/ToolboxSuite.js` (synced)
+  - **Deployed:** Both OBGYN and PCP sheets (Oct 18, 2025)
+
+- [x] **EOY Step 1: Debug column population** (VERIFIED - Already correct!)
+  - **Status:** Code review shows `getOrCreateDebugColumn()` + write logic already implemented
+  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1150-1166` (creates column), lines 857-859 (writes issues)
+  - **Note:** Documentation was outdated - function already works correctly
+
+- [x] **Network notation format** (VERIFIED - Already correct!)
+  - **Status:** Code already uses correct format: `"${networkName} network (~${locationCount});"`
+  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1037-1044`
+  - **Example output:** `"womenshealthcenter network (~8);"`
+  - **Note:** Documentation was outdated - function already works correctly
+
 #### 🔧 IN PROGRESS:
 - [ ] **VERIFICATION BUG: No specialty checking** (CRITICAL - False positives like dermatologists)
   - **Problem:** Verification algorithm only checks name/phone/operational status
@@ -18,22 +37,7 @@
   - **Files:** `scripts/provider-search/UniversalProviderSuite.js:493-540` (verifyPlace function)
   - **API Field:** Need to add `places.types` to X-Goog-FieldMask
 
-- [ ] **EOY Step 2: Rewrite to use fuzzy matching** (CRITICAL BUG)
-  - **Problem:** Currently uses phone-only matching but phone isn't in New Orders
-  - **Reality:** New Orders only has Office Name + Address
-  - **Fix:** Use existing `fuzzyMatchNewOrders()` function with multi-field matching
-  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:815-883`, `scripts/pcp-list/ToolboxSuite.js:764-833`
-
 #### 📋 PENDING:
-- [ ] **EOY Step 1: Actually populate Debug/Issues column**
-  - **Problem:** Only shows alert with counts, doesn't write to Debug column
-  - **Fix:** Modify `auditWorkingList()` to write findings to column (not dry-run mode)
-  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:723-757`, `scripts/pcp-list/ToolboxSuite.js:723-757`
-
-- [ ] **Fix network notation format**
-  - **Current:** "Same network - multiple locations"
-  - **Wanted:** "sunlife network (~8);" with actual network name and location count
-  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1037-1042`, `scripts/pcp-list/ToolboxSuite.js:959-1056`
 
 - [ ] **Implement programmatic filter views**
   - [ ] `showDebugFilter()` - unhide and filter Debug/Issues column
@@ -68,14 +72,14 @@ pip install pandas
 - **Expected API usage:** ~465 calls (well under 3000 limit)
 
 ### 3. Test EOY Automation on OBGYN Working List
-- **Status:** ⚠️ BLOCKED - Critical bugs found, fixing before testing
+- **Status:** ✅ READY TO TEST - Critical bugs fixed (Oct 18, 2025)
 - **Menu location:** Misc. Tools → End-of-Year Workflow
-- **Blocking issues identified:**
-  1. ❌ Step 1 only shows alerts, doesn't populate Debug column
-  2. ❌ Step 2 uses phone matching but phone not in New Orders (BROKEN)
-  3. ⚠️ Network notation format wrong
-  4. ⚠️ DebugRepairSidebar had field name mismatches (FIXED)
-- **Steps to test (after fixes):**
+- **Fixes deployed:**
+  1. ✅ Step 1 - Verified already correct (populates Debug column)
+  2. ✅ Step 2 - FIXED dynamic weight scoring (works without phone in New Orders)
+  3. ✅ Network notation - Verified already correct (uses "networkname network (~count);" format)
+  4. ✅ DebugRepairSidebar - Fixed field name mismatches (previous session)
+- **Steps to test:**
   1. Open OBGYN Working List 2025
   2. Run "Step 1: Audit Working List"
   3. Review flagged issues in hidden "Debug/Issues" column
