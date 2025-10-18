@@ -6,6 +6,7 @@
 JGDC/
 ├── README.md                           # Main project overview
 ├── TODO.md                             # Current task tracker (living document)
+├── AGENT_PRINCIPLES.md                 # AI agent coding rules (anti-spaghettification)
 ├── MASTER_SYSTEM_DOCUMENTATION.md      # Complete system reference
 ├── DEBUG_REPAIR_SYSTEM_SPEC.md         # Debug sidebar specification
 ├── OBGYN_CLEANUP_CHECKLIST.md          # EOY operational guide
@@ -13,6 +14,7 @@ JGDC/
 │
 ├── data/                               # Data files (gitignored)
 │   ├── exports/                        # CSV exports from Google Sheets
+│   ├── stats-snapshots/                # STATS sheet snapshots (JSON, dated)
 │   └── nppes/                          # NPPES bulk data + filter scripts
 │       └── NPPES_Data.../              # 9.1M provider records
 │
@@ -76,6 +78,7 @@ JGDC/
 | File | Purpose | Audience |
 |------|---------|----------|
 | `TODO.md` | Current tasks | Development |
+| `AGENT_PRINCIPLES.md` | AI agent rules | AI Agents |
 | `DEBUG_REPAIR_SYSTEM_SPEC.md` | Debug sidebar spec | Development |
 | `MASTER_SYSTEM_DOCUMENTATION.md` | Complete system | Operations |
 | `OBGYN_CLEANUP_CHECKLIST.md` | EOY workflow | Operations |
@@ -110,7 +113,7 @@ git commit -m "Add feature X"
 ## Organization Principles
 
 ### Root Directory
-- **Active specs only** (README, TODO, MASTER_SYSTEM_DOCUMENTATION, DEBUG_REPAIR_SYSTEM_SPEC)
+- **Active specs only** (README, TODO, AGENT_PRINCIPLES, MASTER_SYSTEM_DOCUMENTATION, DEBUG_REPAIR_SYSTEM_SPEC)
 - **Operational guides** (OBGYN_CLEANUP_CHECKLIST)
 - **No session logs or historical reports** (archived in docs/archive/)
 
@@ -128,6 +131,7 @@ git commit -m "Add feature X"
 ### Data Folder
 - **Gitignored** (too large, sensitive)
 - **exports/** - CSV exports from Sheets
+- **stats-snapshots/** - STATS sheet JSON snapshots (dated)
 - **nppes/** - NPPES bulk data (9.1M rows, 3 GB)
 
 ---
