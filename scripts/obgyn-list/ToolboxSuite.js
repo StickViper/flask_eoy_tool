@@ -1418,12 +1418,21 @@ function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
   const normalizedPhone = normalizePhone(phone);
   const normalizedOfficeName = normalizeOfficeName(officeName);
 
+  // CRITICAL FIX: Detect if phone column exists in New Orders
+  // If no phone, redistribute weight to name+address for accurate scoring
+  const hasPhoneInOrders = ordersPhoneCol !== -1;
+
+  // Dynamic weights based on available fields (always sum to 1.0)
+  const phoneWeight = hasPhoneInOrders ? 0.40 : 0.00;
+  const nameWeight = hasPhoneInOrders ? 0.40 : 0.70;   // 40%→70% if no phone
+  const addressWeight = hasPhoneInOrders ? 0.20 : 0.30; // 20%→30% if no phone
+
   let bestMatch = null;
   let bestScore = 0;
 
   // Search through New Orders
   ordersData.slice(1).forEach((orderRow, idx) => {
-    const orderPhone = normalizePhone(orderRow[ordersPhoneCol]);
+    const orderPhone = hasPhoneInOrders ? normalizePhone(orderRow[ordersPhoneCol]) : '';
     const orderOfficeName = normalizeOfficeName(orderRow[ordersOfficeCol]);
     const orderAddress = (orderRow[ordersAddressCol] || '').toString().trim().toLowerCase();
     const orderQty = orderRow[ordersQtyCol] || 0;
@@ -1433,33 +1442,33 @@ function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
     let nameMatch = false;
     let addressMatch = false;
 
-    // Layer 1: Phone match (40% weight) - optional if phone exists
-    if (normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
-      score += 0.40;
+    // Layer 1: Phone match (dynamic weight) - only if phone exists in Orders
+    if (hasPhoneInOrders && normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
+      score += phoneWeight;
       phoneMatch = true;
     }
 
-    // Layer 2: Office name match (40% weight)
+    // Layer 2: Office name match (dynamic weight)
     if (normalizedOfficeName && orderOfficeName) {
       // Exact normalized match
       if (normalizedOfficeName === orderOfficeName) {
-        score += 0.40;
+        score += nameWeight;
         nameMatch = true;
       } else {
         // Fuzzy match using Levenshtein
         const nameSimilarity = calculateSimilarity(normalizedOfficeName, orderOfficeName);
         if (nameSimilarity >= 0.85) {
-          score += 0.40 * nameSimilarity;
+          score += nameWeight * nameSimilarity;
           if (nameSimilarity >= 0.90) nameMatch = true;
         }
       }
     }
 
-    // Layer 3: Address match (20% weight)
+    // Layer 3: Address match (dynamic weight)
     if (address && orderAddress) {
       const normalizedAddress = address.toLowerCase().trim();
       if (normalizedAddress === orderAddress || orderAddress.includes(normalizedAddress) || normalizedAddress.includes(orderAddress)) {
-        score += 0.20;
+        score += addressWeight;
         addressMatch = true;
       }
     }

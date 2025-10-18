@@ -24,14 +24,21 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
   ui.createMenu('Misc. Tools')
-    .addSubMenu(ui.createMenu('🔧 Quick Fixes')
-      .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
-      .addItem('🏠 Standardize Addresses in Selection', 'standardizeAddresses')
-      .addItem('🔍 Check if in Invalid/Inactive List', 'checkSelectedRowsInInvalidList'))
-    .addSeparator()
-    .addItem('🛠️ Open Debug Repair Tool', 'showDebugRepairSidebar')
-    .addSeparator()
     .addItem('🔗 Create Search Links', 'createGoogleSearchLinks')
+    .addSeparator()
+    .addItem('🔧 Open Debug Repair Tool', 'showDebugRepairSidebar')
+    .addSeparator()
+    .addItem('✨ Fix Capitalization in Selection', 'fixCapitalizationInColumn')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🔍 Filter Views')
+      .addItem('Show Debug Issues Filter', 'showDebugFilter')
+      .addItem('Clear Filters', 'clearDebugFilter')
+      .addSeparator()
+      .addItem('Filter Yellow Rows', 'showYellowFilter')
+      .addItem('Filter Fuschia Rows', 'showFuschiaFilter')
+      .addItem('Filter Red Rows', 'showRedFilter')
+      .addItem('Filter Green Rows', 'showGreenFilter')
+      .addItem('Filter Empty/White Rows', 'showWhiteFilter'))
     .addSeparator()
     .addSubMenu(ui.createMenu('🗑️ Bulk Clear Colors')
       .addItem('Clear All Yellow Rows', 'clearAllYellow')
@@ -50,20 +57,9 @@ function onOpen() {
 }
 
 /**
- * Shows the Debug Repair sidebar and unhides Debug/Issues column
+ * Shows the Debug Repair sidebar
  */
 function showDebugRepairSidebar() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-
-  // Unhide Debug/Issues column if it exists
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
-
-  if (debugCol !== -1) {
-    sheet.showColumns(debugCol + 1);
-  }
-
-  // Show sidebar
   const html = HtmlService.createHtmlOutputFromFile('DebugRepairSidebar')
     .setTitle('Debug Repair Tool')
     .setWidth(350);
@@ -1422,12 +1418,21 @@ function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
   const normalizedPhone = normalizePhone(phone);
   const normalizedOfficeName = normalizeOfficeName(officeName);
 
+  // CRITICAL FIX: Detect if phone column exists in New Orders
+  // If no phone, redistribute weight to name+address for accurate scoring
+  const hasPhoneInOrders = ordersPhoneCol !== -1;
+
+  // Dynamic weights based on available fields (always sum to 1.0)
+  const phoneWeight = hasPhoneInOrders ? 0.40 : 0.00;
+  const nameWeight = hasPhoneInOrders ? 0.40 : 0.70;   // 40%→70% if no phone
+  const addressWeight = hasPhoneInOrders ? 0.20 : 0.30; // 20%→30% if no phone
+
   let bestMatch = null;
   let bestScore = 0;
 
   // Search through New Orders
   ordersData.slice(1).forEach((orderRow, idx) => {
-    const orderPhone = normalizePhone(orderRow[ordersPhoneCol]);
+    const orderPhone = hasPhoneInOrders ? normalizePhone(orderRow[ordersPhoneCol]) : '';
     const orderOfficeName = normalizeOfficeName(orderRow[ordersOfficeCol]);
     const orderAddress = (orderRow[ordersAddressCol] || '').toString().trim().toLowerCase();
     const orderQty = orderRow[ordersQtyCol] || 0;
@@ -1437,33 +1442,33 @@ function fuzzyMatchNewOrders(phone, officeName, address, qty, newOrdersSheet) {
     let nameMatch = false;
     let addressMatch = false;
 
-    // Layer 1: Phone match (40% weight) - optional if phone exists
-    if (normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
-      score += 0.40;
+    // Layer 1: Phone match (dynamic weight) - only if phone exists in Orders
+    if (hasPhoneInOrders && normalizedPhone && orderPhone && normalizedPhone === orderPhone) {
+      score += phoneWeight;
       phoneMatch = true;
     }
 
-    // Layer 2: Office name match (40% weight)
+    // Layer 2: Office name match (dynamic weight)
     if (normalizedOfficeName && orderOfficeName) {
       // Exact normalized match
       if (normalizedOfficeName === orderOfficeName) {
-        score += 0.40;
+        score += nameWeight;
         nameMatch = true;
       } else {
         // Fuzzy match using Levenshtein
         const nameSimilarity = calculateSimilarity(normalizedOfficeName, orderOfficeName);
         if (nameSimilarity >= 0.85) {
-          score += 0.40 * nameSimilarity;
+          score += nameWeight * nameSimilarity;
           if (nameSimilarity >= 0.90) nameMatch = true;
         }
       }
     }
 
-    // Layer 3: Address match (20% weight)
+    // Layer 3: Address match (dynamic weight)
     if (address && orderAddress) {
       const normalizedAddress = address.toLowerCase().trim();
       if (normalizedAddress === orderAddress || orderAddress.includes(normalizedAddress) || normalizedAddress.includes(orderAddress)) {
-        score += 0.20;
+        score += addressWeight;
         addressMatch = true;
       }
     }
@@ -1689,320 +1694,98 @@ function bulkClearColor(targetColor, colorName) {
 }
 
 // ====================================================================================
-// QUICK FIX TOOLS - ADDRESS STANDARDIZATION & INVALID LIST CHECK
+// FILTER VIEW FUNCTIONS
 // ====================================================================================
 
 /**
- * Standardize addresses to USPS format
- * Applies proper capitalization and standard abbreviations
+ * Show Debug/Issues column and filter to show only rows with issues
  */
-function standardizeAddresses() {
-  const ui = SpreadsheetApp.getUi();
+function showDebugFilter() {
   const sheet = SpreadsheetApp.getActiveSheet();
-  const selection = sheet.getActiveRange();
-
-  const response = ui.alert(
-    'Standardize Addresses',
-    'This will apply USPS standard abbreviations and capitalization to the selected range.\n\nContinue?',
-    ui.ButtonSet.YES_NO
-  );
-
-  if (response !== ui.Button.YES) return;
-
-  const values = selection.getValues();
-  let fixedCount = 0;
-
-  const fixed = values.map(row => row.map(cell => {
-    if (cell && typeof cell === 'string') {
-      const fixedCell = standardizeAddress(cell);
-      if (fixedCell !== cell) fixedCount++;
-      return fixedCell;
-    }
-    return cell;
-  }));
-
-  selection.setValues(fixed);
-  ui.alert(`Standardized ${fixedCount} addresses`);
-}
-
-/**
- * Helper: Standardize a single address to USPS format
- */
-function standardizeAddress(address) {
-  if (!address || typeof address !== 'string') return address;
-
-  let std = address.trim();
-
-  // Step 1: Fix capitalization (same as office names)
-  std = std.split(' ').map(word => {
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-  }).join(' ');
-
-  // Step 2: USPS abbreviations (at end of address)
-  const abbrevMap = {
-    'Street': 'St',
-    'Avenue': 'Ave',
-    'Boulevard': 'Blvd',
-    'Drive': 'Dr',
-    'Road': 'Rd',
-    'Lane': 'Ln',
-    'Court': 'Ct',
-    'Circle': 'Cir',
-    'Place': 'Pl',
-    'Parkway': 'Pkwy',
-    'Suite': 'Ste',
-    'Apartment': 'Apt',
-    'Building': 'Bldg',
-    'Floor': 'Fl',
-    'Room': 'Rm',
-    'Number': '#',
-    'North': 'N',
-    'South': 'S',
-    'East': 'E',
-    'West': 'W',
-    'Northeast': 'NE',
-    'Northwest': 'NW',
-    'Southeast': 'SE',
-    'Southwest': 'SW'
-  };
-
-  // Replace full words with abbreviations
-  Object.keys(abbrevMap).forEach(full => {
-    const regex = new RegExp('\\b' + full + '\\b', 'gi');
-    std = std.replace(regex, abbrevMap[full]);
-  });
-
-  // Step 3: Standardize suite/apt format
-  std = std.replace(/\bSte\.?\s*/gi, 'Ste ');
-  std = std.replace(/\bApt\.?\s*/gi, 'Apt ');
-  std = std.replace(/\b#\s*/g, '#');
-
-  // Step 4: Remove multiple spaces
-  std = std.replace(/\s+/g, ' ').trim();
-
-  return std;
-}
-
-/**
- * Check if selected rows are in the Invalid/Inactive List
- * Uses fuzzy matching to detect presence
- */
-function checkSelectedRowsInInvalidList() {
-  const ui = SpreadsheetApp.getUi();
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const selection = sheet.getActiveRange();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Find Invalid/Inactive List sheet
-  const invalidSheet = findInvalidInactiveSheet(ss);
-  if (!invalidSheet) {
-    ui.alert('Error', 'Cannot find "Invalid/Inactive List" sheet.\n\nThis sheet must exist to check for invalid entries.', ui.ButtonSet.OK);
-    return;
-  }
-
-  // Get selection data
-  const selectionData = selection.getValues();
-  const selectionStartRow = selection.getRow();
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
 
-  // Find column indices in working sheet
-  const officeCol = headers.findIndex(h => h && h.toLowerCase().includes('office'));
-  const phoneCol = headers.findIndex(h => h && h.toLowerCase().includes('phone'));
-  const addressCol = headers.findIndex(h => h && h.toLowerCase().includes('address'));
-
-  if (officeCol === -1 && phoneCol === -1 && addressCol === -1) {
-    ui.alert('Error', 'Could not find Office, Phone, or Address columns in the current sheet.', ui.ButtonSet.OK);
+  if (debugCol === -1) {
+    SpreadsheetApp.getUi().alert('Debug Column Not Found', 'No "Debug/Issues" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
     return;
   }
 
-  // Check each selected row
-  const results = [];
-  selectionData.forEach((row, idx) => {
-    const rowNumber = selectionStartRow + idx;
+  sheet.showColumns(debugCol + 1);
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) existingFilter.remove();
 
-    // Get full row data from sheet (not just selection)
-    const fullRow = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const officeName = officeCol !== -1 ? fullRow[officeCol] || '' : '';
-    const phone = phoneCol !== -1 ? fullRow[phoneCol] || '' : '';
-    const address = addressCol !== -1 ? fullRow[addressCol] || '' : '';
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
 
-    // Skip empty rows
-    if (!officeName && !phone && !address) return;
+  const criteria = SpreadsheetApp.newFilterCriteria().whenCellNotEmpty().build();
+  filter.setColumnFilterCriteria(debugCol + 1, criteria);
 
-    const match = fuzzyMatchInvalidList(phone, officeName, address, invalidSheet);
+  SpreadsheetApp.getUi().alert('Debug Filter Applied', 'Now showing only rows with debug issues.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
 
-    if (match.bestMatch && match.confidence >= 0.80) {
-      results.push({
-        rowNumber: rowNumber,
-        officeName: officeName,
-        found: true,
-        confidence: match.confidence,
-        matchedName: match.matchedName,
-        matchedReason: match.matchedReason
-      });
-    } else {
-      results.push({
-        rowNumber: rowNumber,
-        officeName: officeName,
-        found: false
-      });
-    }
-  });
+/**
+ * Clear all filters and hide Debug/Issues column
+ */
+function clearDebugFilter() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) existingFilter.remove();
 
-  // Display results
-  if (results.length === 0) {
-    ui.alert('No Data', 'No valid rows found in selection.', ui.ButtonSet.OK);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const debugCol = headers.findIndex(h => h && (h.includes('Debug') || h.includes('Issues')));
+  if (debugCol !== -1) sheet.hideColumns(debugCol + 1);
+
+  SpreadsheetApp.getUi().alert('Filter Cleared', 'All filters removed and Debug column hidden.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Filter by row color (status)
+ */
+function showColorFilter(color) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = headers.findIndex(h => h && h.toLowerCase().includes('status'));
+
+  if (statusCol === -1) {
+    SpreadsheetApp.getUi().alert('Status Column Not Found', 'No "Status" column exists in this sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
     return;
   }
 
-  const foundCount = results.filter(r => r.found).length;
-  const notFoundCount = results.length - foundCount;
-
-  let message = `Checked ${results.length} row(s) against Invalid/Inactive List:\n\n`;
-
-  if (foundCount > 0) {
-    message += `⚠️ FOUND IN INVALID LIST (${foundCount}):\n`;
-    results.filter(r => r.found).forEach(r => {
-      const confidencePercent = Math.round(r.confidence * 100);
-      const matchType = r.confidence >= 0.95 ? 'EXACT' : 'LIKELY';
-      message += `  • Row ${r.rowNumber}: ${r.officeName}\n`;
-      message += `    ${matchType} MATCH (${confidencePercent}%)\n`;
-      message += `    → "${r.matchedName}"\n`;
-      message += `    → Reason: ${r.matchedReason}\n\n`;
-    });
-  }
-
-  if (notFoundCount > 0) {
-    message += `✓ NOT FOUND (${notFoundCount}):\n`;
-    results.filter(r => !r.found).slice(0, 5).forEach(r => {
-      message += `  • Row ${r.rowNumber}: ${r.officeName}\n`;
-    });
-    if (notFoundCount > 5) {
-      message += `  ... and ${notFoundCount - 5} more\n`;
-    }
-  }
-
-  ui.alert('Invalid List Check Results', message, ui.ButtonSet.OK);
-}
-
-/**
- * Helper: Find the Invalid/Inactive List sheet
- * Tries exact match first, then fuzzy match
- */
-function findInvalidInactiveSheet(ss) {
-  const sheetNames = ss.getSheets().map(s => s.getName());
-
-  // Try exact match
-  const exactNames = ['Invalid/Inactive List', 'Invalid-Inactive List', 'Invalid List', 'Inactive List'];
-  for (const name of exactNames) {
-    const sheet = ss.getSheetByName(name);
-    if (sheet) return sheet;
-  }
-
-  // Try fuzzy match: contains both "invalid" and "inactive"
-  for (const name of sheetNames) {
-    const lower = name.toLowerCase();
-    if (lower.includes('invalid') && lower.includes('inactive')) {
-      return ss.getSheetByName(name);
-    }
-  }
-
-  // Try just "invalid"
-  for (const name of sheetNames) {
-    if (name.toLowerCase().includes('invalid')) {
-      return ss.getSheetByName(name);
-    }
-  }
-
-  return null;
-}
-
-/**
- * Fuzzy match a row against Invalid/Inactive List
- * Returns confidence score and best match details
- * Uses same scoring as fuzzyMatchNewOrders (40% phone, 40% name, 20% address)
- */
-function fuzzyMatchInvalidList(phone, officeName, address, invalidSheet) {
-  const invalidData = invalidSheet.getDataRange().getValues();
-  const invalidHeaders = invalidData[0];
-
-  // Find columns in Invalid/Inactive List (A=Office, B=Phone, C=Address, G=INVALID/INACTIVE reason)
-  const invalidOfficeCol = invalidHeaders.findIndex(h => h && h.toLowerCase().includes('office'));
-  const invalidPhoneCol = invalidHeaders.findIndex(h => h && h.toLowerCase().includes('phone'));
-  const invalidAddressCol = invalidHeaders.findIndex(h => h && h.toLowerCase().includes('address'));
-  const invalidReasonCol = invalidHeaders.findIndex(h => h && (h.toLowerCase().includes('invalid') || h.toLowerCase().includes('inactive')));
-
-  const normalizedPhone = normalizePhone(phone);
-  const normalizedOfficeName = normalizeOfficeName(officeName);
-
-  let bestMatch = null;
-  let bestScore = 0;
-
-  // Search through Invalid/Inactive List
-  invalidData.slice(1).forEach((invalidRow, idx) => {
-    const invalidPhone = normalizePhone(invalidRow[invalidPhoneCol]);
-    const invalidOfficeName = normalizeOfficeName(invalidRow[invalidOfficeCol]);
-    const invalidAddress = (invalidRow[invalidAddressCol] || '').toString().trim().toLowerCase();
-    const invalidReason = (invalidRow[invalidReasonCol] || '').toString().trim();
-
-    let score = 0;
-    let phoneMatch = false;
-    let nameMatch = false;
-    let addressMatch = false;
-
-    // Layer 1: Phone match (40% weight)
-    if (normalizedPhone && invalidPhone && normalizedPhone === invalidPhone) {
-      score += 0.40;
-      phoneMatch = true;
-    }
-
-    // Layer 2: Office name match (40% weight)
-    if (normalizedOfficeName && invalidOfficeName) {
-      // Exact normalized match
-      if (normalizedOfficeName === invalidOfficeName) {
-        score += 0.40;
-        nameMatch = true;
-      } else {
-        // Fuzzy match using Levenshtein
-        const nameSimilarity = calculateSimilarity(normalizedOfficeName, invalidOfficeName);
-        if (nameSimilarity >= 0.85) {
-          score += 0.40 * nameSimilarity;
-          if (nameSimilarity >= 0.90) nameMatch = true;
-        }
-      }
-    }
-
-    // Layer 3: Address match (20% weight)
-    if (address && invalidAddress) {
-      const normalizedAddress = address.toLowerCase().trim();
-      if (normalizedAddress === invalidAddress || invalidAddress.includes(normalizedAddress) || normalizedAddress.includes(invalidAddress)) {
-        score += 0.20;
-        addressMatch = true;
-      }
-    }
-
-    // Track best match
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = {
-        name: invalidRow[invalidOfficeCol],
-        phone: invalidRow[invalidPhoneCol],
-        address: invalidRow[invalidAddressCol],
-        reason: invalidReason || 'No reason provided',
-        phoneMatch: phoneMatch,
-        nameMatch: nameMatch,
-        addressMatch: addressMatch,
-        score: score
-      };
-    }
-  });
-
-  return {
-    bestMatch: bestMatch,
-    confidence: bestScore,
-    exactMatch: bestMatch && bestScore >= 0.95,
-    matchedName: bestMatch ? bestMatch.name : null,
-    matchedPhone: bestMatch ? bestMatch.phone : null,
-    matchedReason: bestMatch ? bestMatch.reason : null
+  const colorMap = {
+    'yellow': 'Successful Order',
+    'fuschia': 'Voicemail/No Answer',
+    'red': 'Potentially Invalid',
+    'green': 'Requested Email',
+    'white': ''
   };
+
+  const statusValue = colorMap[color.toLowerCase()];
+  if (statusValue === undefined) {
+    SpreadsheetApp.getUi().alert('Invalid Color', `Color "${color}" not recognized.`, SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  const existingFilter = sheet.getFilter();
+  if (existingFilter) existingFilter.remove();
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const filter = sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+
+  if (statusValue === '') {
+    const criteria = SpreadsheetApp.newFilterCriteria().whenCellEmpty().build();
+    filter.setColumnFilterCriteria(statusCol + 1, criteria);
+  } else {
+    const criteria = SpreadsheetApp.newFilterCriteria().whenTextEqualTo(statusValue).build();
+    filter.setColumnFilterCriteria(statusCol + 1, criteria);
+  }
+
+  SpreadsheetApp.getUi().alert('Color Filter Applied', `Now showing only ${color} rows.`, SpreadsheetApp.getUi().ButtonSet.OK);
 }
+
+function showYellowFilter() { showColorFilter('yellow'); }
+function showFuschiaFilter() { showColorFilter('fuschia'); }
+function showRedFilter() { showColorFilter('red'); }
+function showGreenFilter() { showColorFilter('green'); }
+function showWhiteFilter() { showColorFilter('white'); }
