@@ -417,6 +417,7 @@ function processBatch(inputSheet, startRow, endRow, apiKey) {
     const city = row[colMap['City']];
     const state = row[colMap['State']];
     const phone = row[colMap['Phone Number']];
+    const notes = colMap['Notes'] !== undefined ? row[colMap['Notes']] : null;
 
     // STATE FILTER: Skip rows not in target states list
     if (config.TARGET_STATES_ARRAY.length > 0 && state) {
@@ -438,6 +439,7 @@ function processBatch(inputSheet, startRow, endRow, apiKey) {
       rowNumber: actualRow,
       officeName: officeName,
       phone: phone,
+      notes: notes,
       rowData: row
     });
   });
@@ -539,7 +541,7 @@ function verifyPlace(apiResult, rowInfo) {
     points += 15;
   }
 
-  // Business type penalty (NEW - prevents specialists from passing)
+  // Business type penalty (prevents non-PCPs from passing)
   const excludedTypes = [
     'dentist',
     'veterinary_care',
@@ -562,16 +564,98 @@ function verifyPlace(apiResult, rowInfo) {
     result.notes = `Wrong specialty detected: ${excludedType}`;
   }
 
+  // Office name specialty keyword filter (NEW - catches specialists Google tags as 'doctor')
+  // This is a backup for specialists that slip through NPPES taxonomy filtering
+  const specialtyKeywords = [
+    // Medical Specialties
+    'cardiology', 'cardiologist', 'heart center', 'heart clinic',
+    'gastroenterology', 'gastroenterologist', 'digestive', 'gi clinic',
+    'pulmonology', 'pulmonologist', 'lung center', 'respiratory',
+    'endocrinology', 'endocrinologist', 'diabetes center', 'thyroid',
+    'nephrology', 'nephrologist', 'kidney', 'dialysis',
+    'rheumatology', 'rheumatologist', 'arthritis',
+    'hematology', 'oncology', 'oncologist', 'cancer center', 'cancer clinic',
+    'infectious disease',
+
+    // Surgery Specialties
+    'neurosurgery', 'neurosurgeon', 'brain surgeon',
+    'plastic surgery', 'plastic surgeon', 'cosmetic surgery', 'reconstructive',
+    'orthopedic', 'orthopaedic', 'sports medicine', 'joint replacement',
+    'vascular surgery', 'vascular surgeon',
+    'cardiac surgery', 'heart surgery',
+    'bariatric', 'weight loss surgery',
+
+    // Pediatrics
+    'pediatric', 'pediatrics', 'pediatrician', 'children', "children's",
+    'kids health', 'child health',
+
+    // Other Specialists
+    'dermatology', 'dermatologist', 'skin clinic',
+    'neurology', 'neurologist',
+    'psychiatry', 'psychiatrist', 'mental health',
+    'allergy', 'allergist', 'immunology',
+    'ophthalmology', 'ophthalmologist', 'eye doctor', 'eye clinic',
+    'ent ', ' ent', 'ear nose throat', 'otolaryngology',
+    'urology', 'urologist',
+    'pain management', 'pain clinic',
+    'sleep medicine', 'sleep center', 'sleep clinic',
+
+    // Age-Specific (Non-Target)
+    'geriatric', 'senior', 'elder care', 'retirement',
+    'adolescent medicine', 'teen health'
+  ];
+
+  // Check office name from both original input and Google's corrected name
+  const namesToCheck = [rowInfo.officeName, result.correctedName].filter(Boolean);
+
+  for (const name of namesToCheck) {
+    const nameLower = (name || '').toLowerCase();
+
+    for (const keyword of specialtyKeywords) {
+      if (nameLower.includes(keyword)) {  // keyword already lowercase
+        points -= 40; // Same heavy penalty as wrong business type
+        const prevNotes = result.notes || '';
+        result.notes = prevNotes ? `${prevNotes}; Specialist detected in name: ${keyword}` : `Specialist detected in name: ${keyword}`;
+        break; // Only apply penalty once
+      }
+    }
+
+    if (result.notes && result.notes.includes('Specialist detected in name:')) {
+      break; // Already found specialist keyword, no need to check other name
+    }
+  }
+
+  // Network penalty (for multi-location practices with 3+ locations)
+  // Check if rowInfo has Notes column data indicating a network
+  if (rowInfo.notes) {
+    const notesLower = rowInfo.notes.toString().toLowerCase();
+    const networkMatch = notesLower.match(/network\s*\(~(\d+)\)/);
+
+    if (networkMatch) {
+      const networkSize = parseInt(networkMatch[1]);
+
+      if (networkSize >= 3) {
+        points -= 10; // Moderate penalty for large networks
+        const networkNote = `Part of ${networkSize}-location network (manual review recommended)`;
+        result.notes = result.notes ? `${result.notes}; ${networkNote}` : networkNote;
+      }
+    }
+  }
+
   result.confidence = Math.max(0, points / maxPoints); // Ensure non-negative
 
   // Determine success
-  result.success = result.confidence >= config.HIGH_CONFIDENCE_THRESHOLD && 
+  result.success = result.confidence >= config.HIGH_CONFIDENCE_THRESHOLD &&
                    result.status === 'OPERATIONAL';
-  result.needsReview = result.confidence >= config.NAME_SIMILARITY_THRESHOLD && 
+  result.needsReview = result.confidence >= config.NAME_SIMILARITY_THRESHOLD &&
                        result.confidence < config.HIGH_CONFIDENCE_THRESHOLD;
-  result.notes = result.success ? 'Verified' : 
-                 result.needsReview ? `Low confidence (${Math.round(result.confidence * 100)}%)` :
-                 'Failed verification';
+
+  // Only set generic notes if specific reason wasn't already set (e.g., specialist detection)
+  if (!result.notes) {
+    result.notes = result.success ? 'Verified' :
+                   result.needsReview ? `Low confidence (${Math.round(result.confidence * 100)}%)` :
+                   'Failed verification';
+  }
 
   return result;
 }
@@ -741,11 +825,20 @@ function buildColumnMap(headers) {
   const required = [
     'Office Name', 'Phone Number', 'Address', 'City', 'State', 'ZIP', 'NPI'
   ];
-  
+
   required.forEach(col => {
     map[col] = headers.indexOf(col);
   });
-  
+
+  // Optional columns (for network detection, etc.)
+  const optional = ['Notes'];
+  optional.forEach(col => {
+    const idx = headers.indexOf(col);
+    if (idx !== -1) {
+      map[col] = idx;
+    }
+  });
+
   return map;
 }
 

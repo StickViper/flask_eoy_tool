@@ -17,7 +17,8 @@
       "Bash(python:*)",
       "Bash(node:*)",
       "WebFetch(domain:docs.google.com)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
