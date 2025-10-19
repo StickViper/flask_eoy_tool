@@ -7,10 +7,9 @@ JGDC/
 ├── README.md                           # Main project overview
 ├── TODO.md                             # Current task tracker (living document)
 ├── AGENT_PRINCIPLES.md                 # AI agent coding rules (anti-spaghettification)
-├── MASTER_SYSTEM_DOCUMENTATION.md      # Complete system reference
-├── DEBUG_REPAIR_SYSTEM_SPEC.md         # Debug sidebar specification
+├── STRUCTURE.md                        # This file (file locations guide)
+├── MASTER_SYSTEM_DOCUMENTATION.md      # Complete system reference (includes appendices)
 ├── OBGYN_CLEANUP_CHECKLIST.md          # EOY operational guide
-├── STRUCTURE.md                        # This file
 │
 ├── data/                               # Data files (gitignored)
 │   ├── exports/                        # CSV exports from Google Sheets
@@ -77,11 +76,13 @@ JGDC/
 ### Active Documentation
 | File | Purpose | Audience |
 |------|---------|----------|
+| `README.md` | Project overview | Everyone |
 | `TODO.md` | Current tasks | Development |
 | `AGENT_PRINCIPLES.md` | AI agent rules | AI Agents |
-| `DEBUG_REPAIR_SYSTEM_SPEC.md` | Debug sidebar spec | Development |
-| `MASTER_SYSTEM_DOCUMENTATION.md` | Complete system | Operations |
-| `OBGYN_CLEANUP_CHECKLIST.md` | EOY workflow | Operations |
+| `STRUCTURE.md` | File locations | Everyone |
+| `MASTER_SYSTEM_DOCUMENTATION.md` | Complete reference + appendices | Operations |
+| `OBGYN_CLEANUP_CHECKLIST.md` | EOY procedures | Operations |
+| `docs/CLASP_SETUP.md` | Apps Script setup | One-time setup |
 
 ### Archived Documentation
 | File | Purpose | Date |
@@ -113,9 +114,9 @@ git commit -m "Add feature X"
 ## Organization Principles
 
 ### Root Directory
-- **Active specs only** (README, TODO, AGENT_PRINCIPLES, MASTER_SYSTEM_DOCUMENTATION, DEBUG_REPAIR_SYSTEM_SPEC)
-- **Operational guides** (OBGYN_CLEANUP_CHECKLIST)
+- **Active docs only** (6 files: README, TODO, AGENT_PRINCIPLES, STRUCTURE, MASTER_SYSTEM_DOCUMENTATION, OBGYN_CLEANUP_CHECKLIST)
 - **No session logs or historical reports** (archived in docs/archive/)
+- **No separate appendices** (consolidated into MASTER_SYSTEM_DOCUMENTATION)
 
 ### Scripts Folder
 - **One folder per script deployment** (maps to Google Apps Script projects)
