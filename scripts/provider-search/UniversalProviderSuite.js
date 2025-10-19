@@ -7,6 +7,31 @@
 // CONFIGURATION MANAGEMENT
 // ====================================================================================
 
+// ============================================================================
+// IMPORTANT: FREE TIER COMPLIANCE (Solo dev / nonprofit project)
+// ============================================================================
+// Google Places API (New) has 3 pricing tiers based on FIELDS REQUESTED:
+//   - ESSENTIALS SKU: 10,000 free calls/month, then $17/1,000
+//   - PRO SKU: 5,000 free calls/month, then $25/1,000
+//   - ENTERPRISE SKU: 1,000 free calls/month, then $34.07/1,000 (AVOID!)
+//
+// YOU ARE BILLED AT THE HIGHEST TIER OF ANY FIELD IN YOUR REQUEST!
+//
+// This code uses ONLY Essentials tier fields to stay 100% free:
+//   ✅ places.id (required, no charge)
+//   ✅ places.formattedAddress (Essentials)
+//   ✅ places.types (Essentials)
+//
+// REMOVED FIELDS (to avoid Pro/Enterprise charges):
+//   ❌ places.nationalPhoneNumber (Enterprise SKU - was the killer!)
+//   ❌ places.displayName (Pro SKU)
+//   ❌ places.businessStatus (Pro SKU)
+//   ❌ places.primaryType (Pro SKU)
+//
+// DO NOT add fields without checking pricing tier at:
+// https://developers.google.com/maps/billing-and-pricing/pricing
+// ============================================================================
+
 const DEFAULT_CONFIG = {
   PROVIDER_TYPE: 'PCP',
   TARGET_STATES: 'TX',  // Comma-separated: 'TX' or 'TX,WA,CO,PA' or empty for all
@@ -19,8 +44,8 @@ const DEFAULT_CONFIG = {
   REQUIRE_PHONE_FOR_OPERATIONAL: true,
   CACHE_DURATION: 21600,
   FIX_CAPITALIZATION: true,
-  API_CALL_LIMIT: 3000,  // Hard limit before charges apply
-  API_WARNING_THRESHOLD: 2800  // Warn when approaching limit
+  API_CALL_LIMIT: 8000,  // Conservative limit (10,000 free for Essentials SKU, 2,000 buffer)
+  API_WARNING_THRESHOLD: 7500  // Warn when approaching limit (500 below hard limit)
 };
 
 function getConfig() {
@@ -479,13 +504,16 @@ function processBatch(inputSheet, startRow, endRow, apiKey) {
 }
 
 function buildSearchRequest(query, apiKey) {
+  // ⚠️ FREE TIER COMPLIANCE: ONLY Essentials SKU fields (10,000 free calls/month)
+  // DO NOT add Pro/Enterprise fields or you'll trigger expensive charges!
+  // Current fields: places.id (free), places.formattedAddress (Essentials), places.types (Essentials)
   return {
     url: 'https://places.googleapis.com/v1/places:searchText',
     method: 'post',
     contentType: 'application/json',
     headers: {
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.businessStatus,places.types,places.primaryType'
+      'X-Goog-FieldMask': 'places.id,places.formattedAddress,places.types'  // ESSENTIALS TIER ONLY!
     },
     payload: JSON.stringify({ textQuery: query }),
     muteHttpExceptions: true
@@ -505,43 +533,39 @@ function verifyPlace(apiResult, rowInfo) {
   const config = getConfig();
   const place = apiResult.places[0];
 
+  // ⚠️ FREE TIER COMPLIANCE: Only Essentials fields available
+  // We removed displayName, nationalPhoneNumber, businessStatus, primaryType to avoid charges
   const result = {
     placeId: place.id,
-    status: place.businessStatus || 'UNKNOWN',
-    correctedName: place.displayName?.text || '',
-    correctedPhone: place.nationalPhoneNumber || '',
+    status: 'FOUND',  // If Google returns it, assume it exists (was: businessStatus)
+    correctedName: '',  // Not available (was: displayName - Pro SKU)
+    correctedPhone: '',  // Not available (was: nationalPhoneNumber - Enterprise SKU)
     correctedAddress: place.formattedAddress || '',
     businessTypes: place.types || [],
-    primaryType: place.primaryType || '',
+    primaryType: '',  // Not available (was: primaryType - Pro SKU)
     confidence: 0
   };
 
-  // Calculate confidence
+  // Calculate confidence (SIMPLIFIED for Essentials tier)
   let points = 0;
   let maxPoints = 100;
 
-  // Name similarity (40%)
-  if (rowInfo.officeName && result.correctedName) {
-    points += calculateSimilarity(rowInfo.officeName, result.correctedName) * 40;
-  }
+  // Base confidence: If Google found a place matching our query, that's high confidence (80%)
+  // The query already includes office name + full address, so if Google returns a result,
+  // it's likely the right place.
+  points += 80;
 
-  // Phone match (30%)
-  if (rowInfo.phone && result.correctedPhone) {
-    if (normalizePhone(rowInfo.phone) === normalizePhone(result.correctedPhone)) {
-      points += 30;
-    }
-  } else if (result.correctedPhone) {
-    points += 15;
-  }
-
-  // Business status (30%)
-  if (result.status === 'OPERATIONAL') {
-    points += 30;
-  } else if (result.status === 'CLOSED_TEMPORARILY') {
-    points += 15;
+  // Business type validation (20%) - CRITICAL for specialty filtering
+  // If types indicate it's a valid healthcare provider (not excluded), add points
+  const hasValidType = result.businessTypes.some(t =>
+    ['doctor', 'health', 'medical_clinic', 'hospital'].includes(t.toLowerCase())
+  );
+  if (hasValidType) {
+    points += 20;
   }
 
   // Business type penalty (prevents non-PCPs from passing)
+  // These types indicate it's NOT a PCP office
   const excludedTypes = [
     'dentist',
     'veterinary_care',
@@ -549,22 +573,24 @@ function verifyPlace(apiResult, rowInfo) {
     'chiropractor',
     'optometrist',
     'pharmacy',
-    'hospital',
+    'hospital',  // Hospitals are excluded (we want independent practices)
     'beauty_salon',
-    'spa'
+    'spa',
+    'gym',
+    'fitness_center'
   ];
 
   const hasExcludedType = result.businessTypes.some(t =>
     excludedTypes.includes(t.toLowerCase())
-  ) || (result.primaryType && excludedTypes.includes(result.primaryType.toLowerCase()));
+  );
 
   if (hasExcludedType) {
-    points -= 40; // Heavy penalty - prevents 96% from becoming 56%
-    const excludedType = result.businessTypes.find(t => excludedTypes.includes(t.toLowerCase())) || result.primaryType;
-    result.notes = `Wrong specialty detected: ${excludedType}`;
+    points -= 40; // Heavy penalty - can drop from 100% to 60% (below 80% threshold)
+    const excludedType = result.businessTypes.find(t => excludedTypes.includes(t.toLowerCase()));
+    result.notes = `Wrong business type: ${excludedType}`;
   }
 
-  // Office name specialty keyword filter (NEW - catches specialists Google tags as 'doctor')
+  // Office name/address specialty keyword filter (catches specialists Google tags as 'doctor')
   // This is a backup for specialists that slip through NPPES taxonomy filtering
   const specialtyKeywords = [
     // Medical Specialties
@@ -605,23 +631,24 @@ function verifyPlace(apiResult, rowInfo) {
     'adolescent medicine', 'teen health'
   ];
 
-  // Check office name from both original input and Google's corrected name
-  const namesToCheck = [rowInfo.officeName, result.correctedName].filter(Boolean);
+  // Check office name from input and Google's formatted address (includes business name often)
+  // Note: correctedName not available (Pro SKU), using formattedAddress instead
+  const textsToCheck = [rowInfo.officeName, result.correctedAddress].filter(Boolean);
 
-  for (const name of namesToCheck) {
-    const nameLower = (name || '').toLowerCase();
+  for (const text of textsToCheck) {
+    const textLower = (text || '').toLowerCase();
 
     for (const keyword of specialtyKeywords) {
-      if (nameLower.includes(keyword)) {  // keyword already lowercase
+      if (textLower.includes(keyword)) {  // keyword already lowercase
         points -= 40; // Same heavy penalty as wrong business type
         const prevNotes = result.notes || '';
-        result.notes = prevNotes ? `${prevNotes}; Specialist detected in name: ${keyword}` : `Specialist detected in name: ${keyword}`;
-        break; // Only apply penalty once
+        result.notes = prevNotes ? `${prevNotes}; Specialist keyword: ${keyword}` : `Specialist keyword detected: ${keyword}`;
+        break; // Only apply penalty once per text
       }
     }
 
-    if (result.notes && result.notes.includes('Specialist detected in name:')) {
-      break; // Already found specialist keyword, no need to check other name
+    if (result.notes && result.notes.includes('Specialist keyword')) {
+      break; // Already found specialist keyword, no need to check other text
     }
   }
 
@@ -644,16 +671,16 @@ function verifyPlace(apiResult, rowInfo) {
 
   result.confidence = Math.max(0, points / maxPoints); // Ensure non-negative
 
-  // Determine success
-  result.success = result.confidence >= config.HIGH_CONFIDENCE_THRESHOLD &&
-                   result.status === 'OPERATIONAL';
+  // Determine success (SIMPLIFIED - no businessStatus check needed)
+  // If Google found it and confidence is high, it's verified
+  result.success = result.confidence >= config.HIGH_CONFIDENCE_THRESHOLD;
   result.needsReview = result.confidence >= config.NAME_SIMILARITY_THRESHOLD &&
                        result.confidence < config.HIGH_CONFIDENCE_THRESHOLD;
 
   // Only set generic notes if specific reason wasn't already set (e.g., specialist detection)
   if (!result.notes) {
-    result.notes = result.success ? 'Verified' :
-                   result.needsReview ? `Low confidence (${Math.round(result.confidence * 100)}%)` :
+    result.notes = result.success ? 'Verified (Essentials tier)' :
+                   result.needsReview ? `Medium confidence (${Math.round(result.confidence * 100)}%)` :
                    'Failed verification';
   }
 
@@ -669,9 +696,8 @@ function recordResult(rowNumber, rowData, colMap, verification) {
   const officeName = config.FIX_CAPITALIZATION ?
     fixCapitalization(rowData[colMap['Office Name']]) :
     rowData[colMap['Office Name']];
-  const correctedName = config.FIX_CAPITALIZATION && verification.correctedName ?
-    fixCapitalization(verification.correctedName) :
-    verification.correctedName;
+  // Note: correctedName not available (Pro SKU removed), using original name
+  const correctedName = officeName;
 
   if (verification.success) {
     // Determine target sheet based on output mode
@@ -693,7 +719,7 @@ function recordResult(rowNumber, rowData, colMap, verification) {
       rowData[colMap['State']],
       rowData[colMap['ZIP']],
       correctedName,
-      verification.correctedPhone,
+      rowData[colMap['Phone Number']],  // Use original phone (correctedPhone not available - Enterprise SKU)
       verification.correctedAddress,
       verification.placeId,
       rowData[colMap['State']],  // Use actual state from row, not config

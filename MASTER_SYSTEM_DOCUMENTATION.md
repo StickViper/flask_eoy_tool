@@ -25,7 +25,7 @@
 ### Key Metrics
 - **Filter efficiency:** 99.99% reduction
 - **Verification success:** 25% (not 70% as guessed)
-- **API limit:** 3,000 calls/month (free tier)
+- **API limit:** 8,000 calls/month (conservative, 10,000 free with Essentials SKU)
 - **Processing time:** 3 min filter + 30 min verify
 
 ---
@@ -94,7 +94,10 @@ FIX_CAPITALIZATION = True
 
 **Common failures:** Closed, moved, phone disconnected, not in Google Places
 
-**⚠️ KNOWN BUG:** No specialty verification - can pass dermatologists/dentists as PCPs (only checks name/phone/operational)
+**✅ FIXED (Oct 2025):** Specialty verification now implemented using `places.types` (Essentials field)
+- Excludes: dentist, veterinary_care, chiropractor, pharmacy, hospital, beauty_salon, spa, etc.
+- Keyword detection: Catches "cardiology", "dermatology", "pediatric" in office names
+- Heavy penalty: -40 points (drops from 100% to 60%, below 85% threshold)
 
 **CRITICAL:** State filter (v8.0) - only processes matching TARGET_STATE to avoid wasting API calls
 
@@ -169,16 +172,36 @@ notesColumn = 11      // Column K
 
 ## API MANAGEMENT
 
-**Google Places API (New)**
+**Google Places API (New) - ESSENTIALS SKU (Oct 2025)**
+
+⚠️ **CRITICAL: FREE TIER COMPLIANCE** ⚠️
+- **Pricing Tier:** ESSENTIALS SKU (field-based billing)
+- **Free Tier:** 10,000 calls/month (effective March 2025)
+- **Overage:** $17/1,000 calls (after 10,000 free)
+- **Current Limit:** 8,000 calls/month (2,000 buffer for safety)
+
+**Field Restrictions (MUST FOLLOW TO STAY FREE):**
+- ✅ **ALLOWED (Essentials):** `places.id`, `places.formattedAddress`, `places.types`
+- ❌ **FORBIDDEN (Pro SKU):** `places.displayName`, `places.businessStatus`, `places.primaryType`
+- ❌❌ **FORBIDDEN (Enterprise SKU):** `places.nationalPhoneNumber`, `places.rating`, `places.website`
+
+**WHY THIS MATTERS:**
+- You are billed at the HIGHEST tier of ANY field in your request
+- Adding ONE Enterprise field drops free tier from 10,000 → 1,000 calls/month
+- Previous config with `nationalPhoneNumber` cost $346.86 in one month!
+
+**Technical Details:**
 - **Endpoint:** `https://places.googleapis.com/v1/places:searchText`
-- **Free tier:** 3,000 calls/month
-- **Overage:** $17/1,000 calls
-- **Storage:** ScriptProperties (`apiKey`, `apiCallCount`)
+- **Field Mask:** `places.id,places.formattedAddress,places.types` (Essentials tier ONLY)
+- **Storage:** ScriptProperties (`PLACES_API_KEY`, `apiCallCount`)
+- **Project Type:** Solo dev / nonprofit (must stay 100% free)
 
 **Usage Tracking:**
 - Persistent counter in ScriptProperties
 - View: Menu → API Usage
 - Reset: Manual (start of billing month only)
+- Warning: 7,500 calls (500 before hard limit)
+- Hard Stop: 8,000 calls (2,000 before charges)
 
 **Safety:**
 - Pre-flight check: Blocks if ≥3000, warns if ≥2800

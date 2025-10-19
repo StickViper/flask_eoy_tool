@@ -28,14 +28,19 @@
   - **Example output:** `"womenshealthcenter network (~8);"`
   - **Note:** Documentation was outdated - function already works correctly
 
-#### 🔧 IN PROGRESS:
-- [ ] **VERIFICATION BUG: No specialty checking** (CRITICAL - False positives like dermatologists)
-  - **Problem:** Verification algorithm only checks name/phone/operational status
-  - **Example:** Dermatologist with 96% confidence passed as PCP
-  - **Reality:** Google Places API returns business types but we don't use them
-  - **Fix:** Add business type checking - penalize non-PCP specialties (dentist, dermatology, veterinary)
-  - **Files:** `scripts/provider-search/UniversalProviderSuite.js:493-540` (verifyPlace function)
-  - **API Field:** Need to add `places.types` to X-Goog-FieldMask
+#### ✅ COMPLETED (Oct 18, 2025 - CRITICAL):
+- [x] **FREE TIER COMPLIANCE: Fixed Enterprise SKU billing** (CRITICAL - Was costing $346+/month!)
+  - **Problem:** Code requested `places.nationalPhoneNumber` (Enterprise SKU) = only 1,000 free calls/month
+  - **Root Cause:** Field tier determines billing - Enterprise tier = 1,000 free, then $34.07/1,000 calls
+  - **Fix:** Removed ALL Pro/Enterprise fields, kept only Essentials fields:
+    - ✅ KEEP: `places.id`, `places.formattedAddress`, `places.types` (Essentials)
+    - ❌ REMOVED: `places.nationalPhoneNumber` (Enterprise), `places.displayName` (Pro), `places.businessStatus` (Pro), `places.primaryType` (Pro)
+  - **Result:** Now using **Essentials SKU = 10,000 free calls/month** (10x increase!)
+  - **Verification Redesign:** Simplified to base confidence (80%) + type validation (20%) - no phone/name matching needed
+  - **API Limit Updated:** 3,000 → 8,000 (with 2,000 buffer below 10,000 free limit)
+  - **Files:** `scripts/provider-search/UniversalProviderSuite.js` (lines 10-48, 506-688)
+  - **Deployed:** Provider Search sheet (Oct 18, 2025)
+  - **Impact:** Solo dev / nonprofit project now stays 100% FREE ✅
 
 #### 📋 PENDING:
 
