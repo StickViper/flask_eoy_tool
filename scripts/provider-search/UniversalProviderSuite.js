@@ -73,16 +73,16 @@ function isPersonName(name) {
 
 /**
  * Builds optimized Google search query
- * For person names: Address first (specific), name last (common)
- * For practice names: Name first (unique), address second
+ * For person names: DROP THE NAME - just search address (Google Places won't find "John Smith MD")
+ * For practice names: Include name (helps identify specific practice)
  */
 function buildSearchQuery(officeName, address, city, state, phone) {
   if (isPersonName(officeName)) {
-    // Person name: Address is more specific than the name
-    // "123 Main St Houston TX John Smith" is better than "John Smith Houston TX"
-    return [address, city, state, phone, officeName].filter(Boolean).join(' ');
+    // Person name: Drop it entirely - Google Places listing likely under different name
+    // Just search address and you'll see what's actually there
+    return [address, city, state, phone].filter(Boolean).join(' ');
   } else {
-    // Practice name: Name is likely unique
+    // Practice name: Include it - likely matches Google Places listing
     return [officeName, address, city, state].filter(Boolean).join(' ');
   }
 }
