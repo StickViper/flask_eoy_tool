@@ -6,14 +6,14 @@
 
 ---
 
-## ⚠️ KNOWN ISSUES - FIX BEFORE USE
+## ✅ STATUS - READY TO USE (Oct 18, 2025)
 
-**CRITICAL BUGS in EOY Automation:**
-1. **Step 2 BROKEN** - Uses phone matching but New Orders has NO phone numbers (only Office Name + Address)
-2. **Step 1 incomplete** - Only shows alerts, doesn't populate Debug/Issues column
-3. **Network notation wrong** - Should be "networkname network (~8);" format
+**CRITICAL BUGS FIXED:**
+1. ✅ **Step 2 FIXED** - Now uses dynamic weight fuzzy matching (works without phone column)
+2. ✅ **Step 1 VERIFIED** - Already populates Debug/Issues column correctly
+3. ✅ **Network notation VERIFIED** - Already uses correct "networkname network (~8);" format
 
-See `TODO.md` section 0 for detailed bug list.
+See `TODO.md` section 0 for verification details and deployment status.
 
 ---
 
@@ -21,7 +21,7 @@ See `TODO.md` section 0 for detailed bug list.
 
 **Automated (Misc. Tools → End-of-Year Workflow):**
 - **Step 1:** Audit Working List → Counts issues, creates hidden Debug/Issues column
-- **Step 2:** Validate Yellow → New Orders → Cross-references working list with orders ⚠️ BROKEN
+- **Step 2:** Validate Yellow → New Orders → Cross-references working list with orders ✅ FIXED
 - **Step 3:** Enforce Not Interested Rules → Auto-adds "not interested" to notes, sets QTY=0
 - **Step 4:** Detect Duplicates → Finds duplicate phone/address, detects networks
 - **Step 5:** Review Status-Based Issues → Categorizes Red/Fuschia/Green/Empty rows
@@ -80,23 +80,23 @@ Misc. Tools → End-of-Year Workflow → Step 1: Audit Working List
 
 ---
 
-### Phase 3: Fix Yellow → New Orders Issues (30-60 min)
+### Phase 3: Fix Yellow → New Orders Issues (15-30 min)
 
-⚠️ **Note:** Step 2 is currently BROKEN (uses phone matching but New Orders has no phone)
+✅ **Automated:** Step 2 now uses fuzzy matching (office name + address)
 
-**Manual process until Step 2 is fixed:**
+```
+Misc. Tools → End-of-Year Workflow → Step 2: Validate Yellow → New Orders
+```
 
-For each row with `⚠️ Yellow but NOT in New Orders`:
-1. Check New Orders sheet by searching Office Name + Address
-2. **If found:** Already there, clear warning
-3. **If not found:**
-   - Copy row to New Orders, OR
-   - Change status if not actually ordered
+**What it does:**
+- Finds yellow rows in Working List
+- Fuzzy matches against New Orders (name 70% + address 30%)
+- Flags mismatches in Debug/Issues column with confidence scores
 
-**For QTY mismatches:**
-1. Check which QTY is correct (Working List vs New Orders)
-2. Update the wrong one to match
-3. Clear warning
+**Manual review needed for:**
+- Medium confidence matches (80-95%) - verify they're the same provider
+- QTY mismatches - decide which sheet has correct quantity
+- "Not found" providers - verify if they should have been in New Orders
 
 ---
 

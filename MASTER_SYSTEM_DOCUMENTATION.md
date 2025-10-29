@@ -141,7 +141,7 @@ See README.md MISC > Color Coding & Status System for full table
 **Process:**
 1. Mark "Successful Order" (yellow) in Working List
 2. Manually copy to New Orders
-3. ⚠️ EOY validation currently BROKEN (uses phone matching but no phone in New Orders)
+3. ✅ EOY validation FIXED (uses fuzzy matching with dynamic weights for New Orders)
 4. Orders fulfilled externally
 5. QTY tracked year-over-year
 
@@ -215,7 +215,7 @@ notesColumn = 11      // Column K
 
 **6 Automated Steps:**
 1. **Audit** - Counts issues, creates Debug/Issues column
-2. **Validate Yellow** - ⚠️ BROKEN (uses phone but New Orders has no phone)
+2. **Validate Yellow** - ✅ FIXED (fuzzy matching: name 70% + address 30%)
 3. **Not Interested** - Auto-adds note, sets QTY=0
 4. **Duplicates** - Flags duplicates, detects networks
 5. **Status Review** - Categorizes Red/Fuschia/Green/Empty
@@ -952,9 +952,9 @@ Oct 2025                  Dec 2025                 Jan 2026
 - ✅ Step 3: Not Interested (auto-fixes)
 - ✅ Step 4: Duplicates (flags) - ⚠️ Bug: network notation wrong format
 - ✅ Step 5: Status Review (categorizes)
-- ❌ Step 2: Yellow validation - **BROKEN** (phone matching, but New Orders has no phone)
+- ✅ Step 2: Yellow validation - **FIXED** (dynamic weight fuzzy matching)
 
-**Status:** Partial - critical bugs block OBGYN EOY (fixing ASAP)
+**Status:** Ready for production - all critical bugs fixed (Oct 18, 2025)
 
 ### Reset Phase
 

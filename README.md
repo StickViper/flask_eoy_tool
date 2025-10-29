@@ -54,12 +54,13 @@ This codebase automates the boring parts (filtering, verification) while providi
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │ STEP 4: MANUAL VERIFICATION (Google Apps Script)                │
-│ Manual verification with keyboard-driven UI:                    │
-│ • Google search links (free, no API)                           │
-│ • Keyboard shortcuts for rapid review (L, G, 1, 2, S)         │
-│ • Duplicate detection across any sheet                         │
-│ Script: scripts/provider-search/UniversalProviderSuite.js      │
-│ Outputs: "All_Verified_Providers", "Manual_Review_Queue"       │
+│ 100% manual verification - works directly on import sheets:     │
+│ • Add Search Links (works on selection OR whole sheet)         │
+│ • Remove Duplicates (works on selection OR whole sheet)        │
+│ • Sidebar verification with keyboard shortcuts (L, G, 1, 2, S) │
+│ • Verified → All_Verified_Providers (row hidden, not deleted)  │
+│ • Closed → Invalid/Inactive List (row hidden, not deleted)     │
+│ Script: scripts/provider-search/UniversalProviderSuite.js v10  │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -262,11 +263,29 @@ python3 nppes_filter_pcps.py
 python3 nppes_filter_pcps.py
 # Creates: FILTERED_pcps_CA_YYYYMMDD.csv
 
-# 6. Import the CSV to Google Sheets manually
-# 7. Manual verification:
-#    - Open sidebar: Provider Tools → Manual Verification Tool
-#    - Use keyboard shortcuts (L=Load, G=Google Search, 1=Active, 2=Closed)
-#    - Or bulk add search links: Quick Tools → Add Search Links
+# 6. Import the CSV to Google Sheets manually (paste into new sheet)
+
+# 7. Quick cleanup (optional but recommended):
+#    a) Select all data rows → Quick Tools → Remove Duplicates
+#       (hides duplicate rows, preserves data)
+#    b) Select all OR specific rows → Quick Tools → Add Search Links
+#       (makes office names clickable Google search links)
+
+# 8. Manual verification (two options):
+
+#    OPTION A - Click and verify:
+#    - Click search link → Google opens
+#    - If operational: leave row visible
+#    - If closed/wrong: manually hide row
+#    - When done: copy visible rows to All_Verified_Providers
+
+#    OPTION B - Sidebar workflow:
+#    - Select first data row
+#    - Provider Tools → Manual Verification Sidebar
+#    - Press L (load row), G (Google search), 1 (verified) or 2 (closed)
+#    - Verified providers → All_Verified_Providers (row auto-hidden)
+#    - Closed providers → Invalid/Inactive List (row auto-hidden)
+#    - Automatically advances to next visible row
 ```
 
 ### Scenario 2: Fixing Capitalization in Existing Data
