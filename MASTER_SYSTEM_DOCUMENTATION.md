@@ -23,10 +23,10 @@
 7. EOY cleanup (automated + manual steps)
 
 ### Key Metrics
-- **Filter efficiency:** 99.99% reduction
-- **Verification success:** 25% (not 70% as guessed)
-- **API limit:** 8,000 calls/month (conservative, 10,000 free with Essentials SKU)
-- **Processing time:** 3 min filter + 30 min verify
+- **Filter efficiency:** 99.99% reduction (9.1M → 8K providers)
+- **Manual verification speed:** 300-500 providers/hour with keyboard shortcuts
+- **Cost:** $0 (no API, 100% manual)
+- **Processing time:** 3 min filter + manual verification as needed
 
 ---
 
@@ -78,30 +78,33 @@ FIX_CAPITALIZATION = True
 
 ---
 
-### Stage 2: Google Places Verification
+### Stage 2: Manual Verification
 
-**Script:** `scripts/provider-search/UniversalProviderSuite.js`
+**Script:** `scripts/provider-search/UniversalProviderSuite.js` (v9.0 - Manual Only)
 
 **Process:**
-1. Import CSV to "Verification Input" sheet
-2. Configure: Provider Type, Target State, API Key
-3. Processes in batches of 25
-4. Calls Google Places API with query: "Office Name" "Address" "City" "State"
-5. Routes to 3 sheets:
-   - **Verified** (≥85% confidence): ~25% of input
-   - **Needs Review** (50-85%): ~32%
-   - **Errors** (<50%): ~43%
+1. Import CSV to any sheet in Provider Search workbook
+2. Add Google search links: Quick Tools → Add Search Links
+3. Manual verification using sidebar:
+   - Load row (L), Google search (G), mark status (1/2), skip (S)
+   - Auto-saves reviewer name and date
+4. Routes to 2 sheets:
+   - **All_Verified_Providers**: Operational providers
+   - **Manual_Review_Queue**: Needs more research
 
-**Common failures:** Closed, moved, phone disconnected, not in Google Places
+**Common rejections:** Closed, moved, wrong specialty, duplicate
 
-**✅ FIXED (Oct 2025):** Specialty verification now implemented using `places.types` (Essentials field)
-- Excludes: dentist, veterinary_care, chiropractor, pharmacy, hospital, beauty_salon, spa, etc.
-- Keyword detection: Catches "cardiology", "dermatology", "pediatric" in office names
-- Heavy penalty: -40 points (drops from 100% to 60%, below 85% threshold)
+**NO GOOGLE PLACES API:** Switched to 100% manual (API was too expensive/risky)
+- Free, unlimited verification
+- Full control over decisions
+- 300-500 providers/hour with keyboard shortcuts
 
-**CRITICAL:** State filter (v8.0) - only processes matching TARGET_STATE to avoid wasting API calls
+**Tools:**
+- Universal duplicate removal (works on any sheet)
+- Copy verified from queue (hides rows, preserves audit trail)
+- Capitalization fixer
 
-**See README.md MISC section for detailed technical notes**
+**See README.md MISC section for keyboard shortcut details**
 
 ---
 
@@ -170,42 +173,37 @@ notesColumn = 11      // Column K
 
 ---
 
-## API MANAGEMENT
+## MANUAL VERIFICATION WORKFLOW
 
-**Google Places API (New) - ESSENTIALS SKU (Oct 2025)**
+**NO API - 100% Manual (Google Places API removed Oct 2025)**
 
-⚠️ **CRITICAL: FREE TIER COMPLIANCE** ⚠️
-- **Pricing Tier:** ESSENTIALS SKU (field-based billing)
-- **Free Tier:** 10,000 calls/month (effective March 2025)
-- **Overage:** $17/1,000 calls (after 10,000 free)
-- **Current Limit:** 8,000 calls/month (2,000 buffer for safety)
+**Why Manual?**
+- Google Places API billing is unpredictable
+- Hit $346.86 in one month (Enterprise SKU triggered accidentally)
+- Free tier too risky for solo dev nonprofit project
+- Manual verification gives full control and is free
 
-**Field Restrictions (MUST FOLLOW TO STAY FREE):**
-- ✅ **ALLOWED (Essentials):** `places.id`, `places.formattedAddress`, `places.types`
-- ❌ **FORBIDDEN (Pro SKU):** `places.displayName`, `places.businessStatus`, `places.primaryType`
-- ❌❌ **FORBIDDEN (Enterprise SKU):** `places.nationalPhoneNumber`, `places.rating`, `places.website`
+**Keyboard-Driven UI:**
+- **L** - Load selected row
+- **G** - Open Google search in new tab
+- **1** - Mark as Active/Operational
+- **2** - Mark as Closed
+- **S** - Skip to next row
+- Auto-saves reviewer name and timestamp
 
-**WHY THIS MATTERS:**
-- You are billed at the HIGHEST tier of ANY field in your request
-- Adding ONE Enterprise field drops free tier from 10,000 → 1,000 calls/month
-- Previous config with `nationalPhoneNumber` cost $346.86 in one month!
+**Speed:** 5-10 seconds per provider = 300-500 providers/hour
 
-**Technical Details:**
-- **Endpoint:** `https://places.googleapis.com/v1/places:searchText`
-- **Field Mask:** `places.id,places.formattedAddress,places.types` (Essentials tier ONLY)
-- **Storage:** ScriptProperties (`PLACES_API_KEY`, `apiCallCount`)
-- **Project Type:** Solo dev / nonprofit (must stay 100% free)
+**Tools:**
+- Google search link generator (free, no API)
+- Universal duplicate removal (phone, address, office name)
+- Copy verified from queue (preserves audit trail)
+- Capitalization fixer
 
-**Usage Tracking:**
-- Persistent counter in ScriptProperties
-- View: Menu → API Usage
-- Reset: Manual (start of billing month only)
-- Warning: 7,500 calls (500 before hard limit)
-- Hard Stop: 8,000 calls (2,000 before charges)
-
-**Safety:**
-- Pre-flight check: Blocks if ≥3000, warns if ≥2800
-- In-flight check: Stops before each batch if limit reached
+**Alternative: NPI Registry API (Future)**
+- Free, unlimited API calls
+- Can check NPI status, address changes, deactivations
+- Cannot verify operational status or patient acceptance
+- See TODO.md for implementation plan
 
 ---
 

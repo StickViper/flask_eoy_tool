@@ -53,19 +53,13 @@ This codebase automates the boring parts (filtering, verification) while providi
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ STEP 4: AUTOMATED VERIFICATION (Google Apps Script)             │
-│ Use Google Places API to verify each provider:                  │
-│ • Is the business operational?                                  │
-│ • Does the phone number match?                                 │
-│ • Is the address correct?                                       │
+│ STEP 4: MANUAL VERIFICATION (Google Apps Script)                │
+│ Manual verification with keyboard-driven UI:                    │
+│ • Google search links (free, no API)                           │
+│ • Keyboard shortcuts for rapid review (L, G, 1, 2, S)         │
+│ • Duplicate detection across any sheet                         │
 │ Script: scripts/provider-search/UniversalProviderSuite.js      │
-│ Outputs: "nppes_verified", "nppes_errors", "nppes_formatted"   │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ STEP 5: MANUAL VERIFICATION (Edge Cases)                        │
-│ Sidebar UI for ambiguous cases                                  │
-│ Script: scripts/provider-search/VerificationSidebar.html        │  
+│ Outputs: "All_Verified_Providers", "Manual_Review_Queue"       │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -269,7 +263,10 @@ python3 nppes_filter_pcps.py
 # Creates: FILTERED_pcps_CA_YYYYMMDD.csv
 
 # 6. Import the CSV to Google Sheets manually
-# 7. Run provider verification from Google Sheets menu
+# 7. Manual verification:
+#    - Open sidebar: Provider Tools → Manual Verification Tool
+#    - Use keyboard shortcuts (L=Load, G=Google Search, 1=Active, 2=Closed)
+#    - Or bulk add search links: Quick Tools → Add Search Links
 ```
 
 ### Scenario 2: Fixing Capitalization in Existing Data
@@ -449,13 +446,7 @@ pip install pandas
 
 ### Google Sheets errors
 
-**Error:** "API Key Missing"
-
-**Solution:**
-1. Get Google Places API key from: https://console.cloud.google.com
-2. In Google Sheets: Extensions → Apps Script
-3. Project Settings → Script Properties
-4. Add property: `PLACES_API_KEY` with your API key value
+**Note:** No API keys needed! This system uses 100% manual verification (no Google Places API).
 
 ---
 
@@ -595,9 +586,9 @@ We filter to ONLY family/primary care codes to avoid wasting time calling specia
 ## 🔗 External Resources
 
 - **NPPES Data Downloads:** https://download.cms.gov/nppes/NPI_Files.html
+- **NPI Registry API (Free!):** https://npiregistry.cms.hhs.gov/api-page
 - **Google Apps Script Docs:** https://developers.google.com/apps-script
 - **clasp Documentation:** https://github.com/google/clasp
-- **Google Places API:** https://developers.google.com/maps/documentation/places/web-service
 - **Canavan Foundation:** https://www.canavanfoundation.org
 
 ---
@@ -890,38 +881,29 @@ When making changes to ToolboxSuite.js:
 
 ---
 
-### Verification Algorithm Limitations
+### Manual Verification Workflow
 
-**CRITICAL ISSUE:** The Google Places API verification (UniversalProviderSuite.js) does NOT check specialty type.
+**NO AUTOMATED VERIFICATION:** This system uses 100% manual verification (Google Places API was too expensive/risky).
 
-**Current scoring (96% confidence for Wassef the dermatologist):**
-- **40%** - Name similarity (Levenshtein distance)
-- **30%** - Phone number match (normalized)
-- **30%** - Business status (OPERATIONAL vs CLOSED)
+**Current approach:**
+- NPPES taxonomy filtering (99.91% reduction: 9.1M → 8K)
+- Manual Google search verification using keyboard-driven UI
+- Duplicate detection across multiple criteria (phone, address, office name)
 
-**What it DOESN'T check:**
-- ❌ Provider specialty (can pass dermatologists, dentists, veterinarians as PCPs)
-- ❌ Business type from Google Places API `types` field
-- ❌ Practice focus (urgent care, specialty clinics)
+**Why manual?**
+- Google Places API billing is unpredictable ($346 in one month!)
+- Enterprise SKU triggered accidentally (only 1,000 free calls)
+- Manual verification is free and gives better control
+- Keyboard shortcuts make it fast (5-10 sec/provider)
 
-**Why this matters:** ~25% verification success rate partially due to legitimate specialty mismatches that score high confidence.
+**Keyboard shortcuts in sidebar:**
+- `L` - Load selected row
+- `G` - Open Google search
+- `1` - Mark as Active
+- `2` - Mark as Closed
+- `S` - Skip to next
 
-**Real example:** Mounir Wassef DO (dermatologist in Wellington, FL)
-- NPPES taxonomy: `207R00000X` (Internal Medicine)
-- Actual practice: Dermatology
-- Verification result: 96% confidence ✅ PASSED (should have failed)
-
-**The fix:** Add business type checking to `verifyPlace()` function:
-```javascript
-// Need to fetch place.types from API
-const excludedTypes = ['dentist', 'veterinary_care'];
-// Check primary_type or types array for specialty mismatch
-if (place.primaryType?.includes('dermatologist')) {
-  points -= 40; // Heavy penalty
-}
-```
-
-**See TODO.md for implementation details.**
+**Speed:** 300-500 providers/hour with experienced reviewer
 
 ---
 

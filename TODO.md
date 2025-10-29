@@ -29,20 +29,40 @@
   - **Note:** Documentation was outdated - function already works correctly
 
 #### ✅ COMPLETED (Oct 18, 2025 - CRITICAL):
-- [x] **FREE TIER COMPLIANCE: Fixed Enterprise SKU billing** (CRITICAL - Was costing $346+/month!)
-  - **Problem:** Code requested `places.nationalPhoneNumber` (Enterprise SKU) = only 1,000 free calls/month
-  - **Root Cause:** Field tier determines billing - Enterprise tier = 1,000 free, then $34.07/1,000 calls
-  - **Fix:** Removed ALL Pro/Enterprise fields, kept only Essentials fields:
-    - ✅ KEEP: `places.id`, `places.formattedAddress`, `places.types` (Essentials)
-    - ❌ REMOVED: `places.nationalPhoneNumber` (Enterprise), `places.displayName` (Pro), `places.businessStatus` (Pro), `places.primaryType` (Pro)
-  - **Result:** Now using **Essentials SKU = 10,000 free calls/month** (10x increase!)
-  - **Verification Redesign:** Simplified to base confidence (80%) + type validation (20%) - no phone/name matching needed
-  - **API Limit Updated:** 3,000 → 8,000 (with 2,000 buffer below 10,000 free limit)
-  - **Files:** `scripts/provider-search/UniversalProviderSuite.js` (lines 10-48, 506-688)
+- [x] **REMOVED GOOGLE PLACES API: Switched to manual-only verification** (Too expensive and risky!)
+  - **Problem:** Google Places API billing is unpredictable, hit $346.86 in one month due to Enterprise SKU
+  - **Decision:** Swear off Google Places API completely - too risky for solo dev nonprofit project
+  - **New Approach:** 100% manual verification with keyboard-driven UI
+  - **Files:** `scripts/provider-search/UniversalProviderSuite.js` (v9.0 - complete rewrite)
+  - **Features Added:**
+    - ✅ Manual verification sidebar with keyboard shortcuts (L, G, 1, 2, S)
+    - ✅ Universal duplicate removal (works on any sheet with Office Name / Phone / Address)
+    - ✅ Copy verified from queue button (hides rows, preserves audit trail)
+    - ✅ Google search link generator (free, no API)
   - **Deployed:** Provider Search sheet (Oct 18, 2025)
-  - **Impact:** Solo dev / nonprofit project now stays 100% FREE ✅
+  - **Impact:** Zero ongoing costs, full control over verification ✅
 
 #### 📋 PENDING:
+
+- [ ] **NPI Registry API Integration (Future Enhancement)**
+  - **Purpose:** Enrich/validate provider data using free NPPES API (no rate limits!)
+  - **Use Case:** Add to Debug Repair Tool for PCP Working List "Potentially Invalid" providers
+  - **What it can do:**
+    - Verify NPI is still active (detect deactivated providers)
+    - Get updated phone/address (detect if provider moved)
+    - Check if taxonomy codes changed (detect specialty switches)
+    - 100% free, unlimited API calls
+  - **What it CAN'T do:**
+    - Verify operational status (NPI can be active but office closed)
+    - Verify accepting new patients
+  - **Implementation:**
+    - Add "Check NPI Status" button to DebugRepairSidebar
+    - Call https://npiregistry.cms.hhs.gov/api/?number=NPI&version=2.1
+    - Parse JSON response for deactivation status, address changes
+    - Auto-flag if deactivated or address mismatch
+    - Mark as "Potentially Invalid" with reason in Debug column
+  - **Files:** `scripts/obgyn-list/DebugRepairSidebar.html`, `scripts/obgyn-list/ToolboxSuite.js`
+  - **Priority:** Medium (nice-to-have, not critical)
 
 - [ ] **Implement programmatic filter views**
   - [ ] `showDebugFilter()` - unhide and filter Debug/Issues column
