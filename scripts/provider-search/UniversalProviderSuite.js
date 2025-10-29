@@ -144,6 +144,11 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
   }
 }
 
+/**
+ * Moves to next visible row
+ * Note: This is ONLY for manual skip (S key), not after hiding rows
+ * (hiding a row automatically moves selection, so calling this would skip a row)
+ */
 function moveToNextRow() {
   const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getActiveRange();

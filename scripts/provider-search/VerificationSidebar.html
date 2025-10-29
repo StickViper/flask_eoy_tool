@@ -603,9 +603,10 @@
       google.script.run
         .withSuccessHandler(message => {
           showStatus(message, false);
-          // Auto-advance to next row after 1.5 seconds
+          // Hiding the row automatically moves selection to next visible row
+          // Just reload - no need to call moveToNextRow()
           setTimeout(() => {
-            skipToNext();
+            loadRowData();
           }, 1500);
         })
         .withFailureHandler(err => showStatus(err.message || 'Error updating', true))
