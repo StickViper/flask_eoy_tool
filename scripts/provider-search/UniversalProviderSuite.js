@@ -44,6 +44,49 @@ function showVerificationSidebar() {
 // MANUAL VERIFICATION (Works on ANY sheet)
 // ====================================================================================
 
+/**
+ * Detects if office name is a person's name (vs practice name)
+ * Person names: "John Smith MD", "Dr. Jane Doe PA-C", "Robert Jones"
+ * Practice names: "Houston Medical Center", "Main Street Clinic"
+ */
+function isPersonName(name) {
+  if (!name) return false;
+
+  const nameLower = name.toLowerCase();
+
+  // Has medical credentials = definitely person
+  const credentials = ['md', 'do', 'pa', 'np', 'arnp', 'crnp', 'fnp', 'dnp', 'dds', 'dpm', 'phd'];
+  if (credentials.some(cred => nameLower.includes(cred))) return true;
+
+  // Has title = person
+  if (nameLower.includes('dr.') || nameLower.includes('doctor')) return true;
+
+  // Simple heuristic: 2-3 words with no practice indicators = likely person name
+  const words = name.trim().split(/\s+/).filter(w => w.length > 0);
+  const practiceWords = ['clinic', 'center', 'medical', 'health', 'hospital', 'associates', 'group', 'practice'];
+  const hasPracticeWord = practiceWords.some(pw => nameLower.includes(pw));
+
+  if (!hasPracticeWord && words.length >= 2 && words.length <= 3) return true;
+
+  return false;
+}
+
+/**
+ * Builds optimized Google search query
+ * For person names: Address first (specific), name last (common)
+ * For practice names: Name first (unique), address second
+ */
+function buildSearchQuery(officeName, address, city, state, phone) {
+  if (isPersonName(officeName)) {
+    // Person name: Address is more specific than the name
+    // "123 Main St Houston TX John Smith" is better than "John Smith Houston TX"
+    return [address, city, state, phone, officeName].filter(Boolean).join(' ');
+  } else {
+    // Practice name: Name is likely unique
+    return [officeName, address, city, state].filter(Boolean).join(' ');
+  }
+}
+
 function getActiveRowData() {
   const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getActiveRange();
@@ -59,12 +102,16 @@ function getActiveRowData() {
   const data = {};
   headers.forEach((h, i) => { data[h] = values[i]; });
 
-  const searchQuery = [
-    data['Office Name'] || data['Office'] || data['Practice'] || data['Name'],
-    data['Address'],
-    data['City'],
-    data['State']
-  ].filter(Boolean).join(' ');
+  const findIdx = (terms) => headers.findIndex(h => h && terms.some(term => h.toLowerCase().includes(term)));
+
+  const officeName = data['Office Name'] || data['Office'] || data['Practice'] || data['Name'];
+  const address = data['Address'];
+  const city = data['City'];
+  const state = data['State'];
+  const phoneIdx = findIdx(['phone', 'number']);
+  const phone = phoneIdx >= 0 ? data[headers[phoneIdx]] : null;
+
+  const searchQuery = buildSearchQuery(officeName, address, city, state, phone);
 
   return {
     data: data,
@@ -343,17 +390,20 @@ function createGoogleSearchLinks() {
   const addressIdx = findIdx(['address']);
   const cityIdx = findIdx(['city']);
   const stateIdx = findIdx(['state', 'st']);
+  const phoneIdx = findIdx(['phone', 'number']);
 
   const richText = data.map(row => {
     const office = row[officeIdx];
     if (office) {
-      const parts = [
-        office,
-        addressIdx >= 0 ? row[addressIdx] : '',
-        cityIdx >= 0 ? row[cityIdx] : '',
-        stateIdx >= 0 ? row[stateIdx] : ''
-      ].filter(Boolean);
-      const url = `https://www.google.com/search?q=${encodeURIComponent(parts.join(' '))}`;
+      const address = addressIdx >= 0 ? row[addressIdx] : '';
+      const city = cityIdx >= 0 ? row[cityIdx] : '';
+      const state = stateIdx >= 0 ? row[stateIdx] : '';
+      const phone = phoneIdx >= 0 ? row[phoneIdx] : '';
+
+      // Use smart query builder - address first for person names
+      const searchQuery = buildSearchQuery(office, address, city, state, phone);
+      const url = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+
       return [SpreadsheetApp.newRichTextValue().setText(office).setLinkUrl(url).build()];
     }
     return [office];
