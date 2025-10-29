@@ -170,16 +170,19 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
         sheetName
       ]);
 
-      // Hide row (don't delete - preserves data)
+      // Color row green, then hide (visual audit trail)
+      sheet.getRange(rowNum, 1, 1, sheet.getLastColumn()).setBackground('#d9ead3');
       sheet.hideRows(rowNum);
 
-      return `✓ Verified and copied to All_Verified_Providers (row hidden)`;
+      return `✓ Verified and copied to All_Verified_Providers (row colored green & hidden)`;
 
     } else if (status === 'CLOSED') {
-      // Just hide the row - Invalid/Inactive List is in Working List sheet (separate cross-sheet task)
+      // Color row red, then hide (visual audit trail)
+      // Invalid/Inactive List is in Working List sheet (separate cross-sheet task)
+      sheet.getRange(rowNum, 1, 1, sheet.getLastColumn()).setBackground('#f4cccc');
       sheet.hideRows(rowNum);
 
-      return `✗ Marked as closed/invalid (row hidden)\nNote: Add to Invalid list in Working List manually if needed`;
+      return `✗ Marked as closed/invalid (row colored red & hidden)\nNote: Add to Invalid list in Working List manually if needed`;
 
     } else if (status === 'NEEDS_INFO') {
       return `Skipped - row remains for later review`;
