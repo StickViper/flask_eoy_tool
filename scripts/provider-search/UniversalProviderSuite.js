@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v10.0 - Import Sheet Workflow)
+ * Manual Provider Verification Suite (v10.1 - Import Sheet Workflow)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -7,10 +7,13 @@
  * 2. Add Search Links (works on selection or whole sheet)
  * 3. Remove Duplicates (works on selection or whole sheet)
  * 4. Manual verification: Click links OR use sidebar
- * 5. Verified providers copied to All_Verified_Providers
- * 6. Closed/invalid providers added to Invalid/Inactive List
+ * 5. Verified providers copied to All_Verified_Providers (row hidden)
+ * 6. Closed/invalid providers just hidden (Invalid list in Working List - separate task)
  *
  * NO GOOGLE PLACES API - Too expensive and risky
+ *
+ * NOTE: Invalid/Inactive List lives in Working List sheets (OBGYN/PCP), not here.
+ * Cross-sheet verification is a separate future task.
  */
 
 // ====================================================================================
@@ -74,7 +77,7 @@ function getActiveRowData() {
 /**
  * Updates row status after manual verification
  * status: 'OPERATIONAL' = copy to verified sheet, hide row
- * status: 'CLOSED' = add to invalid list, hide row
+ * status: 'CLOSED' = just hide row (Invalid list is in Working List - separate cross-sheet task)
  * status: 'NEEDS_INFO' = skip for now
  */
 function updateRowStatus(rowNum, sheetName, status, notes) {
@@ -126,30 +129,10 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
       return `✓ Verified and copied to All_Verified_Providers (row hidden)`;
 
     } else if (status === 'CLOSED') {
-      // Add to Invalid/Inactive List
-      const invalidSheet = getOrCreateSheet('Invalid_Inactive_List', [
-        'Office Name', 'Phone Number', 'Address', 'City', 'State', 'ZIP',
-        'INVALID/INACTIVE', 'Notes', 'Added_Date', 'Added_By', 'Source_Sheet'
-      ]);
-
-      invalidSheet.appendRow([
-        provider.officeName,
-        provider.phone,
-        provider.address,
-        provider.city,
-        provider.state,
-        provider.zip,
-        'CLOSED',
-        notes || 'Closed/invalid - verified manually',
-        new Date(),
-        Session.getActiveUser().getEmail(),
-        sheetName
-      ]);
-
-      // Hide row (don't delete - preserves data)
+      // Just hide the row - Invalid/Inactive List is in Working List sheet (separate cross-sheet task)
       sheet.hideRows(rowNum);
 
-      return `✗ Added to Invalid/Inactive List (row hidden)`;
+      return `✗ Marked as closed/invalid (row hidden)\nNote: Add to Invalid list in Working List manually if needed`;
 
     } else if (status === 'NEEDS_INFO') {
       return `Skipped - row remains for later review`;
@@ -510,14 +493,12 @@ function fixCapitalization(name) {
 
 function generateStatsReport() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
   const verified = ss.getSheetByName('All_Verified_Providers');
-  const invalid = ss.getSheetByName('Invalid_Inactive_List');
 
   const stats =
     `Manual Verification Stats:\n\n` +
-    `Verified: ${verified ? verified.getLastRow() - 1 : 0}\n` +
-    `Invalid/Closed: ${invalid ? invalid.getLastRow() - 1 : 0}`;
+    `Verified: ${verified ? verified.getLastRow() - 1 : 0}\n\n` +
+    `Note: Invalid/Inactive List is in Working List sheets (OBGYN/PCP), not Provider Search.`;
 
   SpreadsheetApp.getUi().alert('Statistics', stats, SpreadsheetApp.getUi().ButtonSet.OK);
 }

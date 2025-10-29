@@ -59,8 +59,8 @@ This codebase automates the boring parts (filtering, verification) while providi
 │ • Remove Duplicates (works on selection OR whole sheet)        │
 │ • Sidebar verification with keyboard shortcuts (L, G, 1, 2, S) │
 │ • Verified → All_Verified_Providers (row hidden, not deleted)  │
-│ • Closed → Invalid/Inactive List (row hidden, not deleted)     │
-│ Script: scripts/provider-search/UniversalProviderSuite.js v10  │
+│ • Closed → just hidden (Invalid list in Working List - later)  │
+│ Script: scripts/provider-search/UniversalProviderSuite.js v10.1│
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -284,7 +284,7 @@ python3 nppes_filter_pcps.py
 #    - Provider Tools → Manual Verification Sidebar
 #    - Press L (load row), G (Google search), 1 (verified) or 2 (closed)
 #    - Verified providers → All_Verified_Providers (row auto-hidden)
-#    - Closed providers → Invalid/Inactive List (row auto-hidden)
+#    - Closed providers → row hidden (add to Invalid list in Working List later)
 #    - Automatically advances to next visible row
 ```
 
