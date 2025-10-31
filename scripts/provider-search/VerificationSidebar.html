@@ -418,7 +418,7 @@
     </div>
 
     <div class="quick-actions">
-      <button onclick="skipToNext()">Skip & Next →</button>
+      <button onclick="skipToNext()">Skip (S)</button>
     </div>
   </div>
   
@@ -426,10 +426,6 @@
   
   <div class="keyboard-shortcuts">
     <h3>Keyboard Shortcuts:</h3>
-    <div class="shortcut">
-      <span>Auto-loads on select row</span>
-      <span class="key">✓</span>
-    </div>
     <div class="shortcut">
       <span>Google Search</span>
       <span class="key">G</span>
@@ -447,7 +443,7 @@
       <span class="key">R / 3</span>
     </div>
     <div class="shortcut">
-      <span>Skip Row</span>
+      <span>Skip</span>
       <span class="key">S</span>
     </div>
     <div class="shortcut">
@@ -558,13 +554,32 @@
       loadingRowNumber = targetRow;
       isLoading = true;
 
-      // Show loading state
+      // Immediately replace content with loading state (prevents flash of old data)
       const detailsDiv = document.getElementById('details');
+      detailsDiv.innerHTML = `
+        <div class="info-section loading">
+          <div style="text-align: center; padding: 40px; color: #5f6368;">
+            Loading row ${targetRow}...
+          </div>
+        </div>
+        <button class="btn-search" disabled style="opacity: 0.5;">
+          <span class="step-indicator">2</span> Google Search This Provider
+        </button>
+        <div class="action-group">
+          <div class="action-label">
+            <span class="step-indicator">3</span> Set Verification Status:
+          </div>
+          <div class="status-buttons">
+            <button class="btn-operational" disabled style="opacity: 0.5;">✓ Active (Q)</button>
+            <button class="btn-closed" disabled style="opacity: 0.5;">✗ Closed (E)</button>
+            <button class="btn-needs-info" disabled style="opacity: 0.5;">? Review (R)</button>
+          </div>
+        </div>
+        <div class="quick-actions">
+          <button disabled style="opacity: 0.5;">Skip (S)</button>
+        </div>
+      `;
       detailsDiv.style.display = 'block';
-      const infoSection = detailsDiv.querySelector('.info-section');
-      if (infoSection) {
-        infoSection.classList.add('loading');
-      }
 
       google.script.run
         .withSuccessHandler(response => {
@@ -644,32 +659,16 @@
             </div>
 
             <div class="quick-actions">
-              <button onclick="skipToNext()">Skip & Next →</button>
+              <button onclick="skipToNext()">Skip (S)</button>
             </div>
           `;
 
-          const detailsDiv = document.getElementById('details');
-          detailsDiv.style.display = 'block';
-
-          // Remove loading state
-          const infoSection = detailsDiv.querySelector('.info-section');
-          if (infoSection) {
-            infoSection.classList.remove('loading');
-          }
-
+          document.getElementById('details').style.display = 'block';
           showStatus(`Loaded Row ${currentRow}`, false, silent);
         })
         .withFailureHandler(err => {
           isLoading = false;
           loadingRowNumber = null;
-
-          // Remove loading state on error
-          const detailsDiv = document.getElementById('details');
-          const infoSection = detailsDiv.querySelector('.info-section');
-          if (infoSection) {
-            infoSection.classList.remove('loading');
-          }
-
           showStatus(err.message || 'Error loading row', true, silent);
         })
         .getActiveRowData();
