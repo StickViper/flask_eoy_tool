@@ -330,12 +330,11 @@
 </head>
 <body>
   <h2>⚡ Manual Verification Tool</h2>
-  
+
   <div class="config-badges">
-    <span class="config-badge provider" id="provider-type">Loading...</span>
-    <span class="config-badge state" id="state">Loading...</span>
+    <span class="config-badge provider" id="provider-type">PCP</span>
   </div>
-  
+
   <button class="btn-primary" onclick="loadRowData()">
     <span class="step-indicator">1</span> Load Selected Row
   </button>
@@ -381,28 +380,20 @@
     <button class="btn-search" id="search-btn" onclick="openGoogleSearch()">
       <span class="step-indicator">2</span> Google Search This Provider
     </button>
-    
+
     <div class="action-group">
       <div class="action-label">
-        <span class="step-indicator">3</span> Add Verification Notes:
-      </div>
-      <textarea id="notes" rows="3" placeholder="Enter any relevant notes from your research..."></textarea>
-    </div>
-    
-    <div class="action-group">
-      <div class="action-label">
-        <span class="step-indicator">4</span> Set Verification Status:
+        <span class="step-indicator">3</span> Set Verification Status:
       </div>
       <div class="status-buttons">
-        <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active</button>
-        <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed</button>
+        <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active (Q)</button>
+        <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed (E)</button>
         <button class="btn-needs-info" onclick="updateStatus('NEEDS_REVIEW')">? Review</button>
       </div>
     </div>
-    
+
     <div class="quick-actions">
       <button onclick="skipToNext()">Skip & Next →</button>
-      <button onclick="clearForm()">Clear Form</button>
     </div>
   </div>
   
@@ -420,15 +411,19 @@
     </div>
     <div class="shortcut">
       <span>Mark Active</span>
-      <span class="key">1</span>
+      <span class="key">Q / 1</span>
     </div>
     <div class="shortcut">
       <span>Mark Closed</span>
-      <span class="key">2</span>
+      <span class="key">E / 2</span>
     </div>
     <div class="shortcut">
       <span>Skip Row</span>
       <span class="key">S</span>
+    </div>
+    <div class="shortcut">
+      <span>Close Tab</span>
+      <span class="key">Ctrl+W</span>
     </div>
   </div>
   
@@ -447,7 +442,7 @@
       document.addEventListener('keydown', function(e) {
         // Ignore if typing in textarea
         if (e.target.tagName === 'TEXTAREA') return;
-        
+
         switch(e.key.toLowerCase()) {
           case 'l':
             loadRowData();
@@ -455,9 +450,11 @@
           case 'g':
             openGoogleSearch();
             break;
+          case 'q':
           case '1':
             updateStatus('OPERATIONAL');
             break;
+          case 'e':
           case '2':
             updateStatus('CLOSED');
             break;
@@ -473,10 +470,10 @@
       statusDiv.textContent = message;
       statusDiv.className = isError ? 'error' : 'success';
       statusDiv.style.display = 'block';
-      
+
       setTimeout(() => {
         statusDiv.style.display = 'none';
-      }, 3000);
+      }, 1500);  // Reduced from 3000ms for faster feedback
     }
     
     function showLoading(show) {
@@ -501,11 +498,7 @@
           currentRow = response.row;
           currentSheet = response.sheetName;
           searchUrl = response.searchUrl;
-          
-          // Update config badges
-          document.getElementById('provider-type').textContent = response.providerType || 'PCP';
-          document.getElementById('state').textContent = response.state || '--';
-          
+
           // Rebuild details section
           document.getElementById('details').innerHTML = `
             <div class="info-section">
@@ -549,28 +542,20 @@
             <button class="btn-search" id="search-btn" onclick="openGoogleSearch()">
               <span class="step-indicator">2</span> Google Search This Provider
             </button>
-            
+
             <div class="action-group">
               <div class="action-label">
-                <span class="step-indicator">3</span> Add Verification Notes:
-              </div>
-              <textarea id="notes" rows="3" placeholder="Enter any relevant notes from your research...">${data['Verification_Notes'] || ''}</textarea>
-            </div>
-            
-            <div class="action-group">
-              <div class="action-label">
-                <span class="step-indicator">4</span> Set Verification Status:
+                <span class="step-indicator">3</span> Set Verification Status:
               </div>
               <div class="status-buttons">
-                <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active</button>
-                <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed</button>
+                <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active (Q)</button>
+                <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed (E)</button>
                 <button class="btn-needs-info" onclick="updateStatus('NEEDS_REVIEW')">? Review</button>
               </div>
             </div>
-            
+
             <div class="quick-actions">
               <button onclick="skipToNext()">Skip & Next →</button>
-              <button onclick="clearForm()">Clear Form</button>
             </div>
           `;
           
@@ -586,7 +571,8 @@
     
     function openGoogleSearch() {
       if (searchUrl) {
-        window.open(searchUrl, '_blank');
+        // Open in same named window (reuses the tab instead of creating new ones)
+        window.open(searchUrl, 'provider_search_tab');
       } else {
         showStatus('No search URL available', true);
       }
@@ -598,8 +584,6 @@
         return;
       }
 
-      const notes = document.getElementById('notes').value;
-
       google.script.run
         .withSuccessHandler(message => {
           showStatus(message, false);
@@ -608,10 +592,10 @@
           // If OPERATIONAL or CLOSED, row IS hidden - auto-advances to next
           setTimeout(() => {
             loadRowData();
-          }, 1500);
+          }, 800);  // Reduced from 1500ms for faster workflow
         })
         .withFailureHandler(err => showStatus(err.message || 'Error updating', true))
-        .updateRowStatus(currentRow, currentSheet, status, notes);
+        .updateRowStatus(currentRow, currentSheet, status, '');
     }
     
     function skipToNext() {

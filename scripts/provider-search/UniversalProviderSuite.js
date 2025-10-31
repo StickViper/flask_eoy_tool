@@ -1,28 +1,35 @@
 /**
- * Manual Provider Verification Suite (v11.0 - Authorization Fixed)
+ * Manual Provider Verification Suite (v12.0 - Performance Optimized)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
  * 1. Import NPPES CSV to any sheet
  * 2. Add Search Links (works on selection or whole sheet)
  * 3. Remove Duplicates (works on selection or whole sheet)
- * 4. Manual verification: Click links OR use sidebar
+ * 4. Manual verification: Sidebar with keyboard shortcuts
  * 5. Verified providers copied to All_Verified_Providers (row colored green, hidden)
- * 6. Closed/invalid providers colored red, hidden (Invalid list in Working List - separate task)
- * 7. Needs Review providers colored yellow, NOT hidden (manual review later)
+ * 6. Closed/invalid providers colored red, hidden
+ * 7. Needs Review providers colored yellow, NOT hidden
+ *
+ * KEYBOARD SHORTCUTS:
+ * - L: Load row (auto-loads on open)
+ * - G: Google search (reuses same tab)
+ * - Q or 1: Mark Active (green, hide, copy to verified)
+ * - E or 2: Mark Closed (red, hide)
+ * - S: Skip to next row
+ * - Ctrl+W: Close search tab (browser native)
+ *
+ * PERFORMANCE OPTIMIZATIONS (v12.0):
+ * - Removed verification notes (unnecessary)
+ * - Color only first 8 visible columns (not entire row)
+ * - Simplified All_Verified_Providers columns (8 instead of 11)
+ * - Reduced status message delays (1500ms → 800ms)
+ * - Search opens in same named window (no tab spam)
+ * - Removed Clear Form button (confusing)
+ * - Removed state badge (unnecessary)
  *
  * NO GOOGLE PLACES API - Too expensive and risky
  * NO Session.getActiveUser() - Removed to avoid authorization issues
- *
- * CHANGES IN v11.0:
- * - Removed Session.getActiveUser().getEmail() (auth issue fix for shared sheets)
- * - Added NEEDS_REVIEW status (yellow color, not hidden)
- * - Fixed verified status detection (reads row background color)
- * - Auto-loads first selected row or row 2 on sidebar open
- * - Larger buttons, no scrolling in sidebar
- *
- * NOTE: Invalid/Inactive List lives in Working List sheets (OBGYN/PCP), not here.
- * Cross-sheet verification is a separate future task.
  */
 
 // ====================================================================================
@@ -140,7 +147,7 @@ function getActiveRowData() {
 
   const searchQuery = buildSearchQuery(officeName, address, city, state, phone);
 
-  // Check row background color to determine verification status
+  // Check row background color to determine verification status (only first cell for speed)
   const rowColor = sheet.getRange(row, 1).getBackground().toLowerCase();
   let verificationStatus = 'Not verified';
   if (rowColor === '#d9ead3') verificationStatus = 'Verified ✓';
@@ -185,10 +192,9 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
     };
 
     if (status === 'OPERATIONAL') {
-      // Copy to All_Verified_Providers
+      // Copy to All_Verified_Providers (simplified for speed)
       const verifiedSheet = getOrCreateSheet('All_Verified_Providers', [
-        'Office Name', 'Phone Number', 'Address', 'City', 'State', 'ZIP', 'NPI',
-        'Verified_Date', 'Verified_By', 'Notes', 'Source_Sheet'
+        'Office Name', 'Phone Number', 'Address', 'City', 'State', 'ZIP', 'NPI', 'Verified_Date'
       ]);
 
       verifiedSheet.appendRow([
@@ -199,31 +205,30 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
         provider.state,
         provider.zip,
         provider.npi,
-        new Date(),
-        'Manual Verification', // Removed Session.getActiveUser() to avoid authorization issues
-        notes || 'Verified via manual review',
-        sheetName
+        new Date()
       ]);
 
-      // Color row green, then hide (visual audit trail)
-      sheet.getRange(rowNum, 1, 1, sheet.getLastColumn()).setBackground('#d9ead3');
+      // Color only first 8 columns (what's visible) for speed, then hide
+      const numCols = Math.min(8, sheet.getLastColumn());
+      sheet.getRange(rowNum, 1, 1, numCols).setBackground('#d9ead3');
       sheet.hideRows(rowNum);
 
-      return `✓ Verified and copied to All_Verified_Providers (row colored green & hidden)`;
+      return `✓ Verified`;
 
     } else if (status === 'CLOSED') {
-      // Color row red, then hide (visual audit trail)
-      // Invalid/Inactive List is in Working List sheet (separate cross-sheet task)
-      sheet.getRange(rowNum, 1, 1, sheet.getLastColumn()).setBackground('#f4cccc');
+      // Color only first 8 columns for speed, then hide
+      const numCols = Math.min(8, sheet.getLastColumn());
+      sheet.getRange(rowNum, 1, 1, numCols).setBackground('#f4cccc');
       sheet.hideRows(rowNum);
 
-      return `✗ Marked as closed/invalid (row colored red & hidden)\nNote: Add to Invalid list in Working List manually if needed`;
+      return `✗ Closed`;
 
     } else if (status === 'NEEDS_REVIEW') {
-      // Color row yellow, DON'T hide (needs manual review)
-      sheet.getRange(rowNum, 1, 1, sheet.getLastColumn()).setBackground('#fff2cc');
+      // Color only first 8 columns for speed, DON'T hide
+      const numCols = Math.min(8, sheet.getLastColumn());
+      sheet.getRange(rowNum, 1, 1, numCols).setBackground('#fff2cc');
 
-      return `⚠ Marked for review (row colored yellow, NOT hidden) - review this row later`;
+      return `⚠ Review`;
     }
 
     return `Unknown status: ${status}`;
