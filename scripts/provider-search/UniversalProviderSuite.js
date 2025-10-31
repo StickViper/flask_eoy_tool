@@ -16,15 +16,15 @@
  * - G: Google search (reuses same tab) - DISABLED during loading
  * - Q or 1: Mark Active → INSTANT load of next row (bypasses debounce)
  * - E or 2: Mark Closed → INSTANT load of next row (bypasses debounce)
- * - R or 3: Mark Review → INSTANT reload (bypasses debounce)
+ * - R or 3: Mark Review → INSTANT load of next row (bypasses debounce)
  * - S: Skip → INSTANT load of next row (bypasses debounce)
  * - L: Manual reload (always instant)
  * - Ctrl+W: Close search tab (browser native)
  *
  * SMOOTHNESS (v13.0):
  * - Skip (S) immediately loads next row - no wait
- * - Status (Q/E/R) immediately loads next/current row - no wait
- * - Can press S then G immediately - always correct row
+ * - Status (Q/E/R) immediately loads next row - no wait
+ * - Can press Q/E/R/S then G immediately - always correct row
  * - Debounce only applies to auto-load (prevents cell edit triggers)
  * - User actions always bypass debounce for instant response
  *
@@ -199,9 +199,9 @@ function getActiveRowData() {
 
 /**
  * Updates row status after manual verification
- * status: 'OPERATIONAL' = copy to verified sheet, color green, hide row
- * status: 'CLOSED' = color red, hide row (Invalid list in Working List - separate cross-sheet task)
- * status: 'NEEDS_REVIEW' = color yellow, DON'T hide (needs manual review later)
+ * status: 'OPERATIONAL' = copy to verified sheet, color green, hide row, move to next
+ * status: 'CLOSED' = color red, hide row, move to next
+ * status: 'NEEDS_REVIEW' = color yellow, DON'T hide, move to next
  */
 function updateRowStatus(rowNum, sheetName, status, notes) {
   try {
@@ -261,6 +261,9 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
       // Color only first 8 columns for speed, DON'T hide
       const numCols = Math.min(8, sheet.getLastColumn());
       sheet.getRange(rowNum, 1, 1, numCols).setBackground('#fff2cc');
+
+      // Move to next row (like skip) - don't stay on yellow row
+      moveToNextRow();
 
       return `⚠ Review`;
     }
