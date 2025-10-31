@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v12.7 - Prevent Actions During Loading)
+ * Manual Provider Verification Suite (v13.0 - Instant Skip/Status Actions)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -12,27 +12,38 @@
  * 7. Needs Review providers colored yellow, NOT hidden
  *
  * KEYBOARD SHORTCUTS:
- * - AUTO: Selecting a new row auto-loads it (400ms polling)
+ * - AUTO: Selecting a new row auto-loads it (500ms polling, 1.5s debounce)
  * - G: Google search (reuses same tab) - DISABLED during loading
- * - Q or 1: Mark Active - DISABLED during loading
- * - E or 2: Mark Closed - DISABLED during loading
- * - R or 3: Mark Review - DISABLED during loading
- * - S: Skip to next row - DISABLED during loading
- * - L: Manual reload
+ * - Q or 1: Mark Active → INSTANT load of next row (bypasses debounce)
+ * - E or 2: Mark Closed → INSTANT load of next row (bypasses debounce)
+ * - R or 3: Mark Review → INSTANT reload (bypasses debounce)
+ * - S: Skip → INSTANT load of next row (bypasses debounce)
+ * - L: Manual reload (always instant)
  * - Ctrl+W: Close search tab (browser native)
  *
- * CRITICAL FIXES (v12.7):
+ * SMOOTHNESS (v13.0):
+ * - Skip (S) immediately loads next row - no wait
+ * - Status (Q/E/R) immediately loads next/current row - no wait
+ * - Can press S then G immediately - always correct row
+ * - Debounce only applies to auto-load (prevents cell edit triggers)
+ * - User actions always bypass debounce for instant response
+ *
+ * DEBOUNCING (v12.9):
+ * - Auto-load requires 1.5s row stability (prevents cell edit triggers)
+ * - User actions (S/Q/E/R/L) bypass debounce completely
+ * - Header row (row 1) always ignored
+ *
+ * CRITICAL FIXES:
  * - Clean loading state (no old data visible during load)
  * - All actions disabled until currentRow === selectedRow
- * - Shows "Wait for row to finish loading" if actions attempted
+ * - Keyboard shortcuts blocked during loading
  * - 10-second timeout auto-recovers from stuck loading
- * - Error state with retry button
+ * - Cell edits don't trigger unwanted loads
  *
  * PERFORMANCE OPTIMIZATIONS:
  * - Only reads first 15 columns (was 50+) → 4-5x faster loading
  * - Request tracking ignores stale responses (race condition fix)
- * - Polling: 400ms (balanced responsiveness)
- * - Reload delay: 400ms after status update
+ * - Polling: 500ms (balanced, less aggressive)
  * - Color only first 8 visible columns (not entire row)
  * - Simplified All_Verified_Providers columns (8 instead of 11)
  *

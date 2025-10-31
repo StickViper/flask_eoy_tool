@@ -770,11 +770,17 @@
         .withSuccessHandler(message => {
           showStatus(message, false, false); // Show status for user action
 
-          // If NEEDS_REVIEW, row is NOT hidden - just reload same row to update color
-          // If OPERATIONAL or CLOSED, row IS hidden - auto-advances to next
-          setTimeout(() => {
-            loadRowData(true); // Silent reload after status update (will get current active row)
-          }, 400);  // Reduced for faster workflow
+          // Get current active row and immediately load it (bypass debounce)
+          google.script.run
+            .withSuccessHandler(activeRow => {
+              if (activeRow) {
+                selectedRow = activeRow;
+                lastPolledRow = activeRow;
+                sameRowCount = 3; // Mark as stable
+                loadRowData(true, activeRow); // Immediate load
+              }
+            })
+            .getActiveRowNumber();
         })
         .withFailureHandler(err => showStatus(err.message || 'Error updating', true, false))
         .updateRowStatus(currentRow, currentSheet, status, '');
@@ -795,10 +801,16 @@
       // Call the server-side function to change the active cell
       google.script.run
         .withSuccessHandler(newRow => {
-          // Auto-load will handle loading the new row
           if (!newRow) {
             showStatus('Already on the last row.', false, false);
+            return;
           }
+
+          // Immediately load the new row (bypass debounce for skip action)
+          selectedRow = newRow;
+          lastPolledRow = newRow;
+          sameRowCount = 3; // Set to 3 so it's already "stable"
+          loadRowData(true, newRow); // Silent, immediate load
         })
         .withFailureHandler(err => {
           showStatus('Error moving to next row: ' + err.message, true, false);
