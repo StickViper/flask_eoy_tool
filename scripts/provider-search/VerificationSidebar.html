@@ -129,24 +129,6 @@
       min-height: 150px;
       position: relative;
     }
-
-    .info-section.loading {
-      opacity: 0.5;
-    }
-
-    .info-section.loading::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #1a73e8;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-    }
     
     .info-row {
       margin: 6px 0;
@@ -472,12 +454,15 @@
     // Auto-load when user selects a new row
     function startAutoLoad() {
       autoLoadInterval = setInterval(() => {
+        // Don't poll if already loading
+        if (isLoading) return;
+
         google.script.run
           .withSuccessHandler(activeRow => {
             selectedRow = activeRow; // Track selected row
 
-            // Only reload if different row selected AND not currently loading that row
-            if (activeRow && activeRow !== currentRow && activeRow !== loadingRowNumber) {
+            // Only reload if different row selected AND not currently loading
+            if (activeRow && activeRow !== currentRow && !isLoading) {
               loadRowData(true, activeRow); // Silent on auto-load, pass target row
             }
           })
@@ -485,7 +470,7 @@
             // Silent fail - don't spam errors
           })
           .getActiveRowNumber();
-      }, 400); // Increased from 300ms to reduce polling frequency (smoother)
+      }, 500); // Increased to 500ms to reduce polling aggression
     }
 
     function stopAutoLoad() {
@@ -499,26 +484,49 @@
         // Ignore if typing in textarea
         if (e.target.tagName === 'TEXTAREA') return;
 
+        // Block ALL shortcuts (except L) if loaded row doesn't match selected row
+        const isLoading = currentRow !== selectedRow;
+
         switch(e.key.toLowerCase()) {
           case 'l':
-            loadRowData(false); // Manual load - show message
+            loadRowData(false); // Manual load - always allowed
             break;
           case 'g':
+            if (isLoading) {
+              showStatus('Wait for row to finish loading', true, false);
+              return;
+            }
             openGoogleSearch();
             break;
           case 'q':
           case '1':
+            if (isLoading) {
+              showStatus('Wait for row to finish loading', true, false);
+              return;
+            }
             updateStatus('OPERATIONAL');
             break;
           case 'e':
           case '2':
+            if (isLoading) {
+              showStatus('Wait for row to finish loading', true, false);
+              return;
+            }
             updateStatus('CLOSED');
             break;
           case 'r':
           case '3':
+            if (isLoading) {
+              showStatus('Wait for row to finish loading', true, false);
+              return;
+            }
             updateStatus('NEEDS_REVIEW');
             break;
           case 's':
+            if (isLoading) {
+              showStatus('Wait for row to finish loading', true, false);
+              return;
+            }
             skipToNext();
             break;
         }
@@ -554,6 +562,11 @@
     }
 
     function loadRowDataInternal(silent, targetRow) {
+      // Prevent overlapping loads
+      if (isLoading && loadingRowNumber === targetRow) {
+        return; // Already loading this exact row, ignore
+      }
+
       // Clear any existing timeout
       if (loadTimeout) {
         clearTimeout(loadTimeout);
@@ -576,10 +589,10 @@
       // Immediately show clean loading state - no old data visible
       const detailsDiv = document.getElementById('details');
       detailsDiv.innerHTML = `
-        <div class="info-section loading">
+        <div class="info-section">
           <div style="text-align: center; padding: 60px; color: #5f6368;">
-            <div class="spinner" style="margin: 0 auto 10px;"></div>
-            Loading row ${targetRow}...
+            <div class="spinner" style="margin: 0 auto 15px;"></div>
+            <div>Loading row ${targetRow}...</div>
           </div>
         </div>
       `;
