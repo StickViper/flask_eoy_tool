@@ -118,6 +118,7 @@ function getActiveRowNumber() {
 /**
  * Gets data for the active row or first selected/available row
  * Auto-loads first selected row if any, otherwise row 2
+ * OPTIMIZED: Only reads first 15 columns (all we need) instead of all 50+ NPPES columns
  */
 function getActiveRowData() {
   const sheet = SpreadsheetApp.getActiveSheet();
@@ -142,8 +143,12 @@ function getActiveRowData() {
   }
 
   const row = range.getRow();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // OPTIMIZATION: Only read first 15 columns (Office Name, Phone, Address, City, State, ZIP, NPI, etc.)
+  // NPPES has 50+ columns but we don't need most of them
+  const numCols = Math.min(15, sheet.getLastColumn());
+  const headers = sheet.getRange(1, 1, 1, numCols).getValues()[0];
+  const values = sheet.getRange(row, 1, 1, numCols).getValues()[0];
 
   const data = {};
   headers.forEach((h, i) => { data[h] = values[i]; });
