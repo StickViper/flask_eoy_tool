@@ -459,6 +459,7 @@
     let autoLoadInterval = null;
     let isLoading = false;
     let loadingRowNumber = null; // Track which row we're loading to ignore stale responses
+    let loadTimeout = null; // Track timeout for cancellation
 
     // Initialize on load
     window.onload = function() {
@@ -481,7 +482,7 @@
             // Silent fail - don't spam errors
           })
           .getActiveRowNumber();
-      }, 300); // Reduced from 500ms for more responsive feel
+      }, 400); // Increased from 300ms to reduce polling frequency (smoother)
     }
 
     function stopAutoLoad() {
@@ -550,39 +551,40 @@
     }
 
     function loadRowDataInternal(silent, targetRow) {
+      // Clear any existing timeout
+      if (loadTimeout) {
+        clearTimeout(loadTimeout);
+      }
+
       // Track which row we're loading
       loadingRowNumber = targetRow;
       isLoading = true;
 
-      // Immediately replace content with loading state (prevents flash of old data)
+      // Safety timeout - reset loading state after 10 seconds
+      loadTimeout = setTimeout(() => {
+        if (loadingRowNumber === targetRow) {
+          isLoading = false;
+          loadingRowNumber = null;
+          loadTimeout = null;
+          showStatus('Loading timeout - try again (press L)', true, false);
+        }
+      }, 10000);
+
+      // Show minimal loading indicator without replacing entire HTML
       const detailsDiv = document.getElementById('details');
-      detailsDiv.innerHTML = `
-        <div class="info-section loading">
-          <div style="text-align: center; padding: 40px; color: #5f6368;">
-            Loading row ${targetRow}...
-          </div>
-        </div>
-        <button class="btn-search" disabled style="opacity: 0.5;">
-          <span class="step-indicator">2</span> Google Search This Provider
-        </button>
-        <div class="action-group">
-          <div class="action-label">
-            <span class="step-indicator">3</span> Set Verification Status:
-          </div>
-          <div class="status-buttons">
-            <button class="btn-operational" disabled style="opacity: 0.5;">✓ Active (Q)</button>
-            <button class="btn-closed" disabled style="opacity: 0.5;">✗ Closed (E)</button>
-            <button class="btn-needs-info" disabled style="opacity: 0.5;">? Review (R)</button>
-          </div>
-        </div>
-        <div class="quick-actions">
-          <button disabled style="opacity: 0.5;">Skip (S)</button>
-        </div>
-      `;
+      const infoSection = detailsDiv.querySelector('.info-section');
+      if (infoSection) {
+        infoSection.classList.add('loading');
+      }
       detailsDiv.style.display = 'block';
 
       google.script.run
         .withSuccessHandler(response => {
+          if (loadTimeout) {
+            clearTimeout(loadTimeout);
+            loadTimeout = null;
+          }
+
           // CRITICAL: Ignore stale responses (user moved to different row while loading)
           if (response.row !== loadingRowNumber) {
             isLoading = false;
@@ -663,12 +665,32 @@
             </div>
           `;
 
-          document.getElementById('details').style.display = 'block';
+          const detailsDiv = document.getElementById('details');
+          detailsDiv.style.display = 'block';
+
+          // Remove loading state
+          const infoSection = detailsDiv.querySelector('.info-section');
+          if (infoSection) {
+            infoSection.classList.remove('loading');
+          }
+
           showStatus(`Loaded Row ${currentRow}`, false, silent);
         })
         .withFailureHandler(err => {
+          if (loadTimeout) {
+            clearTimeout(loadTimeout);
+            loadTimeout = null;
+          }
           isLoading = false;
           loadingRowNumber = null;
+
+          // Remove loading state on error
+          const detailsDiv = document.getElementById('details');
+          const infoSection = detailsDiv.querySelector('.info-section');
+          if (infoSection) {
+            infoSection.classList.remove('loading');
+          }
+
           showStatus(err.message || 'Error loading row', true, silent);
         })
         .getActiveRowData();
