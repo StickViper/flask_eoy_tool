@@ -11,7 +11,7 @@
     
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-      padding: 15px;
+      padding: 12px;
       font-size: 14px;
       color: #333;
       background: #f8f9fa;
@@ -20,15 +20,15 @@
     h2 {
       color: #1a73e8;
       font-size: 18px;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
       border-bottom: 2px solid #1a73e8;
-      padding-bottom: 8px;
+      padding-bottom: 6px;
     }
     
     .config-badges {
       display: flex;
       gap: 8px;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
     
     .config-badge {
@@ -54,11 +54,11 @@
     
     button {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       margin: 8px 0;
       border: none;
       border-radius: 4px;
-      font-size: 14px;
+      font-size: 15px;
       cursor: pointer;
       transition: all 0.3s;
       font-weight: 500;
@@ -123,13 +123,13 @@
     .info-section {
       background: white;
       border-radius: 8px;
-      padding: 12px;
-      margin: 10px 0;
+      padding: 10px;
+      margin: 8px 0;
       border: 1px solid #e0e0e0;
     }
     
     .info-row {
-      margin: 8px 0;
+      margin: 6px 0;
       display: flex;
       align-items: flex-start;
     }
@@ -179,7 +179,7 @@
       font-family: inherit;
       font-size: 13px;
       resize: vertical;
-      min-height: 60px;
+      min-height: 50px;
     }
     
     textarea:focus {
@@ -189,7 +189,7 @@
     }
     
     .action-group {
-      margin: 15px 0;
+      margin: 10px 0;
     }
     
     .action-label {
@@ -204,10 +204,10 @@
       grid-template-columns: 1fr 1fr 1fr;
       gap: 8px;
     }
-    
+
     .status-buttons button {
-      font-size: 12px;
-      padding: 8px 4px;
+      font-size: 13px;
+      padding: 12px 8px;
     }
     
     #status-message {
@@ -283,8 +283,8 @@
     }
     
     .keyboard-shortcuts {
-      margin-top: 20px;
-      padding: 10px;
+      margin-top: 12px;
+      padding: 8px;
       background: #f1f3f4;
       border-radius: 4px;
       font-size: 11px;
@@ -363,8 +363,8 @@
         <span class="info-value" id="location"></span>
       </div>
       <div class="info-row">
-        <span class="info-label">Status</span>
-        <span class="info-value" id="current-status">Not verified</span>
+        <span class="info-label">Verified</span>
+        <span class="info-value" id="current-status">Loading...</span>
       </div>
       
       <div class="info-row" id="confidence-section" style="display: none;">
@@ -396,7 +396,7 @@
       <div class="status-buttons">
         <button class="btn-operational" onclick="updateStatus('OPERATIONAL')">✓ Active</button>
         <button class="btn-closed" onclick="updateStatus('CLOSED')">✗ Closed</button>
-        <button class="btn-needs-info" onclick="updateStatus('NEEDS_INFO')">? Review</button>
+        <button class="btn-needs-info" onclick="updateStatus('NEEDS_REVIEW')">? Review</button>
       </div>
     </div>
     
@@ -530,8 +530,8 @@
                 <span class="info-value" id="location">${data['City'] || ''}, ${data['State'] || ''} ${data['ZIP'] || ''}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">Status</span>
-                <span class="info-value" id="current-status">${data['Verification_Status'] || 'Not verified'}</span>
+                <span class="info-label">Verified</span>
+                <span class="info-value" id="current-status">${response.verificationStatus || 'Not verified'}</span>
               </div>
               ${response.confidence ? `
                 <div class="info-row" id="confidence-section">
@@ -603,8 +603,9 @@
       google.script.run
         .withSuccessHandler(message => {
           showStatus(message, false);
-          // Hiding the row automatically moves selection to next visible row
-          // Just reload - no need to call moveToNextRow()
+
+          // If NEEDS_REVIEW, row is NOT hidden - just reload same row to update color
+          // If OPERATIONAL or CLOSED, row IS hidden - auto-advances to next
           setTimeout(() => {
             loadRowData();
           }, 1500);

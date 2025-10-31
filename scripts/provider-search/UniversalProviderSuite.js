@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v10.1 - Import Sheet Workflow)
+ * Manual Provider Verification Suite (v11.0 - Authorization Fixed)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -7,10 +7,19 @@
  * 2. Add Search Links (works on selection or whole sheet)
  * 3. Remove Duplicates (works on selection or whole sheet)
  * 4. Manual verification: Click links OR use sidebar
- * 5. Verified providers copied to All_Verified_Providers (row hidden)
- * 6. Closed/invalid providers just hidden (Invalid list in Working List - separate task)
+ * 5. Verified providers copied to All_Verified_Providers (row colored green, hidden)
+ * 6. Closed/invalid providers colored red, hidden (Invalid list in Working List - separate task)
+ * 7. Needs Review providers colored yellow, NOT hidden (manual review later)
  *
  * NO GOOGLE PLACES API - Too expensive and risky
+ * NO Session.getActiveUser() - Removed to avoid authorization issues
+ *
+ * CHANGES IN v11.0:
+ * - Removed Session.getActiveUser().getEmail() (auth issue fix for shared sheets)
+ * - Added NEEDS_REVIEW status (yellow color, not hidden)
+ * - Fixed verified status detection (reads row background color)
+ * - Auto-loads first selected row or row 2 on sidebar open
+ * - Larger buttons, no scrolling in sidebar
  *
  * NOTE: Invalid/Inactive List lives in Working List sheets (OBGYN/PCP), not here.
  * Cross-sheet verification is a separate future task.
@@ -87,12 +96,30 @@ function buildSearchQuery(officeName, address, city, state, phone) {
   }
 }
 
+/**
+ * Gets data for the active row or first selected/available row
+ * Auto-loads first selected row if any, otherwise row 2
+ */
 function getActiveRowData() {
   const sheet = SpreadsheetApp.getActiveSheet();
-  const range = sheet.getActiveRange();
+  let range = sheet.getActiveRange();
 
+  // If no selection or header row selected, try to find first data row
   if (!range || range.getRow() < 2) {
-    return { error: "Please select a data row (not the header)" };
+    // Check if there's a selection with multiple rows
+    if (range && range.getNumRows() > 1) {
+      // Use first row from selection (skip header if selected)
+      const firstRow = range.getRow() === 1 ? 2 : range.getRow();
+      sheet.setActiveRange(sheet.getRange(firstRow, 1));
+      range = sheet.getActiveRange();
+    } else {
+      // No valid selection - use row 2 (first data row)
+      if (sheet.getLastRow() < 2) {
+        return { error: "No data rows found in this sheet" };
+      }
+      sheet.setActiveRange(sheet.getRange(2, 1));
+      range = sheet.getActiveRange();
+    }
   }
 
   const row = range.getRow();
@@ -113,19 +140,27 @@ function getActiveRowData() {
 
   const searchQuery = buildSearchQuery(officeName, address, city, state, phone);
 
+  // Check row background color to determine verification status
+  const rowColor = sheet.getRange(row, 1).getBackground().toLowerCase();
+  let verificationStatus = 'Not verified';
+  if (rowColor === '#d9ead3') verificationStatus = 'Verified ✓';
+  else if (rowColor === '#f4cccc') verificationStatus = 'Closed ✗';
+  else if (rowColor === '#fff2cc') verificationStatus = 'Needs Review ⚠';
+
   return {
     data: data,
     row: row,
     sheetName: sheet.getName(),
-    searchUrl: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`
+    searchUrl: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
+    verificationStatus: verificationStatus
   };
 }
 
 /**
  * Updates row status after manual verification
- * status: 'OPERATIONAL' = copy to verified sheet, hide row
- * status: 'CLOSED' = just hide row (Invalid list is in Working List - separate cross-sheet task)
- * status: 'NEEDS_INFO' = skip for now
+ * status: 'OPERATIONAL' = copy to verified sheet, color green, hide row
+ * status: 'CLOSED' = color red, hide row (Invalid list in Working List - separate cross-sheet task)
+ * status: 'NEEDS_REVIEW' = color yellow, DON'T hide (needs manual review later)
  */
 function updateRowStatus(rowNum, sheetName, status, notes) {
   try {
@@ -165,7 +200,7 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
         provider.zip,
         provider.npi,
         new Date(),
-        Session.getActiveUser().getEmail(),
+        'Manual Verification', // Removed Session.getActiveUser() to avoid authorization issues
         notes || 'Verified via manual review',
         sheetName
       ]);
@@ -184,8 +219,11 @@ function updateRowStatus(rowNum, sheetName, status, notes) {
 
       return `✗ Marked as closed/invalid (row colored red & hidden)\nNote: Add to Invalid list in Working List manually if needed`;
 
-    } else if (status === 'NEEDS_INFO') {
-      return `Skipped - row remains for later review`;
+    } else if (status === 'NEEDS_REVIEW') {
+      // Color row yellow, DON'T hide (needs manual review)
+      sheet.getRange(rowNum, 1, 1, sheet.getLastColumn()).setBackground('#fff2cc');
+
+      return `⚠ Marked for review (row colored yellow, NOT hidden) - review this row later`;
     }
 
     return `Unknown status: ${status}`;
