@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v13.2 - Ultra Fast Auto-Load)
+ * Manual Provider Verification Suite (v13.3 - Instant Actions)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -42,9 +42,9 @@
  * - Cell edits don't trigger unwanted loads
  *
  * PERFORMANCE OPTIMIZATIONS:
- * - Only reads first 15 columns (was 50+) → 4-5x faster loading
+ * - Only reads first 6 columns (was 50+) → ultra fast loading
  * - Request tracking ignores stale responses (race condition fix)
- * - Polling: 500ms (balanced, less aggressive)
+ * - Polling: 300ms (minimal delay)
  * - Color only first 8 visible columns (not entire row)
  * - Simplified All_Verified_Providers columns (8 instead of 11)
  *
@@ -162,9 +162,9 @@ function getActiveRowData() {
 
   const row = range.getRow();
 
-  // OPTIMIZATION: Only read first 15 columns (Office Name, Phone, Address, City, State, ZIP, NPI, etc.)
-  // NPPES has 50+ columns but we don't need most of them
-  const numCols = Math.min(15, sheet.getLastColumn());
+  // OPTIMIZATION: Only read first 6 columns (Office Name, Phone, Address, City, State, ZIP)
+  // NPPES has 50+ columns but we only need the essential ones for display
+  const numCols = Math.min(6, sheet.getLastColumn());
   const headers = sheet.getRange(1, 1, 1, numCols).getValues()[0];
   const values = sheet.getRange(row, 1, 1, numCols).getValues()[0];
 

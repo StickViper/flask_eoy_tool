@@ -652,6 +652,7 @@
           // Reset debounce counters after successful load
           lastPolledRow = response.row;
           sameRowCount = 0;
+          selectedRow = response.row; // Sync selectedRow to prevent false blocking
 
           // Rebuild details section
           document.getElementById('details').innerHTML = `
