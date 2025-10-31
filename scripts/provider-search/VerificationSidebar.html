@@ -126,6 +126,26 @@
       padding: 10px;
       margin: 8px 0;
       border: 1px solid #e0e0e0;
+      min-height: 150px;
+      position: relative;
+    }
+
+    .info-section.loading {
+      opacity: 0.5;
+    }
+
+    .info-section.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #1a73e8;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
     }
     
     .info-row {
@@ -442,6 +462,7 @@
     let searchUrl = null;
     let autoLoadInterval = null;
     let isLoading = false;
+    let loadingRowNumber = null; // Track which row we're loading to ignore stale responses
 
     // Initialize on load
     window.onload = function() {
@@ -453,20 +474,18 @@
     // Auto-load when user selects a new row
     function startAutoLoad() {
       autoLoadInterval = setInterval(() => {
-        if (isLoading) return; // Skip if already loading
-
         google.script.run
           .withSuccessHandler(activeRow => {
-            // Only reload if different row selected
-            if (activeRow && activeRow !== currentRow) {
-              loadRowData(true); // Silent on auto-load
+            // Only reload if different row selected AND not currently loading that row
+            if (activeRow && activeRow !== currentRow && activeRow !== loadingRowNumber) {
+              loadRowData(true, activeRow); // Silent on auto-load, pass target row
             }
           })
           .withFailureHandler(() => {
             // Silent fail - don't spam errors
           })
           .getActiveRowNumber();
-      }, 500); // Check every 500ms
+      }, 300); // Reduced from 500ms for more responsive feel
     }
 
     function stopAutoLoad() {
@@ -518,16 +537,46 @@
       }, 1500);
     }
     
-    function loadRowData(silent) {
-      if (isLoading) return; // Prevent multiple simultaneous loads
+    function loadRowData(silent, targetRow) {
+      // Get the row number we're about to load
+      if (!targetRow) {
+        // Manual load - get current active row from server
+        google.script.run
+          .withSuccessHandler(activeRow => {
+            if (activeRow) {
+              loadRowDataInternal(silent, activeRow);
+            }
+          })
+          .getActiveRowNumber();
+      } else {
+        loadRowDataInternal(silent, targetRow);
+      }
+    }
+
+    function loadRowDataInternal(silent, targetRow) {
+      // Track which row we're loading
+      loadingRowNumber = targetRow;
       isLoading = true;
 
-      // Clear previous data to prevent flash
-      document.getElementById('details').style.display = 'none';
+      // Show loading state
+      const detailsDiv = document.getElementById('details');
+      detailsDiv.style.display = 'block';
+      const infoSection = detailsDiv.querySelector('.info-section');
+      if (infoSection) {
+        infoSection.classList.add('loading');
+      }
 
       google.script.run
         .withSuccessHandler(response => {
+          // CRITICAL: Ignore stale responses (user moved to different row while loading)
+          if (response.row !== loadingRowNumber) {
+            isLoading = false;
+            loadingRowNumber = null;
+            return; // Ignore this stale response
+          }
+
           isLoading = false;
+          loadingRowNumber = null;
 
           if (response.error) {
             showStatus(response.error, true, silent);
@@ -599,11 +648,28 @@
             </div>
           `;
 
-          document.getElementById('details').style.display = 'block';
+          const detailsDiv = document.getElementById('details');
+          detailsDiv.style.display = 'block';
+
+          // Remove loading state
+          const infoSection = detailsDiv.querySelector('.info-section');
+          if (infoSection) {
+            infoSection.classList.remove('loading');
+          }
+
           showStatus(`Loaded Row ${currentRow}`, false, silent);
         })
         .withFailureHandler(err => {
           isLoading = false;
+          loadingRowNumber = null;
+
+          // Remove loading state on error
+          const detailsDiv = document.getElementById('details');
+          const infoSection = detailsDiv.querySelector('.info-section');
+          if (infoSection) {
+            infoSection.classList.remove('loading');
+          }
+
           showStatus(err.message || 'Error loading row', true, silent);
         })
         .getActiveRowData();
@@ -631,8 +697,8 @@
           // If NEEDS_REVIEW, row is NOT hidden - just reload same row to update color
           // If OPERATIONAL or CLOSED, row IS hidden - auto-advances to next
           setTimeout(() => {
-            loadRowData(true); // Silent reload after status update
-          }, 600);  // Reduced for faster workflow
+            loadRowData(true); // Silent reload after status update (will get current active row)
+          }, 400);  // Reduced for faster workflow
         })
         .withFailureHandler(err => showStatus(err.message || 'Error updating', true, false))
         .updateRowStatus(currentRow, currentSheet, status, '');

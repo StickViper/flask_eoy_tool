@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v12.1 - Auto-Load on Row Select)
+ * Manual Provider Verification Suite (v12.4 - Race Condition Fix)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -12,23 +12,24 @@
  * 7. Needs Review providers colored yellow, NOT hidden
  *
  * KEYBOARD SHORTCUTS:
- * - AUTO: Selecting a new row auto-loads it (500ms polling)
+ * - AUTO: Selecting a new row auto-loads it (300ms polling, responsive)
  * - G: Google search (reuses same tab)
  * - Q or 1: Mark Active (green, hide, copy to verified)
  * - E or 2: Mark Closed (red, hide)
+ * - R or 3: Mark Review (yellow, NOT hidden)
  * - S: Skip to next row
  * - L: Manual reload (optional, auto-loads on select)
  * - Ctrl+W: Close search tab (browser native)
  *
- * PERFORMANCE OPTIMIZATIONS:
- * - Auto-loads when selecting new row (no manual L press needed)
- * - Removed verification notes (unnecessary)
+ * PERFORMANCE OPTIMIZATIONS (v12.3-12.4):
+ * - Only reads first 15 columns (was 50+) → 4-5x faster loading
+ * - Request tracking ignores stale responses (race condition fix)
+ * - Loading spinner shows during fetch (visual feedback)
+ * - Reduced polling: 500ms → 300ms (more responsive)
+ * - Reduced reload delay: 600ms → 400ms after status update
  * - Color only first 8 visible columns (not entire row)
  * - Simplified All_Verified_Providers columns (8 instead of 11)
- * - Reduced status message delays (1500ms → 800ms)
  * - Search opens in same named window (no tab spam)
- * - Removed Clear Form button (confusing)
- * - Removed state badge (unnecessary)
  *
  * NO GOOGLE PLACES API - Too expensive and risky
  * NO Session.getActiveUser() - Removed to avoid authorization issues
