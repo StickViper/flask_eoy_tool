@@ -460,6 +460,7 @@
     let isLoading = false;
     let loadingRowNumber = null; // Track which row we're loading to ignore stale responses
     let loadTimeout = null; // Track timeout for cancellation
+    let selectedRow = null; // Track which row is actually selected in sheet
 
     // Initialize on load
     window.onload = function() {
@@ -473,6 +474,8 @@
       autoLoadInterval = setInterval(() => {
         google.script.run
           .withSuccessHandler(activeRow => {
+            selectedRow = activeRow; // Track selected row
+
             // Only reload if different row selected AND not currently loading that row
             if (activeRow && activeRow !== currentRow && activeRow !== loadingRowNumber) {
               loadRowData(true, activeRow); // Silent on auto-load, pass target row
@@ -570,12 +573,16 @@
         }
       }, 10000);
 
-      // Show minimal loading indicator without replacing entire HTML
+      // Immediately show clean loading state - no old data visible
       const detailsDiv = document.getElementById('details');
-      const infoSection = detailsDiv.querySelector('.info-section');
-      if (infoSection) {
-        infoSection.classList.add('loading');
-      }
+      detailsDiv.innerHTML = `
+        <div class="info-section loading">
+          <div style="text-align: center; padding: 60px; color: #5f6368;">
+            <div class="spinner" style="margin: 0 auto 10px;"></div>
+            Loading row ${targetRow}...
+          </div>
+        </div>
+      `;
       detailsDiv.style.display = 'block';
 
       google.script.run
@@ -665,15 +672,7 @@
             </div>
           `;
 
-          const detailsDiv = document.getElementById('details');
-          detailsDiv.style.display = 'block';
-
-          // Remove loading state
-          const infoSection = detailsDiv.querySelector('.info-section');
-          if (infoSection) {
-            infoSection.classList.remove('loading');
-          }
-
+          document.getElementById('details').style.display = 'block';
           showStatus(`Loaded Row ${currentRow}`, false, silent);
         })
         .withFailureHandler(err => {
@@ -684,12 +683,17 @@
           isLoading = false;
           loadingRowNumber = null;
 
-          // Remove loading state on error
+          // Show error state
           const detailsDiv = document.getElementById('details');
-          const infoSection = detailsDiv.querySelector('.info-section');
-          if (infoSection) {
-            infoSection.classList.remove('loading');
-          }
+          detailsDiv.innerHTML = `
+            <div class="info-section">
+              <div style="text-align: center; padding: 40px; color: #d33b27;">
+                Error loading row: ${err.message || 'Unknown error'}
+                <br><br>
+                <button class="btn-primary" onclick="loadRowData(false)">Retry (L)</button>
+              </div>
+            </div>
+          `;
 
           showStatus(err.message || 'Error loading row', true, silent);
         })
@@ -697,17 +701,29 @@
     }
     
     function openGoogleSearch() {
+      // Don't allow search if loaded row doesn't match selected row
+      if (currentRow !== selectedRow) {
+        showStatus('Wait for row to finish loading', true, false);
+        return;
+      }
+
       if (searchUrl) {
         // Open in same named window (reuses the tab instead of creating new ones)
         window.open(searchUrl, 'provider_search_tab');
       } else {
-        showStatus('No search URL available', true);
+        showStatus('No search URL available', true, false);
       }
     }
     
     function updateStatus(status) {
       if (!currentRow) {
         showStatus('Please load a row first', true, false);
+        return;
+      }
+
+      // Don't allow verification if loaded row doesn't match selected row
+      if (currentRow !== selectedRow) {
+        showStatus('Wait for row to finish loading', true, false);
         return;
       }
 
@@ -728,6 +744,12 @@
     function skipToNext() {
       if (!currentRow) {
         showStatus('No row loaded', true, false);
+        return;
+      }
+
+      // Don't allow skip if loaded row doesn't match selected row
+      if (currentRow !== selectedRow) {
+        showStatus('Wait for row to finish loading', true, false);
         return;
       }
 

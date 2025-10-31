@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v12.4 - Race Condition Fix)
+ * Manual Provider Verification Suite (v12.7 - Prevent Actions During Loading)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -12,24 +12,29 @@
  * 7. Needs Review providers colored yellow, NOT hidden
  *
  * KEYBOARD SHORTCUTS:
- * - AUTO: Selecting a new row auto-loads it (300ms polling, responsive)
- * - G: Google search (reuses same tab)
- * - Q or 1: Mark Active (green, hide, copy to verified)
- * - E or 2: Mark Closed (red, hide)
- * - R or 3: Mark Review (yellow, NOT hidden)
- * - S: Skip to next row
- * - L: Manual reload (optional, auto-loads on select)
+ * - AUTO: Selecting a new row auto-loads it (400ms polling)
+ * - G: Google search (reuses same tab) - DISABLED during loading
+ * - Q or 1: Mark Active - DISABLED during loading
+ * - E or 2: Mark Closed - DISABLED during loading
+ * - R or 3: Mark Review - DISABLED during loading
+ * - S: Skip to next row - DISABLED during loading
+ * - L: Manual reload
  * - Ctrl+W: Close search tab (browser native)
  *
- * PERFORMANCE OPTIMIZATIONS (v12.3-12.4):
+ * CRITICAL FIXES (v12.7):
+ * - Clean loading state (no old data visible during load)
+ * - All actions disabled until currentRow === selectedRow
+ * - Shows "Wait for row to finish loading" if actions attempted
+ * - 10-second timeout auto-recovers from stuck loading
+ * - Error state with retry button
+ *
+ * PERFORMANCE OPTIMIZATIONS:
  * - Only reads first 15 columns (was 50+) → 4-5x faster loading
  * - Request tracking ignores stale responses (race condition fix)
- * - Loading spinner shows during fetch (visual feedback)
- * - Reduced polling: 500ms → 300ms (more responsive)
- * - Reduced reload delay: 600ms → 400ms after status update
+ * - Polling: 400ms (balanced responsiveness)
+ * - Reload delay: 400ms after status update
  * - Color only first 8 visible columns (not entire row)
  * - Simplified All_Verified_Providers columns (8 instead of 11)
- * - Search opens in same named window (no tab spam)
  *
  * NO GOOGLE PLACES API - Too expensive and risky
  * NO Session.getActiveUser() - Removed to avoid authorization issues
