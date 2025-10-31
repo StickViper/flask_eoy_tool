@@ -443,6 +443,8 @@
     let loadingRowNumber = null; // Track which row we're loading to ignore stale responses
     let loadTimeout = null; // Track timeout for cancellation
     let selectedRow = null; // Track which row is actually selected in sheet
+    let lastPolledRow = null; // Track last polled row for debouncing
+    let sameRowCount = 0; // Count how many times we've seen the same row
 
     // Initialize on load
     window.onload = function() {
@@ -452,6 +454,7 @@
     };
 
     // Auto-load when user selects a new row
+    // Uses debouncing to prevent cell edits from triggering loads
     function startAutoLoad() {
       autoLoadInterval = setInterval(() => {
         // Don't poll if already loading
@@ -459,10 +462,29 @@
 
         google.script.run
           .withSuccessHandler(activeRow => {
+            // Ignore header row (row 1) and invalid rows
+            if (!activeRow || activeRow < 2) {
+              return; // Don't process header or invalid selections
+            }
+
+            // Debounce: Only trigger load if row has been stable for 3 polls
+            if (activeRow === lastPolledRow) {
+              sameRowCount++;
+            } else {
+              lastPolledRow = activeRow;
+              sameRowCount = 1;
+            }
+
             selectedRow = activeRow; // Track selected row
 
-            // Only reload if different row selected AND not currently loading
-            if (activeRow && activeRow !== currentRow && !isLoading) {
+            // Only load if:
+            // 1. Row is different from current
+            // 2. Row has been stable for at least 3 polls (1.5 seconds)
+            // 3. Not currently loading
+            // This prevents cell edits from triggering unwanted loads
+            if (activeRow !== currentRow &&
+                sameRowCount >= 3 &&
+                !isLoading) {
               loadRowData(true, activeRow); // Silent on auto-load, pass target row
             }
           })
@@ -470,7 +492,7 @@
             // Silent fail - don't spam errors
           })
           .getActiveRowNumber();
-      }, 500); // Increased to 500ms to reduce polling aggression
+      }, 500); // Poll every 500ms
     }
 
     function stopAutoLoad() {
@@ -624,6 +646,10 @@
           currentRow = response.row;
           currentSheet = response.sheetName;
           searchUrl = response.searchUrl;
+
+          // Reset debounce counters after successful load
+          lastPolledRow = response.row;
+          sameRowCount = 0;
 
           // Rebuild details section
           document.getElementById('details').innerHTML = `
