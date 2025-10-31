@@ -336,7 +336,7 @@
   </div>
 
   <button class="btn-primary" onclick="loadRowData()">
-    <span class="step-indicator">1</span> Load Selected Row
+    <span class="step-indicator">1</span> Reload Row (L) - auto-loads
   </button>
   
   <div id="details">
@@ -402,8 +402,8 @@
   <div class="keyboard-shortcuts">
     <h3>Keyboard Shortcuts:</h3>
     <div class="shortcut">
-      <span>Load Row</span>
-      <span class="key">L</span>
+      <span>Auto-loads on select row</span>
+      <span class="key">✓</span>
     </div>
     <div class="shortcut">
       <span>Google Search</span>
@@ -431,12 +431,37 @@
     let currentRow = null;
     let currentSheet = null;
     let searchUrl = null;
-    
+    let autoLoadInterval = null;
+
     // Initialize on load
     window.onload = function() {
       loadRowData();
       setupKeyboardShortcuts();
+      startAutoLoad();
     };
+
+    // Auto-load when user selects a new row
+    function startAutoLoad() {
+      autoLoadInterval = setInterval(() => {
+        google.script.run
+          .withSuccessHandler(activeRow => {
+            // Only reload if different row selected
+            if (activeRow && activeRow !== currentRow) {
+              loadRowData();
+            }
+          })
+          .withFailureHandler(() => {
+            // Silent fail - don't spam errors
+          })
+          .getActiveRowNumber();
+      }, 500); // Check every 500ms
+    }
+
+    function stopAutoLoad() {
+      if (autoLoadInterval) {
+        clearInterval(autoLoadInterval);
+      }
+    }
     
     function setupKeyboardShortcuts() {
       document.addEventListener('keydown', function(e) {

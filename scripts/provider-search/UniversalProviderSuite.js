@@ -1,25 +1,27 @@
 /**
- * Manual Provider Verification Suite (v12.0 - Performance Optimized)
+ * Manual Provider Verification Suite (v12.1 - Auto-Load on Row Select)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
  * 1. Import NPPES CSV to any sheet
  * 2. Add Search Links (works on selection or whole sheet)
  * 3. Remove Duplicates (works on selection or whole sheet)
- * 4. Manual verification: Sidebar with keyboard shortcuts
+ * 4. Manual verification: Sidebar with auto-load + keyboard shortcuts
  * 5. Verified providers copied to All_Verified_Providers (row colored green, hidden)
  * 6. Closed/invalid providers colored red, hidden
  * 7. Needs Review providers colored yellow, NOT hidden
  *
  * KEYBOARD SHORTCUTS:
- * - L: Load row (auto-loads on open)
+ * - AUTO: Selecting a new row auto-loads it (500ms polling)
  * - G: Google search (reuses same tab)
  * - Q or 1: Mark Active (green, hide, copy to verified)
  * - E or 2: Mark Closed (red, hide)
  * - S: Skip to next row
+ * - L: Manual reload (optional, auto-loads on select)
  * - Ctrl+W: Close search tab (browser native)
  *
- * PERFORMANCE OPTIMIZATIONS (v12.0):
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Auto-loads when selecting new row (no manual L press needed)
  * - Removed verification notes (unnecessary)
  * - Color only first 8 visible columns (not entire row)
  * - Simplified All_Verified_Providers columns (8 instead of 11)
@@ -101,6 +103,16 @@ function buildSearchQuery(officeName, address, city, state, phone) {
     // Practice name: Include it - likely matches Google Places listing
     return [officeName, address, city, state].filter(Boolean).join(' ');
   }
+}
+
+/**
+ * Gets the currently selected row number (for auto-load detection)
+ */
+function getActiveRowNumber() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const range = sheet.getActiveRange();
+  if (!range) return null;
+  return range.getRow();
 }
 
 /**
