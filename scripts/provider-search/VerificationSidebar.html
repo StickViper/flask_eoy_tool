@@ -467,7 +467,7 @@
               return; // Don't process header or invalid selections
             }
 
-            // Debounce: Only trigger load if row has been stable for 3 polls
+            // Minimal debounce: Only trigger load if row has been stable for 1 poll
             if (activeRow === lastPolledRow) {
               sameRowCount++;
             } else {
@@ -479,11 +479,11 @@
 
             // Only load if:
             // 1. Row is different from current
-            // 2. Row has been stable for at least 3 polls (1.5 seconds)
+            // 2. Row has been stable for at least 1 poll (300ms)
             // 3. Not currently loading
-            // This prevents cell edits from triggering unwanted loads
+            // This prevents brief cell edit flickers from triggering loads
             if (activeRow !== currentRow &&
-                sameRowCount >= 3 &&
+                sameRowCount >= 1 &&
                 !isLoading) {
               loadRowData(true, activeRow); // Silent on auto-load, pass target row
             }
@@ -492,7 +492,7 @@
             // Silent fail - don't spam errors
           })
           .getActiveRowNumber();
-      }, 500); // Poll every 500ms
+      }, 300); // Poll every 300ms - faster response
     }
 
     function stopAutoLoad() {
@@ -506,15 +506,17 @@
         // Ignore if typing in textarea
         if (e.target.tagName === 'TEXTAREA') return;
 
-        // Block ALL shortcuts (except L) if loaded row doesn't match selected row
-        const isLoading = currentRow !== selectedRow;
+        // Block ALL shortcuts (except L) if:
+        // 1. Loaded row doesn't match selected row, OR
+        // 2. Currently in loading state
+        const blocked = (currentRow !== selectedRow) || isLoading;
 
         switch(e.key.toLowerCase()) {
           case 'l':
             loadRowData(false); // Manual load - always allowed
             break;
           case 'g':
-            if (isLoading) {
+            if (blocked) {
               showStatus('Wait for row to finish loading', true, false);
               return;
             }
@@ -522,7 +524,7 @@
             break;
           case 'q':
           case '1':
-            if (isLoading) {
+            if (blocked) {
               showStatus('Wait for row to finish loading', true, false);
               return;
             }
@@ -530,7 +532,7 @@
             break;
           case 'e':
           case '2':
-            if (isLoading) {
+            if (blocked) {
               showStatus('Wait for row to finish loading', true, false);
               return;
             }
@@ -538,14 +540,14 @@
             break;
           case 'r':
           case '3':
-            if (isLoading) {
+            if (blocked) {
               showStatus('Wait for row to finish loading', true, false);
               return;
             }
             updateStatus('NEEDS_REVIEW');
             break;
           case 's':
-            if (isLoading) {
+            if (blocked) {
               showStatus('Wait for row to finish loading', true, false);
               return;
             }

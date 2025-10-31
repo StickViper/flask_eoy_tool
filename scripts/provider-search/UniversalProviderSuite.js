@@ -1,5 +1,5 @@
 /**
- * Manual Provider Verification Suite (v13.0 - Instant Skip/Status Actions)
+ * Manual Provider Verification Suite (v13.2 - Ultra Fast Auto-Load)
  * 100% manual verification - works directly on import sheets
  *
  * WORKFLOW:
@@ -12,7 +12,7 @@
  * 7. Needs Review providers colored yellow, NOT hidden
  *
  * KEYBOARD SHORTCUTS:
- * - AUTO: Selecting a new row auto-loads it (500ms polling, 1.5s debounce)
+ * - AUTO: Selecting a new row auto-loads it (300ms polling, 300ms debounce)
  * - G: Google search (reuses same tab) - DISABLED during loading
  * - Q or 1: Mark Active → INSTANT load of next row (bypasses debounce)
  * - E or 2: Mark Closed → INSTANT load of next row (bypasses debounce)
@@ -28,10 +28,11 @@
  * - Debounce only applies to auto-load (prevents cell edit triggers)
  * - User actions always bypass debounce for instant response
  *
- * DEBOUNCING (v12.9):
- * - Auto-load requires 1.5s row stability (prevents cell edit triggers)
- * - User actions (S/Q/E/R/L) bypass debounce completely
+ * DEBOUNCING (v13.2):
+ * - Auto-load requires 300ms row stability (prevents cell edit triggers)
+ * - User actions (S/Q/E/R/L) bypass debounce completely (instant)
  * - Header row (row 1) always ignored
+ * - Keyboard shortcuts blocked during loading (checks isLoading flag)
  *
  * CRITICAL FIXES:
  * - Clean loading state (no old data visible during load)
