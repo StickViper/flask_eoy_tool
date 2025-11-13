@@ -13,6 +13,7 @@ NPPES_Data_Dissemination*/
 .env
 config/secrets.js
 *_secrets.*
+credentials.json
 
 # OS Files
 .DS_Store

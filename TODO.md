@@ -2,179 +2,137 @@
 
 ## 🔴 IMMEDIATE PRIORITIES (Current Session)
 
-### 0. Fix Half-Implemented EOY Features (CRITICAL BUGS)
+### 0. OBGYN EOY Cleanup (December 2024)
 
-**Status:** In progress - fixing bugs found during codebase audit
+**Status:** Building local Python tool to replace Apps Script validation
+**Timeline:** This week (Dec 2024)
 
 #### ✅ COMPLETED:
-- [x] Fix DebugRepairSidebar field name mismatches (backend now returns proper column headers)
+- [x] Manual verification sidebar (v13.3) - works for shared users after cache clear
+- [x] OBGYN sheet connected to ToolboxSuite.js (clasp already setup)
+- [x] Created gspread test script (`scripts/test_gspread.py`)
+- [x] Created PECOS API test script (`scripts/test_pecos_api.py`)
 
-#### ✅ COMPLETED (Oct 18, 2025):
-- [x] **EOY Step 2: Dynamic weight fuzzy matching** (FIXED!)
-  - **Problem:** Max score without phone was 60% (below 80% threshold) → all flagged as "not found"
-  - **Fix:** Dynamic weights - if no phone column detected, redistribute to name (70%) + address (30%)
-  - **Result:** Perfect name+address matches now score 100%, correctly identified as exact matches
-  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1421-1428`, `scripts/pcp-list/ToolboxSuite.js` (synced)
-  - **Deployed:** Both OBGYN and PCP sheets (Oct 18, 2025)
+#### 🚧 IN PROGRESS:
+- [ ] **Local Python EOY Tool** (REPLACES Apps Script debug tools)
+  - **Why:** Apps Script validation flags ALL 244 yellow rows as "not found" in New Orders
+  - **Problem:** Fuzzy matching broken OR data format mismatch (need to debug)
+  - **Solution:** Build local Python tool with gspread (instant, no polling, easy to debug)
+  - **Features:**
+    - Load Working List (738 rows) + New Orders (269 rows) via gspread
+    - Validate yellow rows (244) → New Orders matches
+    - Detect duplicates (phone, address, name)
+    - Flag status issues (fuschia, green, red, empty)
+    - Check "not interested" notes + QTY=0
+    - Interactive: review issues one-by-one, make decisions
+    - Batch update sheet at end
+  - **Replaces:** Debug sidebar + debug column + Apps Script EOY automation
+  - **Files:** `scripts/eoy_obgyn_tool.py` (new)
+  - **Time estimate:** 3-4 hours to build, 2-4 hours to use
 
-- [x] **EOY Step 1: Debug column population** (VERIFIED - Already correct!)
-  - **Status:** Code review shows `getOrCreateDebugColumn()` + write logic already implemented
-  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1150-1166` (creates column), lines 857-859 (writes issues)
-  - **Note:** Documentation was outdated - function already works correctly
+#### ⚠️ KNOWN ISSUES (Apps Script EOY - why we're replacing it):
+- **Step 2: Yellow validation BROKEN** - flags ALL 244 yellow rows as "not in New Orders"
+  - Test run showed 100% false positives
+  - Likely cause: fuzzy matching threshold too high OR data format mismatch
+  - Local tool will show exact confidence scores for debugging
+- **Apps Script limitations:**
+  - Client-side polling lag
+  - 6-minute execution limit
+  - Hard to debug (no console output for confidence scores)
+  - Browser cache issues for shared users
 
-- [x] **Network notation format** (VERIFIED - Already correct!)
-  - **Status:** Code already uses correct format: `"${networkName} network (~${locationCount});"`
-  - **Files:** `scripts/obgyn-list/ToolboxSuite.js:1037-1044`
-  - **Example output:** `"womenshealthcenter network (~8);"`
-  - **Note:** Documentation was outdated - function already works correctly
+#### 📦 ARCHIVED (Old Completed Work):
+- Google Places API removed (Oct 2025) - switched to 100% manual verification
+- Manual verification sidebar (v13.3) works after browser cache fix
+- DebugRepairSidebar field name fixes
+- Network notation format verified correct
 
-#### ✅ COMPLETED (Oct 18, 2025 - CRITICAL):
-- [x] **REMOVED GOOGLE PLACES API: Switched to manual-only verification** (Too expensive and risky!)
-  - **Problem:** Google Places API billing is unpredictable, hit $346.86 in one month due to Enterprise SKU
-  - **Decision:** Swear off Google Places API completely - too risky for solo dev nonprofit project
-  - **New Approach:** 100% manual verification with keyboard-driven UI
-  - **Files:** `scripts/provider-search/UniversalProviderSuite.js` (v9.0 - complete rewrite)
-  - **Features Added:**
-    - ✅ Manual verification sidebar with keyboard shortcuts (L, G, 1, 2, S)
-    - ✅ Universal duplicate removal (works on any sheet with Office Name / Phone / Address)
-    - ✅ Copy verified from queue button (hides rows, preserves audit trail)
-    - ✅ Google search link generator (free, no API)
-  - **Deployed:** Provider Search sheet (Oct 18, 2025)
-  - **Impact:** Zero ongoing costs, full control over verification ✅
+#### 📋 NEXT STEPS (This Week):
 
-#### 📋 PENDING:
+**YOU:**
+1. [ ] Run `python scripts/test_gspread.py` - verify gspread setup works
+2. [ ] Run `python scripts/test_pecos_api.py` - test PECOS API access
+3. [ ] Answer EOY tool questions (see questions below)
+4. [ ] Run completed EOY tool interactively (2-4 hours)
+5. [ ] Verify STATS sheet after updates
+6. [ ] Manual reset phase (add 2026 QTY column, etc.)
 
-- [ ] **NPI Registry API Integration (Future Enhancement)**
-  - **Purpose:** Enrich/validate provider data using free NPPES API (no rate limits!)
-  - **Use Case:** Add to Debug Repair Tool for PCP Working List "Potentially Invalid" providers
-  - **What it can do:**
-    - Verify NPI is still active (detect deactivated providers)
-    - Get updated phone/address (detect if provider moved)
-    - Check if taxonomy codes changed (detect specialty switches)
-    - 100% free, unlimited API calls
-  - **What it CAN'T do:**
-    - Verify operational status (NPI can be active but office closed)
-    - Verify accepting new patients
-  - **Implementation:**
-    - Add "Check NPI Status" button to DebugRepairSidebar
-    - Call https://npiregistry.cms.hhs.gov/api/?number=NPI&version=2.1
-    - Parse JSON response for deactivation status, address changes
-    - Auto-flag if deactivated or address mismatch
-    - Mark as "Potentially Invalid" with reason in Debug column
-  - **Files:** `scripts/obgyn-list/DebugRepairSidebar.html`, `scripts/obgyn-list/ToolboxSuite.js`
-  - **Priority:** Medium (nice-to-have, not critical)
-
-- [ ] **Implement programmatic filter views**
-  - [ ] `showDebugFilter()` - unhide and filter Debug/Issues column
-  - [ ] `clearDebugFilter()` - restore normal view
-  - [ ] `showColorFilter(color)` - filter by status color
-  - [ ] Add '🔍 Debug Views' submenu to Misc. Tools menu
-
-- [ ] **Menu cleanup**
-  - [ ] Remove unused `validateCurrentSheet()` stub (lines 691-701)
-  - [ ] Remove unused `findDuplicatesInSheet()` stub (lines 707-712)
-  - [ ] Remove '🔍 Validation & Debugging' submenu from menu (lines 33-35)
-
-- [ ] **Move Not Interested to sidebar**
-  - [ ] Add Not Interested handling to DebugRepairSidebar UI
-  - [ ] Remove EOY Step 3 from menu after moving to sidebar
-
-### 1. Install Python Dependencies (BLOCKING)
-```bash
-pip install pandas
-```
-- **Why:** Required for NPPES filtering script to run
-- **Status:** Not installed on current machine
-
-### 2. Run OBGYN Filtering (TX, WA, CO, PA)
-- **Goal:** Generate ~400 TX + ~80 each WA/CO/PA providers for verification
-- **Steps:**
-  1. Verify pandas is installed
-  2. Set `DRY_RUN = False` in `nppes_filter_pcps.py`
-  3. Run: `python nppes_filter_pcps.py`
-  4. Import filtered CSVs to Google Sheets (manual)
-  5. Run verification (watch API limit: 3000 max)
-- **Expected API usage:** ~465 calls (well under 3000 limit)
-
-### 3. Test EOY Automation on OBGYN Working List
-- **Status:** ✅ READY TO TEST - Critical bugs fixed (Oct 18, 2025)
-- **Menu location:** Misc. Tools → End-of-Year Workflow
-- **Fixes deployed:**
-  1. ✅ Step 1 - Verified already correct (populates Debug column)
-  2. ✅ Step 2 - FIXED dynamic weight scoring (works without phone in New Orders)
-  3. ✅ Network notation - Verified already correct (uses "networkname network (~count);" format)
-  4. ✅ DebugRepairSidebar - Fixed field name mismatches (previous session)
-- **Steps to test:**
-  1. Open OBGYN Working List 2025
-  2. Run "Step 1: Audit Working List"
-  3. Review flagged issues in hidden "Debug/Issues" column
-  4. Fix issues manually or run individual validation steps
-- **Edge cases to watch:**
-  - Messy copy-paste in New Orders sheet
-  - "Not interested" variations in Notes column
-  - Duplicate detection accuracy
-
-### 4. Update OBGYN Sheet Script Connection
-- **Current:** OBGYN uses standalone `onEdit()` function
-- **Goal:** Connect to ToolboxSuite.js for EOY automation
-- **Steps:**
-  1. Get OBGYN sheet Script ID
-  2. `cd scripts/obgyn-list` (create folder)
-  3. `clasp clone <OBGYN_SCRIPT_ID>`
-  4. Replace old code with ToolboxSuite.js functions
-  5. Test onEdit coloring still works
+**ME:**
+1. [ ] Build `scripts/eoy_obgyn_tool.py` (3-4 hours)
+2. [ ] Test with OBGYN data (gspread + validation logic)
+3. [ ] Document usage instructions
+4. [ ] Build PECOS cross-reference script (after OBGYN reset)
 
 ---
 
-## 🟠 HIGH PRIORITY (Next Week)
+### 1. gspread Setup (BLOCKING EOY tool)
+- [ ] Install gspread: `pip install gspread oauth2client`
+- [ ] Create Google Service Account (see `scripts/test_gspread.py` for instructions)
+- [ ] Share OBGYN sheet with service account email
+- [ ] Run test: `python scripts/test_gspread.py`
+- [ ] Verify: Should print "✅ ALL TESTS PASSED!"
 
-### Data Quality & Validation
+---
 
-- [ ] **Test all 6 EOY automation steps individually**
-  - [ ] Step 1: Audit Working List (❌ BUG: doesn't populate Debug column)
-  - [ ] Step 2: Validate Yellow → New Orders (❌ BROKEN: phone not in New Orders)
-  - [x] Step 3: Enforce Not Interested Rules ✅ (works but needs to move to sidebar)
-  - [ ] Step 4: Detect Duplicates (⚠️ works but network notation format wrong)
-  - [x] Step 5: Review Status Issues ✅ (code complete)
-  - [ ] Test with real OBGYN data (BLOCKED until bugs fixed)
-  - [ ] Identify and document edge cases
+## 🟠 HIGH PRIORITY (After OBGYN Reset)
 
-- [ ] **Handle EOY transitions (Steps 6-7 - NOT YET AUTOMATED)**
-  - Manual steps still required:
-    1. Add "202X QTY" column
-    2. Duplicate sheets, rename old ones with "OLD" prefix
-    3. Clear New Orders sheet
-    4. Clear colors/statuses (preserve email Notes)
-    5. Update STATS tab formulas
-    6. Update linked dashboard IMPORTRANGE
-  - Automation complexity: High (formatting, formula updates)
-  - Priority: Medium (once per year)
+### 2. PECOS Cross-Reference Integration
 
-### API Usage Management
+**Goal:** Reduce closed/inactive providers by 40%, increase call success rate from 25% to 35-40%
 
-- [x] **Centralized API tracking** ✅ COMPLETE
-  - [x] Hard limit at 3000 calls
-  - [x] Warning at 2800 calls
-  - [x] Pre-flight check before verification
-  - [x] In-flight check during batch processing
-  - [x] Enhanced usage display with percentages
+- [ ] **Build PECOS cross-reference script** (`scripts/pecos_cross_reference.py`)
+  - **Input:** NPPES filtered CSV (e.g., `FILTERED_PCP_TX_2024.csv`)
+  - **Process:**
+    - Query CMS PECOS API by NPI
+    - Keep only Medicare-enrolled providers (active enrollment)
+    - Filter out closed/inactive providers automatically
+  - **Output:** PECOS-verified CSV (e.g., `FILTERED_PCP_TX_2024_PECOS.csv`)
+  - **Benefits:**
+    - FREE (PECOS API is free, unlimited)
+    - Eliminates 40-50% of closed providers
+    - More current than NPPES (revalidates every 5 years)
+    - Specialty info more accurate
+  - **Time:** 2-3 hours to build, instant to run
 
-- [ ] **API usage reset procedure**
-  - Document when/how to reset counter
-  - Track actual billing cycle dates
-  - Add monthly usage log
+- [ ] **Test PECOS filtering on recent NPPES export**
+  - Run on 1000 TX providers
+  - Measure: How many filtered out? (expect ~400-500 remaining)
+  - Manual spot check: Are filtered providers actually closed?
+  - Measure call success rate improvement
 
-### Documentation
+- [ ] **Optional: Add Twilio phone validation** (if PECOS alone insufficient)
+  - Cost: $0.005 per phone = $5 per 1000 providers
+  - Validates phone number exists and is reachable
+  - Further reduces closed providers
+  - Decision: Run after PECOS test to see if needed
 
-- [ ] **Create OBGYN-specific docs**
-  - How to run OBGYN filtering (different from PCP)
-  - Expected taxonomy codes for OBGYN
-  - State-specific considerations
+### 3. Provider Filtering Improvements
 
-- [ ] **Update EOY workflow guide**
-  - Document each automation step
-  - Screenshot expected outputs
-  - Troubleshooting common errors
+**From `docs/FILTERING_IMPROVEMENTS_BRAINSTORM.md`:**
+
+- [ ] **Expand organization blacklist** (nppes_filter_pcps.py)
+  - Add: dermatology, dental, veterinary, chiropractic, etc.
+  - Test on recent NPPES export
+  - Measure over-filtering rate
+
+- [ ] **Secondary taxonomy code check**
+  - NPPES has up to 15 taxonomy codes per provider
+  - Check if ANY code indicates specialist (not just primary)
+  - Catches multi-specialty groups
+
+### 4. Documentation & Testing
+
+- [ ] **Create test data generator** (`scripts/test_data_generator.py`)
+  - Generate 150-200 realistic EOY test cases
+  - All edge cases: perfect matches, fuzzy matches, duplicates, status issues
+  - Upload to "EOY Test - PCP" sheet once
+  - Use for fast iteration during development
+
+- [ ] **Document local Python workflow**
+  - When to use Apps Script vs Python
+  - gspread setup guide
+  - EOY tool usage guide
+  - PECOS integration guide
 
 ---
 

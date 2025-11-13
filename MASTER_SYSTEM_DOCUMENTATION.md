@@ -211,15 +211,45 @@ notesColumn = 11      // Column K
 
 **See `OBGYN_CLEANUP_CHECKLIST.md` for detailed procedures**
 
-**Location:** Misc. Tools → End-of-Year Workflow
+### Local Python Tool (December 2024+)
 
-**6 Automated Steps:**
-1. **Audit** - Counts issues, creates Debug/Issues column
-2. **Validate Yellow** - ✅ FIXED (fuzzy matching: name 70% + address 30%)
-3. **Not Interested** - Auto-adds note, sets QTY=0
-4. **Duplicates** - Flags duplicates, detects networks
-5. **Status Review** - Categorizes Red/Fuschia/Green/Empty
-6. **Full EOY** - Runs 1-5 sequentially
+**New Approach:** `scripts/eoy_obgyn_tool.py` - Local Python tool with gspread
+
+**Why:** Apps Script EOY validation broken (flags all 244 yellow rows as false positives)
+
+**Benefits:**
+- ✅ No client-side polling lag
+- ✅ No 6-minute execution limit
+- ✅ Easy to debug (shows confidence scores)
+- ✅ Interactive terminal UI (review issues one-by-one)
+- ✅ Batch updates (fast, safe)
+- ✅ Can process 1000s of rows
+
+**Validations:**
+1. **Yellow → New Orders** - Fuzzy matching (name 70% + address 30%, no phone)
+2. **Duplicates** - Phone/name/address matching, network detection
+3. **Status Issues** - Fuschia/green/red/empty validation
+4. **Not Interested** - Auto-fixes missing notes + QTY=0
+
+**Workflow:**
+1. Load Working List + New Orders (instant via gspread)
+2. Run validations (~20 seconds for 738 rows)
+3. Interactive review (2-4 hours user time)
+4. Batch write to sheet (5-10 seconds)
+
+**See:** `docs/EOY_TOOL_SPEC.md` for full specification
+
+### Apps Script EOY (Deprecated - October 2024)
+
+**Status:** Replaced by local Python tool
+
+**Old Location:** Misc. Tools → End-of-Year Workflow
+
+**Issues found:**
+- Step 2 validation flagged ALL yellow rows as "not found" (100% false positive)
+- Client-side polling lag
+- 6-minute execution limit
+- Hard to debug (no confidence score visibility)
 
 **Still Manual:**
 - Add new QTY column
@@ -227,11 +257,6 @@ notesColumn = 11      // Column K
 - Clear data for new year
 - Update STATS tab
 - Update dashboard links
-
-**Debug/Issues Column:**
-- Auto-created, auto-hidden (yellow background)
-- Format: `⚠️ Yellow but NOT in New Orders`, `🔄 Duplicate phone (appears 2 times)`
-- Unhide: Right-click column headers → Unhide
 
 ---
 
