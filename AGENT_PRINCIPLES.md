@@ -38,6 +38,34 @@
 - When you spot stale TODO items, remove them
 - Check git log to see if "solution" was already tried and reverted
 
+### 5. Trust Nothing - All Code is Unverified Until Proven
+**Symptom:** Assuming code in repo is functional and complete
+
+**Reality:**
+- Code may be half-implemented stubs (compiles but doesn't work)
+- Functions may exist but have never been tested
+- Documentation may describe ideal state, not current reality
+- Previous AI sessions may have created broken implementations
+
+**Fix:**
+- **ALWAYS treat code as incomplete** unless:
+  - User explicitly says "this works" or "this is tested"
+  - TODO.md says "✅ VERIFIED" or "✅ COMPLETED"
+  - You test it yourself and it works
+- **Use existing code as reference**, not truth
+  - Read it to understand intent
+  - Don't copy/paste without verifying logic
+  - Check for TODOs, stubs, placeholder logic
+- **When writing new code:**
+  - Don't assume helper functions work (test them)
+  - Don't trust variable names match reality (check actual data)
+  - Don't assume error handling exists (it probably doesn't)
+- **Red flags that code is untested:**
+  - No error handling
+  - Generic variable names (data, result, items)
+  - TODOs or comments like "fix this later"
+  - Function exists but isn't called anywhere
+
 ## Architectural Invariants
 
 ### Where Truth Lives
