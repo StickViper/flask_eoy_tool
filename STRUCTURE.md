@@ -9,7 +9,6 @@ JGDC/
 ├── AGENT_PRINCIPLES.md                 # AI agent coding rules (anti-spaghettification)
 ├── STRUCTURE.md                        # This file (file locations guide)
 ├── MASTER_SYSTEM_DOCUMENTATION.md      # Complete system reference (includes appendices)
-├── OBGYN_CLEANUP_CHECKLIST.md          # EOY operational guide
 │
 ├── data/                               # Data files (gitignored)
 │   ├── exports/                        # CSV exports from Google Sheets
@@ -81,12 +80,13 @@ JGDC/
 | `AGENT_PRINCIPLES.md` | AI agent rules | AI Agents |
 | `STRUCTURE.md` | File locations | Everyone |
 | `MASTER_SYSTEM_DOCUMENTATION.md` | Complete reference + appendices | Operations |
-| `OBGYN_CLEANUP_CHECKLIST.md` | EOY procedures | Operations |
+| `docs/EOY_TOOL_SPEC.md` | EOY tool specification | Development |
 | `docs/CLASP_SETUP.md` | Apps Script setup | One-time setup |
 
 ### Archived Documentation
 | File | Purpose | Date |
 |------|---------|------|
+| `docs/OBGYN_CLEANUP_CHECKLIST_DEPRECATED.md` | Old EOY checklist (superseded by EOY_TOOL_SPEC) | Oct 2025 |
 | `docs/archive/sessions/SESSION_SUMMARY_20251003.md` | OBGYN campaign setup | Oct 3, 2025 |
 | `docs/archive/sessions/OBGYN_FILTERING_SUMMARY_20251003.md` | Filtering results | Oct 3, 2025 |
 | `docs/archive/config-fixes/CONFIG_AUDIT_REPORT.md` | Wizard bugs audit | Oct 7, 2025 |
@@ -114,9 +114,10 @@ git commit -m "Add feature X"
 ## Organization Principles
 
 ### Root Directory
-- **Active docs only** (6 files: README, TODO, AGENT_PRINCIPLES, STRUCTURE, MASTER_SYSTEM_DOCUMENTATION, OBGYN_CLEANUP_CHECKLIST)
+- **Active docs only** (5 files: README, TODO, AGENT_PRINCIPLES, STRUCTURE, MASTER_SYSTEM_DOCUMENTATION)
 - **No session logs or historical reports** (archived in docs/archive/)
 - **No separate appendices** (consolidated into MASTER_SYSTEM_DOCUMENTATION)
+- **No operational checklists** (development specs in docs/)
 
 ### Scripts Folder
 - **One folder per script deployment** (maps to Google Apps Script projects)

@@ -1,5 +1,5 @@
 """
-Test gspread connection to OBGYN Working List 2025
+Test gspread connection to OBGYN List 2025 - Use This List!
 Run this AFTER completing gspread setup (see setup instructions below)
 """
 
@@ -35,9 +35,9 @@ def test_connection():
         return False
 
     # Step 2: Open spreadsheet
-    print("\n[2/5] Opening 'OBGYN Working List 2025'...")
+    print("\n[2/5] Opening 'OBGYN List 2025 - Use This List!'...")
     try:
-        sh = gc.open('OBGYN Working List 2025')
+        sh = gc.open('OBGYN List 2025 - Use This List!')
         print(f"✅ Spreadsheet opened: {sh.title}")
         print(f"   URL: {sh.url}")
     except gspread.SpreadsheetNotFound:
@@ -117,7 +117,7 @@ def show_setup_instructions():
    i. Move to: C:\\Users\\noagi\\Desktop\\JGDC\\credentials.json
 
 3. Share Sheet with Service Account (1 min):
-   a. Open OBGYN Working List 2025 in browser
+   a. Open 'OBGYN List 2025 - Use This List!' in browser
    b. Share button (top right)
    c. Paste service account email (from step 2.e)
    d. Set to Editor
