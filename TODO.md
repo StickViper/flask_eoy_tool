@@ -4,31 +4,51 @@
 
 ### 0. OBGYN EOY Cleanup (December 2024)
 
-**Status:** Building local Python tool to replace Apps Script validation
+**Status:** ✅ ARCHITECTURE COMPLETE - Ready to build
 **Timeline:** This week (Dec 2024)
 
-#### ✅ COMPLETED:
+#### ✅ COMPLETED (Planning & Setup):
 - [x] Manual verification sidebar (v13.3) - works for shared users after cache clear
 - [x] OBGYN sheet connected to ToolboxSuite.js (clasp already setup)
-- [x] Created gspread test script (`scripts/test_gspread.py`)
+- [x] Created & tested gspread connection (`scripts/test_gspread.py`)
 - [x] Created PECOS API test script (`scripts/test_pecos_api.py`)
+- [x] **Installed dependencies:** gspread-formatting, rapidfuzz, textual
+- [x] **Tested critical assumptions:**
+  - ✅ Color reading works (gspread-formatting)
+  - ✅ Fuzzy matching works (rapidfuzz, 100% match on "Smith Family Practice" vs "Family Practice Smith")
+  - ✅ Worksheet duplication preserves formulas
+  - ✅ Can distinguish empty cells from "0"
+- [x] **Analyzed actual data:**
+  - 289 rows with notes (39%)
+  - 67% standard patterns (vm x2, not interested, sent, network)
+  - 33% non-standard (need review)
+  - Identified clearable patterns (callback, gave my #, office closed)
+- [x] **Architecture V2 complete:** (docs/EOY_TOOL_ARCHITECTURE_V2.md - 1560 lines)
+  - All 5 phases specified
+  - Complete Textual UI designs
+  - Shadow worksheet strategy
+  - Progress save/resume
+  - Error handling
+- [x] **Gap analysis complete:** (docs/ARCHITECTURE_GAP_ANALYSIS.md)
+  - 15 critical gaps identified & resolved
+  - 8 ambiguities clarified
+  - 5 big leaps simplified
+- [x] **Unresolved questions documented:** (docs/UNRESOLVED_QUESTIONS.md)
+  - 10 minor questions (none blocking)
+  - Can all be resolved during build
 
-#### 🚧 IN PROGRESS:
-- [ ] **Local Python EOY Tool** (REPLACES Apps Script debug tools)
-  - **Why:** Apps Script validation flags ALL 244 yellow rows as "not found" in New Orders
-  - **Problem:** Fuzzy matching broken OR data format mismatch (need to debug)
-  - **Solution:** Build local Python tool with gspread (instant, no polling, easy to debug)
+#### 🏗️ NEXT: BUILD THE TOOL
+- [ ] **Build `scripts/eoy_obgyn_tool.py`**
+  - **Framework:** Textual TUI (modern Python terminal UI with mouse support!)
   - **Features:**
-    - Load Working List (738 rows) + New Orders (269 rows) via gspread
-    - Validate yellow rows (244) → New Orders matches
-    - Detect duplicates (phone, address, name)
-    - Flag status issues (fuschia, green, red, empty)
-    - Check "not interested" notes + QTY=0
-    - Interactive: review issues one-by-one, make decisions
-    - Batch update sheet at end
+    - Phase 1: Load data (737 rows, colors via gspread-formatting)
+    - Phase 2: Validate (yellow→NO, duplicates, status issues, notes)
+    - Phase 3: Interactive review (category tabs, batch operations, editable fields)
+    - Phase 4: Create shadow worksheets (_CLEANUP suffix)
+    - Phase 5: Write changes, validate STATS
   - **Replaces:** Debug sidebar + debug column + Apps Script EOY automation
-  - **Files:** `scripts/eoy_obgyn_tool.py` (new)
-  - **Time estimate:** 3-4 hours to build, 2-4 hours to use
+  - **Data:** 737 rows, 244 yellow, 269 New Orders, 289 notes
+  - **Time:** 4-6 hours to build, 2-4 hours to use
 
 #### ⚠️ KNOWN ISSUES (Apps Script EOY - why we're replacing it):
 - **Step 2: Yellow validation BROKEN** - flags ALL 244 yellow rows as "not in New Orders"
@@ -47,30 +67,20 @@
 - DebugRepairSidebar field name fixes
 - Network notation format verified correct
 
-#### 📋 NEXT STEPS (This Week):
+#### 📋 NEXT STEPS:
 
-**YOU:**
-1. [ ] Run `python scripts/test_gspread.py` - verify gspread setup works
-2. [ ] Run `python scripts/test_pecos_api.py` - test PECOS API access
-3. [ ] Answer EOY tool questions (see questions below)
-4. [ ] Run completed EOY tool interactively (2-4 hours)
-5. [ ] Verify STATS sheet after updates
-6. [ ] Manual reset phase (add 2026 QTY column, etc.)
+**NEXT LLM (Fresh Mind):**
+1. Read `docs/EOY_TOOL_ARCHITECTURE_V2.md` (complete architecture, 1560 lines)
+2. Read `docs/UNRESOLVED_QUESTIONS.md` (10 minor questions, resolve during build)
+3. Build `scripts/eoy_obgyn_tool.py` following architecture (4-6 hours)
+4. Test with OBGYN data
 
-**ME:**
-1. [ ] Build `scripts/eoy_obgyn_tool.py` (3-4 hours)
-2. [ ] Test with OBGYN data (gspread + validation logic)
-3. [ ] Document usage instructions
-4. [ ] Build PECOS cross-reference script (after OBGYN reset)
-
----
-
-### 1. gspread Setup (BLOCKING EOY tool)
-- [ ] Install gspread: `pip install gspread oauth2client`
-- [ ] Create Google Service Account (see `scripts/test_gspread.py` for instructions)
-- [ ] Share OBGYN sheet with service account email
-- [ ] Run test: `python scripts/test_gspread.py`
-- [ ] Verify: Should print "✅ ALL TESTS PASSED!"
+**USER:**
+1. Run completed EOY tool interactively (2-4 hours)
+2. QA and provide feedback
+3. Verify STATS_CLEANUP sheet after updates
+4. Rename shadow worksheets (remove _CLEANUP suffix)
+5. Manual reset phase (add 2026 QTY column, etc.)
 
 ---
 

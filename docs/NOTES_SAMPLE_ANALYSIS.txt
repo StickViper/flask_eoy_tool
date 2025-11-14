@@ -1,0 +1,200 @@
+================================================================================
+NOTES ANALYSIS - Working List 2025
+================================================================================
+
+Total rows with notes: 289
+Total rows: 737
+Percentage with notes: 39.2%
+
+================================================================================
+COMMON NOTE PATTERNS (top 30)
+================================================================================
+    74x  vm x2
+    71x  not interested
+    26x  Same network - multiple locations
+     9x  REPEAT
+     6x  seems open, number out of service
+     6x  Office closed
+     4x  number out of service
+     3x  gave my #
+     3x  closed
+     3x  updated # try again
+     3x  VM X2
+     2x  Not doing OB anymore
+     2x  Impossible to reach someone, TAKE OFF?
+     2x  Already have someone for it
+     2x  Enough from last time
+     2x  Don't do OB
+     2x  No longer doing OB
+     2x  office closed vm x2
+     2x  Closed on Friday
+     2x  questions@acpny.com :sent
+     1x  temporarily closed
+     1x  backoffice@beachobgyn.com attn: Rebecca
+     1x  kimberly.bishop@sutterhealth.org: sent
+     1x  Same as another on list (TAKE OFF)
+     1x  silvia@capitalobgyn.com :sent
+     1x  wfinch@womenshealthct.com :sent
+     1x  Can't get ahold of someone at the office (TAKE OFF LIST?)
+     1x  Ask for Melissa VM x2
+     1x  new provider?
+     1x  mgreen@womenshealthct.com :sent
+
+================================================================================
+CHUNK CATEGORIZATION
+================================================================================
+  Standard chunks: 223 (67.0%)
+  Non-standard chunks: 110 (33.0%)
+
+================================================================================
+SAMPLE NON-STANDARD NOTES (50 unique examples)
+================================================================================
+   1. [1x] bestobgyn@gmail.com
+   2. [1x] nurses@mfmnyc.com
+   3. [1x] collecting patient info w automated system
+   4. [1x] temporarily closed
+   5. [1x] Office open Tuesday and Saturday
+   6. [1x] 3 different offices, option "2" ordered
+   7. [1x] Already have
+   8. [1x] call back later ask for manager
+   9. [1x] CHRISTINA Monday
+  10. [2x] Not doing OB anymore
+  11. [6x] seems open, number out of service
+  12. [3x] closed
+  13. [1x] Work with a company
+  14. [1x] closing down
+  15. [1x] Permanently closed?
+  16. [1x] drjovanovic930@gmail.com,
+  17. [2x] Closed on Friday
+  18. [1x] Closes early on friday
+  19. [1x] Have another company
+  20. [1x] Not doing deliveries
+  21. [4x] number out of service
+  22. [1x] not an OB/GYN
+  23. [2x] Already have someone for it
+  24. [1x] Have their own
+  25. [1x] doesn't do OB anymore
+  26. [1x] Call back tmr morning
+  27. [1x] info@chobg.com
+  28. [1x] With anothe company
+  29. [1x] Dr. Crable
+  30. [1x] Ob/Gyn Office
+  31. [1x] Already works with a company
+  32. [1x] Already affiliated with a company
+  33. [1x] Don't do OB anymore
+  34. [1x] Scary noises
+  35. [1x] Can't get ahold of someone at the office (TAKE OFF LIST?)
+  36. [1x] call back at 3 for office manager
+  37. [1x] Call back monday
+  38. [6x] Office closed
+  39. [2x] Enough from last time
+  40. [1x] obgyn3047@gmail.com
+  41. [1x] Jessica Fernandez
+  42. [1x] Call back tomorrow @ 10
+  43. [1x] Closes early
+  44. [1x] new provider?
+  45. [1x] Office clsoed
+  46. [1x] Already have similar materials in office
+  47. [1x] Jessica
+  48. [1x] backoffice@beachobgyn.com attn: Rebecca
+  49. [1x] Already have someone
+  50. [1x] Not OBGYN
+
+================================================================================
+FULL NOTE EXAMPLES (showing context)
+================================================================================
+
+1. Row 2: Grant Avenue Medical
+   Full notes: gave my #; not interested
+   Chunks: ['gave my #', 'not interested']
+
+2. Row 4: Prenatal Diagnosis
+   Full notes: gave my #; not interested
+   Chunks: ['gave my #', 'not interested']
+
+3. Row 9: Dr. Stephen Weinstein
+   Full notes: temporarily closed
+   Chunks: ['temporarily closed']
+
+4. Row 13: Beach Obstetrics & Gyn
+   Full notes: backoffice@beachobgyn.com attn: Rebecca ; not interested
+   Chunks: ['backoffice@beachobgyn.com attn: Rebecca', 'not interested']
+
+5. Row 23: Beverly Birthing Care
+   Full notes: closed
+   Chunks: ['closed']
+
+6. Row 24: Samuel J Porter, MD
+   Full notes: Not doing OB anymore; not interested
+   Chunks: ['Not doing OB anymore', 'not interested']
+
+7. Row 34: Sunaina Sehwani, MD
+   Full notes: Same as another on list (TAKE OFF)
+   Chunks: ['Same as another on list (TAKE OFF)']
+
+8. Row 35: Dikio Ob/Gyn
+   Full notes: seems open, number out of service
+   Chunks: ['seems open, number out of service']
+
+9. Row 37: Dr. Aliabadi
+   Full notes: gave my #; not interested
+   Chunks: ['gave my #', 'not interested']
+
+10. Row 43: Sonia Rodriguez MD
+   Full notes: seems open, number out of service
+   Chunks: ['seems open, number out of service']
+
+11. Row 45: Ob-Gyn Women Physicians Assoc. Inc.
+   Full notes: seems open, number out of service
+   Chunks: ['seems open, number out of service']
+
+12. Row 53: Putnam Ob-Gyn
+   Full notes: Can't get ahold of someone at the office (TAKE OFF LIST?)
+   Chunks: ["Can't get ahold of someone at the office (TAKE OFF LIST?)"]
+
+13. Row 54: Avery Center for OB/GYN
+   Full notes: REPEAT
+   Chunks: ['REPEAT']
+
+14. Row 57: Jane Srinivasan Md
+   Full notes:  new provider?
+   Chunks: ['new provider?']
+
+15. Row 64: Women’s Health
+   Full notes: call back at 3 for office manager
+   Chunks: ['call back at 3 for office manager']
+
+16. Row 65: Westmed Medical Group
+   Full notes: Impossible to reach someone, TAKE OFF?; Same network - multiple locations
+   Chunks: ['Impossible to reach someone, TAKE OFF?', 'Same network - multiple locations']
+
+17. Row 66: Westmed Medical Group
+   Full notes: Impossible to reach someone, TAKE OFF?; Same network - multiple locations
+   Chunks: ['Impossible to reach someone, TAKE OFF?', 'Same network - multiple locations']
+
+18. Row 69: Bloom Ob/Gyn
+   Full notes: Already affiliated with a company
+   Chunks: ['Already affiliated with a company']
+
+19. Row 72: New Beginnings: Dr. Bradley Cynthia MD
+   Full notes: seems open, number out of service
+   Chunks: ['seems open, number out of service']
+
+20. Row 76: True Med MD
+   Full notes: not an OB/GYN; not interested
+   Chunks: ['not an OB/GYN', 'not interested']
+
+================================================================================
+POTENTIALLY CLEARABLE NOTES
+================================================================================
+(Notes that might be safe to remove for new year)
+
+  Pattern: 'call back' (9 occurrences)
+    - Row 64: call back at 3 for office manager
+    - Row 115: Call back tmr morning
+    - Row 134: Call back monday
+
+  Pattern: 'try again' (3 occurrences)
+    - Row 168: updated # try again
+    - Row 174: updated # try again
+    - Row 479: updated # try again

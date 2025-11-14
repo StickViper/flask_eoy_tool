@@ -18,7 +18,8 @@
       "Bash(node:*)",
       "WebFetch(domain:docs.google.com)",
       "Bash(cat:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(docs/NOTES_SAMPLE_ANALYSIS.txt)"
     ],
     "deny": [],
     "ask": []
