@@ -32,3 +32,11 @@ Thumbs.db
 # Node modules (if using clasp)
 node_modules/
 package-lock.json
+
+# EOY Tool progress files
+eoy_progress_*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

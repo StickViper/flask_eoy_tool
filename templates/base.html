@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}EOY Cleanup Tool{% endblock %}</title>
+
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block body %}{% endblock %}
+
+    <!-- Core JavaScript -->
+    <script src="{{ url_for('static', filename='js/selection.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/shortcuts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/undo.js') }}"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

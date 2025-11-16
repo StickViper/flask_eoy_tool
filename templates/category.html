@@ -1,0 +1,811 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.name }} - EOY Cleanup Tool{% endblock %}
+
+{% block body %}
+<div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1 class="sidebar-title">EOY Cleanup</h1>
+            <p class="sidebar-subtitle">OBGYN List {{ state.year if state else 2025 }}</p>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="progress-section">
+            <div class="progress-label">Overall Progress</div>
+            {% set completed = categories | selectattr('row_count', 'equalto', 0) | list | length %}
+            {% set total = categories | length %}
+            {% set percent = (completed / total * 100) if total > 0 else 0 %}
+            <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: {{ percent }}%;"></div>
+            </div>
+            <div class="progress-text">{{ completed }}/{{ total }} categories complete</div>
+        </div>
+
+        <!-- Categories List -->
+        <nav class="categories-list">
+            {% for cat in categories %}
+            <a href="/category/{{ cat.id }}"
+               class="category-item {% if cat.id == category.id %}active{% endif %} {% if cat.row_count == 0 %}completed{% endif %}">
+                <div class="category-icon">
+                    {% if cat.row_count == 0 %}✓{% else %}•{% endif %}
+                </div>
+                <div class="category-info">
+                    <div class="category-name">{{ cat.name }}</div>
+                    <div class="category-count">{{ cat.row_count }} row{{ 's' if cat.row_count != 1 else '' }}</div>
+                </div>
+            </a>
+            {% endfor %}
+        </nav>
+
+        <!-- Sidebar Footer Actions -->
+        <div style="margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+            <div id="saveStatus" style="padding: 0.5rem; text-align: center; font-size: 0.75rem; color: var(--color-text-tertiary); font-family: var(--font-mono);">
+                Last saved: Never
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="saveProgress()" style="width: 100%;">
+                💾 Save Progress (Ctrl+S)
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="window.location.href='/'" style="width: 100%;">
+                ← Back to Start
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Category Header -->
+        <header class="category-header">
+            <div class="category-title">
+                <h2>{{ category.name }}</h2>
+                <span class="row-count">{{ category.row_count }} rows</span>
+            </div>
+            <p class="category-description">{{ category.description }}</p>
+        </header>
+
+        <!-- Quick Actions (Category-Specific Smart Buttons) -->
+        {% if category.primary_action or category.secondary_actions %}
+        <div class="quick-actions">
+            <span class="quick-actions-label">Quick Actions:</span>
+
+            <button class="btn btn-secondary btn-sm" onclick="selectAll()">
+                Select All
+            </button>
+
+            <button class="btn btn-ghost btn-sm" onclick="clearSelection()">
+                Clear Selection
+            </button>
+
+            <button class="btn btn-ghost btn-sm" onclick="expandAllDetails()">
+                ▼ Expand All
+            </button>
+
+            <button class="btn btn-ghost btn-sm" onclick="collapseAllDetails()">
+                ▶ Collapse All
+            </button>
+
+            {% if category.primary_action %}
+                {% if category.primary_action == 'keep_first_delete_rest' %}
+                <button class="btn btn-primary btn-sm" onclick="keepFirstDeleteRest()">
+                    Keep First, Delete Rest
+                </button>
+                {% elif category.primary_action == 'accept_all' %}
+                <button class="btn btn-primary btn-sm" onclick="acceptAllMatches()">
+                    ✓ Accept All Matches
+                </button>
+                {% elif category.primary_action == 'confirm_network' %}
+                <button class="btn btn-primary btn-sm" onclick="confirmNetwork()">
+                    ✓ Confirm Network
+                </button>
+                {% elif category.primary_action == 'convert_to_not_interested' %}
+                <button class="btn btn-primary btn-sm" onclick="convertToNotInterested()">
+                    Convert to Not Interested
+                </button>
+                {% elif category.primary_action == 'move_all_to_invalid' %}
+                <button class="btn btn-danger btn-sm" onclick="moveAllToInvalid()">
+                    Move All to Invalid
+                </button>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Data Table -->
+        <div class="table-container">
+            <table class="data-table" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="col-checkbox">
+                            <input type="checkbox" class="custom-checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)">
+                        </th>
+                        <th style="width: 30px;"></th><!-- Expand icon -->
+                        <th class="col-row-num sortable" onclick="sortTable(2)">#</th>
+                        <th class="col-practice sortable" onclick="sortTable(3)">Practice ↕</th>
+                        <th class="col-phone sortable" onclick="sortTable(4)">Phone ↕</th>
+                        <th class="sortable" onclick="sortTable(5)">Address ↕</th>
+                        <th class="sortable" onclick="sortTable(6)">City ↕</th>
+                        <th class="sortable" onclick="sortTable(7)">ST ↕</th>
+                        <th class="sortable" onclick="sortTable(8)">2025 QTY ↕</th>
+                        <th class="sortable" onclick="sortTable(9)">Status ↕</th>
+                        <th class="notes-cell">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr data-row-num="{{ row.row_num }}"
+                        data-duplicate-group="{{ row.duplicate_group_id if row.duplicate_group_id else '' }}"
+                        class="data-row {% if row.bg_color in ['#ffff00', '#ffff01', '#fffef0', '#ffffe0'] %}row-yellow{% elif row.bg_color in ['#00ff00', '#00ff01', '#00fe00'] %}row-green{% elif row.bg_color in ['#ff0000', '#ff0001', '#fe0000'] %}row-red{% elif row.bg_color in ['#ff00ff', '#ff00fe', '#fe00ff'] %}row-fuschia{% endif %}{% if row.duplicate_group_id %} dup-group-{{ row.duplicate_group_id }}{% endif %}"
+                        onclick="handleRowClick(event, this)"
+                        oncontextmenu="handleRowRightClick(event, this); return false;">
+                        <td class="col-checkbox" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="custom-checkbox row-checkbox" data-row-num="{{ row.row_num }}">
+                        </td>
+                        <td style="text-align: center; cursor: pointer;" onclick="event.stopPropagation(); toggleDetailRow({{ row.row_num }});">
+                            {% if row.matched_no_row or row.duplicate_group_id %}
+                            <span class="expand-icon" id="expand-{{ row.row_num }}">▶</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-row-num">{{ row.row_num }}</td>
+                        <td class="col-practice">{{ row.practice }}</td>
+                        <td class="col-phone">{{ row.phone }}</td>
+                        <td>{{ row.address }}</td>
+                        <td>{{ row.city }}</td>
+                        <td>{{ row.state }}</td>
+                        <td class="text-mono">{{ row.qty_2025 if row.qty_2025 else '—' }}</td>
+                        <td>
+                            <span style="font-size: 0.8125rem;">{{ row.status if row.status else '—' }}</span>
+                        </td>
+                        <td class="notes-cell">
+                            {% if row.notes %}
+                            <div class="note-chunks">
+                                {% for chunk in row.notes.split(';') %}
+                                {% if chunk.strip() %}
+                                <span class="note-chunk"
+                                      data-chunk-index="{{ loop.index0 }}"
+                                      oncontextmenu="showNoteChunkMenu(event, {{ row.row_num }}, {{ loop.index0 }}, '{{ chunk.strip() | replace("'", "\\'") }}'); return false;">
+                                    {{ chunk.strip() }}
+                                </span>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="text-tertiary">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <!-- Expandable detail row for match info -->
+                    <tr class="detail-row" id="detail-{{ row.row_num }}" style="display: none;">
+                        <td colspan="11" style="padding: 0; background: #f9f9f9; border-left: 4px solid var(--color-accent);">
+                            <div style="padding: 1rem 2rem; font-size: 0.875rem;">
+                                {% if row.matched_no_row %}
+                                <div style="margin-bottom: 0.75rem;">
+                                    <strong style="color: var(--color-primary);">📋 Matched New Order:</strong>
+                                    <span style="margin-left: 0.5rem;">
+                                        Row #{{ row.matched_no_row }}
+                                        {% for issue in row.issues %}
+                                            {% if issue.no_practice %}
+                                                | {{ issue.no_practice }}
+                                                {% if issue.no_qty %} | QTY: {{ issue.no_qty }}{% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </span>
+                                </div>
+                                <div style="margin-bottom: 0.75rem;">
+                                    <strong>Confidence:</strong>
+                                    <span style="font-weight: 600; color: {% if row.match_confidence >= 0.95 %}#16a34a{% elif row.match_confidence >= 0.80 %}#ca8a04{% else %}#dc2626{% endif %};">
+                                        {{ (row.match_confidence * 100) | round(1) }}%
+                                    </span>
+                                    <span style="margin-left: 1rem; font-size: 0.8125rem; color: var(--color-text-secondary);">
+                                        {% if row.match_confidence >= 0.95 %}
+                                            ✓ High confidence match
+                                        {% elif row.match_confidence >= 0.80 %}
+                                            ⚠ Review carefully
+                                        {% else %}
+                                            ✗ Low confidence - may not be correct
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% for issue in row.issues %}
+                                    {% if issue.qty_mismatch %}
+                                    <div style="padding: 0.5rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 0.8125rem;">
+                                        <strong>⚠ QTY Mismatch:</strong> Working List shows {{ row.qty_2025 }}, but New Orders shows {{ issue.no_qty }}.
+                                        <span style="font-style: italic; color: var(--color-text-secondary);">(New Orders is the source of truth)</span>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                                {% endif %}
+
+                                {% if row.duplicate_group_id %}
+                                <div style="margin-top: {% if row.matched_no_row %}1rem{% else %}0{% endif %};">
+                                    <strong style="color: var(--color-accent);">🔗 Duplicate Group #{{ row.duplicate_group_id }}</strong>
+                                    <span style="margin-left: 0.5rem; font-size: 0.8125rem; color: var(--color-text-secondary);">
+                                        This row is part of a group of duplicate/similar rows with the same phone number
+                                    </span>
+                                </div>
+                                {% endif %}
+
+                                {% if not row.matched_no_row and not row.duplicate_group_id %}
+                                <div style="color: var(--color-text-secondary); font-style: italic;">
+                                    No additional information available
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Info footer -->
+        <div style="margin-top: 2rem; padding: 1.5rem; background: var(--color-surface-raised); border-radius: 8px; border-left: 4px solid var(--color-accent); font-size: 0.875rem; color: var(--color-text-secondary);">
+            <strong>Keyboard Shortcuts:</strong>
+            Ctrl+A (select all) • Ctrl+D (deselect) • Ctrl+S (save) • Ctrl+F (search) • Ctrl+Z (undo) • Space (toggle selection) • Shift+Click (range select) • Ctrl+Click (toggle)
+        </div>
+    </main>
+</div>
+
+<!-- Floating Selection Bar (appears when rows selected) -->
+<div class="selection-bar" id="selectionBar">
+    <div class="selection-count">
+        <span id="selectionCount">0</span> selected
+    </div>
+    <div class="selection-actions">
+        <button class="btn btn-sm" onclick="editSelected()">
+            ✎ Edit Selected
+        </button>
+        <button class="btn btn-sm" onclick="googleSearchSelected()">
+            🔍 Google Search
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelected()">
+            Delete Selected
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="clearSelection()">
+            Clear
+        </button>
+    </div>
+</div>
+
+<!-- Context Menu for Note Chunks (right-click) -->
+<div id="noteChunkContextMenu" style="display: none; position: fixed; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 0.5rem; min-width: 200px; z-index: 2000;">
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="deleteNoteChunk()">
+        Delete this chunk
+    </button>
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="editNoteChunk()">
+        Edit this chunk
+    </button>
+</div>
+
+<script>
+// Selection state
+let selectedRows = new Set();
+let lastSelectedRow = null;
+let currentNoteChunkContext = null;
+
+// Toggle detail row visibility
+function toggleDetailRow(rowNum) {
+    const detailRow = document.getElementById(`detail-${rowNum}`);
+    const expandIcon = document.getElementById(`expand-${rowNum}`);
+
+    if (detailRow.style.display === 'none') {
+        detailRow.style.display = 'table-row';
+        if (expandIcon) expandIcon.textContent = '▼';
+    } else {
+        detailRow.style.display = 'none';
+        if (expandIcon) expandIcon.textContent = '▶';
+    }
+}
+
+// Expand all detail rows
+function expandAllDetails() {
+    const detailRows = document.querySelectorAll('.detail-row');
+    const expandIcons = document.querySelectorAll('.expand-icon');
+
+    detailRows.forEach(row => {
+        row.style.display = 'table-row';
+    });
+
+    expandIcons.forEach(icon => {
+        icon.textContent = '▼';
+    });
+}
+
+// Collapse all detail rows
+function collapseAllDetails() {
+    const detailRows = document.querySelectorAll('.detail-row');
+    const expandIcons = document.querySelectorAll('.expand-icon');
+
+    detailRows.forEach(row => {
+        row.style.display = 'none';
+    });
+
+    expandIcons.forEach(icon => {
+        icon.textContent = '▶';
+    });
+}
+
+// Handle row click (with shift/ctrl support)
+function handleRowClick(event, rowElement) {
+    const rowNum = rowElement.dataset.rowNum;
+    const checkbox = rowElement.querySelector('.row-checkbox');
+
+    if (event.shiftKey && lastSelectedRow) {
+        // Shift-click: select range from last SELECTED row (not last clicked)
+        const allRows = Array.from(document.querySelectorAll('.data-row'));
+        const startIdx = allRows.findIndex(r => r.dataset.rowNum === lastSelectedRow);
+        const endIdx = allRows.findIndex(r => r.dataset.rowNum === rowNum);
+
+        const [min, max] = [Math.min(startIdx, endIdx), Math.max(startIdx, endIdx)];
+
+        for (let i = min; i <= max; i++) {
+            const row = allRows[i];
+            const rowCheckbox = row.querySelector('.row-checkbox');
+            row.classList.add('selected');
+            rowCheckbox.checked = true;
+            selectedRows.add(row.dataset.rowNum);
+        }
+        lastSelectedRow = rowNum;
+    } else if (event.ctrlKey || event.metaKey) {
+        // Ctrl-click: toggle single row
+        if (selectedRows.has(rowNum)) {
+            selectedRows.delete(rowNum);
+            rowElement.classList.remove('selected');
+            checkbox.checked = false;
+            // Update lastSelectedRow to most recent selected
+            if (selectedRows.size > 0) {
+                lastSelectedRow = Array.from(selectedRows)[selectedRows.size - 1];
+            } else {
+                lastSelectedRow = null;
+            }
+        } else {
+            selectedRows.add(rowNum);
+            rowElement.classList.add('selected');
+            checkbox.checked = true;
+            lastSelectedRow = rowNum;
+        }
+    } else {
+        // Regular click: toggle if already selected, otherwise select only this row
+        if (selectedRows.has(rowNum) && selectedRows.size === 1) {
+            // Clicking the only selected row - deselect it
+            clearSelection();
+            lastSelectedRow = null;
+        } else {
+            // Select only this row
+            clearSelection();
+            selectedRows.add(rowNum);
+            rowElement.classList.add('selected');
+            checkbox.checked = true;
+            lastSelectedRow = rowNum;
+        }
+    }
+
+    updateSelectionBar();
+}
+
+// Handle row right-click (context menu for row actions)
+function handleRowRightClick(event, rowElement) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rowNum = rowElement.dataset.rowNum;
+
+    // If row not selected, select it first
+    if (!selectedRows.has(rowNum)) {
+        clearSelection();
+        selectedRows.add(rowNum);
+        rowElement.classList.add('selected');
+        rowElement.querySelector('.row-checkbox').checked = true;
+        lastSelectedRow = rowNum;
+        updateSelectionBar();
+    }
+
+    // Show row context menu (TODO: implement)
+    // For now, just keep the row highlighted
+}
+
+// Handle checkbox click
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.row-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            e.stopPropagation();
+            const rowNum = checkbox.dataset.rowNum;
+            const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+
+            if (checkbox.checked) {
+                selectedRows.add(rowNum);
+                row.classList.add('selected');
+            } else {
+                selectedRows.delete(rowNum);
+                row.classList.remove('selected');
+            }
+
+            updateSelectionBar();
+        });
+    });
+});
+
+// Clear selection
+function clearSelection() {
+    selectedRows.clear();
+    document.querySelectorAll('.data-row').forEach(row => {
+        row.classList.remove('selected');
+        row.querySelector('.row-checkbox').checked = false;
+    });
+    document.getElementById('selectAllCheckbox').checked = false;
+    updateSelectionBar();
+}
+
+// Select all
+function selectAll() {
+    document.querySelectorAll('.data-row').forEach(row => {
+        selectedRows.add(row.dataset.rowNum);
+        row.classList.add('selected');
+        row.querySelector('.row-checkbox').checked = true;
+    });
+    document.getElementById('selectAllCheckbox').checked = true;
+    updateSelectionBar();
+}
+
+// Toggle select all
+function toggleSelectAll(checkbox) {
+    if (checkbox.checked) {
+        selectAll();
+    } else {
+        clearSelection();
+    }
+}
+
+// Update selection bar
+function updateSelectionBar() {
+    const count = selectedRows.size;
+    const bar = document.getElementById('selectionBar');
+    const countEl = document.getElementById('selectionCount');
+
+    countEl.textContent = count;
+
+    if (count > 0) {
+        bar.classList.add('active');
+    } else {
+        bar.classList.remove('active');
+    }
+}
+
+// Note chunk context menu
+function showNoteChunkMenu(event, rowNum, chunkIndex, chunkText) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const menu = document.getElementById('noteChunkContextMenu');
+    menu.style.display = 'block';
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+
+    currentNoteChunkContext = { rowNum, chunkIndex, chunkText };
+}
+
+// Hide context menu when clicking elsewhere
+document.addEventListener('click', () => {
+    document.getElementById('noteChunkContextMenu').style.display = 'none';
+});
+
+// Delete note chunk
+function deleteNoteChunk() {
+    if (!currentNoteChunkContext) return;
+
+    const { rowNum, chunkIndex, chunkText } = currentNoteChunkContext;
+
+    if (confirm(`Delete note chunk "${chunkText}"?`)) {
+        // Send API request to delete chunk
+        fetch('/api/delete_note_chunk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row_num: rowNum, chunk_index: chunkIndex })
+        }).then(() => {
+            location.reload();
+        });
+    }
+}
+
+// Save progress
+async function saveProgress() {
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = 'var(--color-accent)';
+
+    try {
+        const response = await fetch('/api/save_progress', { method: 'POST' });
+        const result = await response.json();
+
+        if (result.success) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            statusEl.textContent = `Last saved: ${timeStr}`;
+            statusEl.style.color = 'var(--color-success)';
+
+            // Fade back to tertiary after 2 seconds
+            setTimeout(() => {
+                statusEl.style.color = 'var(--color-text-tertiary)';
+            }, 2000);
+        } else {
+            statusEl.textContent = 'Save failed';
+            statusEl.style.color = 'var(--color-error)';
+        }
+    } catch (error) {
+        statusEl.textContent = 'Save failed';
+        statusEl.style.color = 'var(--color-error)';
+    }
+}
+
+// Placeholder action functions
+function editSelected() {
+    alert('Edit selected: ' + Array.from(selectedRows).join(', '));
+}
+
+function googleSearchSelected() {
+    if (selectedRows.size === 0) {
+        alert('No rows selected');
+        return;
+    }
+
+    if (selectedRows.size > 5) {
+        if (!confirm(`Open ${selectedRows.size} Google search tabs?`)) {
+            return;
+        }
+    }
+
+    // Get row data for selected rows
+    const rowsData = [];
+    selectedRows.forEach(rowNum => {
+        const rowElement = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+        if (rowElement) {
+            const cells = rowElement.querySelectorAll('td');
+            const practice = cells[2]?.textContent || '';  // Col 2: Practice
+            const address = cells[4]?.textContent || '';   // Col 4: Address
+            const city = cells[5]?.textContent || '';      // Col 5: City
+            const state = cells[6]?.textContent || '';     // Col 6: State
+
+            rowsData.push({ practice, address, city, state });
+        }
+    });
+
+    // Open Google search for each row
+    rowsData.forEach(row => {
+        const query = `${row.practice} ${row.address} ${row.city} ${row.state}`.trim();
+        const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        window.open(url, '_blank');
+    });
+}
+
+async function deleteSelected() {
+    if (selectedRows.size === 0) {
+        alert('No rows selected');
+        return;
+    }
+
+    if (!confirm(`Delete ${selectedRows.size} selected row(s)?\n\nThis will mark them for deletion. Changes will be saved to sheet when you save progress.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/delete_rows', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                row_nums: Array.from(selectedRows)
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Remove deleted rows from UI
+            selectedRows.forEach(rowNum => {
+                const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+                if (row) {
+                    row.style.opacity = '0.3';
+                    row.style.textDecoration = 'line-through';
+                }
+            });
+
+            clearSelection();
+            alert(`Marked ${result.count} row(s) for deletion`);
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error deleting rows: ${error}`);
+    }
+}
+
+// Category-specific actions
+async function keepFirstDeleteRest() {
+    // Get all rows in current category (duplicate groups)
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Keep first occurrence of each duplicate group and delete the rest?\n\n${allRows.length} total rows in this category.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/keep_first_delete_rest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function acceptAllMatches() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Accept all ${allRows.length} yellow matches?\n\nThis confirms these rows match New Orders and are correct.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/accept_all_matches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Accepted ${result.count} matches`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function confirmNetwork() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    const networkName = prompt(`Confirm network name for these ${allRows.length} locations:\n\n(Will add "networkname network (~${allRows.length})" to notes)`);
+
+    if (!networkName) {
+        return;  // User cancelled
+    }
+
+    try {
+        const response = await fetch('/api/confirm_network', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}',
+                network_name: networkName
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Confirmed network: ${networkName} (${result.count} locations)`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function convertToNotInterested() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Convert all ${allRows.length} green 'sent' rows to 'Not Interested'?\n\nThis will:\n- Set status to "Not Interested"\n- Set QTY to 0\n- Update notes`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/convert_to_not_interested', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Converted ${result.count} rows to Not Interested`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function moveAllToInvalid() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    const reason = prompt(`Move all ${allRows.length} rows to Invalid/Inactive List?\n\nEnter reason:`, 'Potentially Invalid');
+
+    if (!reason) {
+        return;  // User cancelled
+    }
+
+    try {
+        const response = await fetch('/api/move_to_invalid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}',
+                reason: reason
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Moved ${result.count} rows to Invalid List`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+// Table sorting
+let sortDirection = {};  // Track sort direction per column
+
+function sortTable(columnIndex) {
+    const table = document.getElementById('dataTable');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Toggle sort direction
+    const key = `col_${columnIndex}`;
+    sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
+    const ascending = sortDirection[key] === 'asc';
+
+    // Sort rows
+    rows.sort((a, b) => {
+        const aCell = a.cells[columnIndex]?.textContent.trim() || '';
+        const bCell = b.cells[columnIndex]?.textContent.trim() || '';
+
+        // Try numeric comparison first
+        const aNum = parseFloat(aCell);
+        const bNum = parseFloat(bCell);
+
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return ascending ? aNum - bNum : bNum - aNum;
+        }
+
+        // String comparison
+        return ascending ?
+            aCell.localeCompare(bCell) :
+            bCell.localeCompare(aCell);
+    });
+
+    // Re-append sorted rows
+    rows.forEach(row => tbody.appendChild(row));
+}
+</script>
+{% endblock %}

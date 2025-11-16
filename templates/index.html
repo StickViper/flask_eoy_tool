@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}EOY Cleanup Tool - Start{% endblock %}
+
+{% block body %}
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;">
+    <div style="max-width: 600px; width: 100%; background: white; padding: 3rem; border-radius: 12px; box-shadow: 0 8px 32px rgba(42, 37, 32, 0.12); border: 1px solid var(--border-color);">
+
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 3rem;">
+            <h1 style="font-size: 3rem; margin-bottom: 0.5rem; background: linear-gradient(135deg, var(--color-primary), var(--color-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                EOY Cleanup Tool
+            </h1>
+            <p style="color: var(--color-text-secondary); font-size: 1.125rem; margin-bottom: 0;">
+                Provider Data Cleanup for End of Year Reset
+            </p>
+            <p style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--color-text-tertiary); margin-top: 0.5rem;">
+                Data Atelier Edition
+            </p>
+        </div>
+
+        <!-- Description -->
+        <div style="background: var(--color-surface-raised); padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; border-left: 4px solid var(--color-primary);">
+            <h4 style="margin-bottom: 0.75rem; color: var(--color-primary); font-size: 0.875rem;">What this tool does:</h4>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+                <li style="display: flex; align-items: start; gap: 0.5rem;">
+                    <span style="color: var(--color-accent); font-weight: bold;">✓</span>
+                    <span style="font-size: 0.9375rem;">Matches yellow orders to New Orders (fuzzy matching)</span>
+                </li>
+                <li style="display: flex; align-items: start; gap: 0.5rem;">
+                    <span style="color: var(--color-accent); font-weight: bold;">✓</span>
+                    <span style="font-size: 0.9375rem;">Detects duplicates and networks</span>
+                </li>
+                <li style="display: flex; align-items: start; gap: 0.5rem;">
+                    <span style="color: var(--color-accent); font-weight: bold;">✓</span>
+                    <span style="font-size: 0.9375rem;">Validates data quality issues</span>
+                </li>
+                <li style="display: flex; align-items: start; gap: 0.5rem;">
+                    <span style="color: var(--color-accent); font-weight: bold;">✓</span>
+                    <span style="font-size: 0.9375rem;">Organizes issues into reviewable categories</span>
+                </li>
+                <li style="display: flex; align-items: start; gap: 0.5rem;">
+                    <span style="color: var(--color-accent); font-weight: bold;">✓</span>
+                    <span style="font-size: 0.9375rem;">Creates safe shadow worksheets for rollback</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Form -->
+        <form id="loadForm" method="POST" action="/load">
+            <div style="margin-bottom: 2rem;">
+                <label for="year" style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--color-primary);">
+                    Year to process:
+                </label>
+                <input
+                    type="number"
+                    id="year"
+                    name="year"
+                    value="2025"
+                    min="2020"
+                    max="2030"
+                    style="width: 100%; padding: 0.875rem 1rem; border: 2px solid var(--border-color); border-radius: 8px; font-size: 1rem; font-family: var(--font-mono); transition: all 150ms ease;"
+                    onfocus="this.style.borderColor='var(--color-primary)'; this.style.boxShadow='0 0 0 3px rgba(27, 67, 50, 0.1)'"
+                    onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
+                >
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+                <span>Load Data & Run Validations</span>
+                <span style="margin-left: auto;">→</span>
+            </button>
+        </form>
+
+        <!-- Loading state (hidden initially) -->
+        <div id="loadingState" style="display: none; text-align: center; margin-top: 2rem;">
+            <div class="loading-spinner" style="margin: 0 auto;"></div>
+            <div class="loading-text" style="margin-top: 1rem;">
+                <div id="loadingMessage" style="font-weight: 600; color: var(--color-primary); margin-bottom: 0.5rem;">
+                    Loading data from Google Sheets...
+                </div>
+                <div style="font-size: 0.875rem; color: var(--color-text-tertiary);">
+                    This may take 30-60 seconds
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer note -->
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); text-align: center; color: var(--color-text-tertiary); font-size: 0.875rem;">
+            <p style="margin: 0;">
+                Estimated review time: 2-4 hours<br>
+                All changes saved to _CLEANUP shadow worksheets
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form submission with loading state
+document.getElementById('loadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Show loading state
+    document.querySelector('form').style.display = 'none';
+    document.getElementById('loadingState').style.display = 'block';
+
+    const formData = new FormData(e.target);
+
+    // Update loading messages
+    const messages = [
+        'Loading data from Google Sheets...',
+        'Reading cell colors...',
+        'Running fuzzy matching on yellow rows...',
+        'Detecting duplicates and networks...',
+        'Validating status issues...',
+        'Categorizing issues...'
+    ];
+
+    let messageIndex = 0;
+    const messageInterval = setInterval(() => {
+        messageIndex = (messageIndex + 1) % messages.length;
+        document.getElementById('loadingMessage').textContent = messages[messageIndex];
+    }, 5000);
+
+    try {
+        const response = await fetch('/load', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        clearInterval(messageInterval);
+
+        if (result.success) {
+            // Redirect to categories page
+            window.location.href = '/categories';
+        } else {
+            alert('Error loading data: ' + result.error);
+            document.querySelector('form').style.display = 'block';
+            document.getElementById('loadingState').style.display = 'none';
+        }
+    } catch (error) {
+        clearInterval(messageInterval);
+        alert('Error: ' + error.message);
+        document.querySelector('form').style.display = 'block';
+        document.getElementById('loadingState').style.display = 'none';
+    }
+});
+</script>
+{% endblock %}
