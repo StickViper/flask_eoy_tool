@@ -1,5 +1,41 @@
 # AI Agent Principles - Anti-Spaghettification Rules
 
+**Last Modified:** 2025-11-17
+
+## Source of Truth Hierarchy
+
+1. **User's direct instructions** (highest priority - overrides everything)
+2. **Code that user confirms works** ("this is tested", "this works")
+3. **Recent git commits** (check `git log --oneline -10`)
+4. **Files with recent "Last Modified" dates** (check top of file)
+5. **Old documentation** (lowest priority - verify before trusting)
+
+**Rule:** When in doubt, ask the user. Docs are for LLMs, not humans - user may not have read them.
+
+---
+
+## Critical: LLMs Are Time-Blind
+
+**NEVER trust your sense of dates!** LLMs have a knowledge cutoff and cannot know the current date.
+
+**Before flagging any date as "future" or "past":**
+```bash
+date  # Check system date FIRST
+```
+
+**Example of failure:**
+- LLM thinks it's 2024
+- Flags "October 2025" as future date
+- System date is actually November 2025
+- "October 2025" is 1 month ago (CORRECT)
+
+**Always check:**
+- System date with `date` command
+- Git commit dates with `git log --oneline -10`
+- File "Last Modified" headers
+
+---
+
 ## Context Window Failure Modes
 
 ### 1. The Stub Problem
@@ -50,8 +86,8 @@
 **Fix:**
 - **ALWAYS treat code as incomplete** unless:
   - User explicitly says "this works" or "this is tested"
-  - TODO.md says "✅ VERIFIED" or "✅ COMPLETED"
   - You test it yourself and it works
+  - Recent git commit message says it's verified/working
 - **Use existing code as reference**, not truth
   - Read it to understand intent
   - Don't copy/paste without verifying logic
@@ -69,24 +105,24 @@
 ## Architectural Invariants
 
 ### Where Truth Lives
-- **Column positions:** ToolboxSuite.js lines 160-165 (hardcoded, fragile)
-- **Color mappings:** ToolboxSuite.js onEdit() function (never change hex codes)
+- **Column positions:** ToolboxSuite.js `statusColumn` variable (currently column 10 = "CALL STATUS", column 11 = "Notes")
+- **Color mappings:** ToolboxSuite.js `onEdit()` function (never change hex codes)
 - **System Properties:** scripts/provider-search/UniversalProviderSuite.js (grep for PropertiesService)
-- **Current state:** TODO.md section 0 (Critical Bugs) and git log --oneline -10
+- **Current state:** TODO.md section 0 (Critical Bugs) and `git log --oneline -10`
 
 ### Never Do This
 - ❌ Code directly in Google Sheets (always local + clasp push)
-- ❌ Move Column J (breaks onEdit trigger everywhere)
-- ❌ Change semicolon separator in Notes (breaks parsing)
+- ❌ Move Column J (column 10 = CALL STATUS - breaks onEdit trigger everywhere)
+- ❌ Change semicolon separator in Notes column (column 11 - breaks note parsing/merging)
 - ❌ Use sheet-wide filters (breaks multi-user editing)
 - ❌ Edit production without backup
-- ❌ Create files without checking STRUCTURE.md first
+- ❌ Hard-code line numbers or column numbers in docs (use variable/function names instead)
 
 ### Always Do This
 - ✅ Check git status before starting
 - ✅ Read TODO.md section 0 (Critical Bugs) first
-- ✅ clasp pull before editing Scripts
-- ✅ Test on both OBGYN and PCP when changing ToolboxSuite.js
+- ✅ `clasp pull` before editing Apps Script files (.js/.html in scripts/*/`)
+- ✅ When changing ToolboxSuite.js: Don't assume it works on both OBGYN and PCP sheets without user testing
 - ✅ Update TODO.md as you discover tasks (not batch at end)
 
 ## Decision Heuristics
@@ -113,7 +149,7 @@
 
 **"This is just a quick fix"** → If it touches onEdit or verification, it's not quick. Test both sheets.
 
-**"The docs say X"** → Check git blame. Is that doc 6 months old? Trust recent commits over old docs.
+**"The docs say X"** → Check "Last Modified" date at top of file. Old docs may be outdated. Trust recent commits over old docs.
 
 **"I'll document this after"** → No. Update docs in same commit as code.
 
@@ -125,15 +161,23 @@
 git status              # What's uncommitted?
 git log --oneline -10   # Recent context?
 cat TODO.md | head -50  # Current priorities?
+ls -la *.md | head -20  # What docs exist? Check Last Modified dates
 ```
 
 Read TODO.md section 0 (Critical Bugs) - it tells you what's actually broken right now.
+
+**Session startup checklist:**
+1. Check git status - any uncommitted changes?
+2. Scan recent commits to understand what was done last
+3. Read TODO.md section 0 to know current blockers
+4. Check which markdown docs exist and when they were last modified
+5. Ask user what they want to work on (don't assume based on docs)
 
 ## Code Sync Rules
 
 **Source of truth:** Local files in git
 **Deployment target:** Google Sheets via clasp
-**Never:** Edit in Sheets web UI (breaks sync)
+**Never:** Edit in Sheets web UI (creates conflicts with local files)
 
 **Shared code (must stay identical):**
 - scripts/obgyn-list/ToolboxSuite.js
@@ -141,20 +185,20 @@ Read TODO.md section 0 (Critical Bugs) - it tells you what's actually broken rig
 - scripts/obgyn-list/DebugRepairSidebar.html
 - scripts/pcp-list/DebugRepairSidebar.html
 
-**Process:** Edit OBGYN → test → cp to PCP → test both → commit
+**Verification:** If unsure whether files are still identical, check the code yourself (grep for functions or compare key sections)
 
 ## File Hierarchy (No Duplication)
 
 **Purpose → File mapping:**
 - Current bugs/tasks → TODO.md
-- System overview → MASTER_SYSTEM_DOCUMENTATION.md
-- File locations → STRUCTURE.md
-- Procedures → OBGYN_CLEANUP_CHECKLIST.md
-- Setup → docs/CLASP_SETUP.md
+- System overview → MASTER_SYSTEM_DOCUMENTATION.md (verify if current)
+- File locations → STRUCTURE.md (verify if current)
+- Procedures → docs/OBGYN_CLEANUP_CHECKLIST_DEPRECATED.md (deprecated - check for newer version)
+- Setup → docs/CLASP_SETUP.md (verify if current)
 - This file → Meta-rules for AI agents
 
 **If adding info:** Check if it belongs in existing file first. Don't duplicate.
 
 ---
 
-**TL;DR:** Read TODO.md first. Don't finish broken implementations. Delete deprecated stuff. Test on both sheets. Update docs in same commit. Check git status.
+**TL;DR:** Read TODO.md first. Don't finish broken implementations. Delete deprecated info (archive old files if not wrong). Test on both sheets. Update docs in same commit. Check git status. User is source of truth.

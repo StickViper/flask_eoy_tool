@@ -2,85 +2,74 @@
 
 ## 🔴 IMMEDIATE PRIORITIES (Current Session)
 
-### 0. OBGYN EOY Cleanup (December 2024)
+### 0. OBGYN EOY Cleanup Tool (December 2024)
 
-**Status:** ✅ ARCHITECTURE COMPLETE - Ready to build
-**Timeline:** This week (Dec 2024)
+**Status:** ✅ FLASK WEB APP BUILT - Read-only mode working, write phase not implemented
+**Last Updated:** 2024-11-17
 
-#### ✅ COMPLETED (Planning & Setup):
-- [x] Manual verification sidebar (v13.3) - works for shared users after cache clear
-- [x] OBGYN sheet connected to ToolboxSuite.js (clasp already setup)
-- [x] Created & tested gspread connection (`scripts/test_gspread.py`)
-- [x] Created PECOS API test script (`scripts/test_pecos_api.py`)
-- [x] **Installed dependencies:** gspread-formatting, rapidfuzz, textual
-- [x] **Tested critical assumptions:**
-  - ✅ Color reading works (gspread-formatting)
-  - ✅ Fuzzy matching works (rapidfuzz, 100% match on "Smith Family Practice" vs "Family Practice Smith")
-  - ✅ Worksheet duplication preserves formulas
-  - ✅ Can distinguish empty cells from "0"
-- [x] **Analyzed actual data:**
-  - 289 rows with notes (39%)
-  - 67% standard patterns (vm x2, not interested, sent, network)
-  - 33% non-standard (need review)
-  - Identified clearable patterns (callback, gave my #, office closed)
-- [x] **Architecture V2 complete:** (docs/EOY_TOOL_ARCHITECTURE_V2.md - 1560 lines)
-  - All 5 phases specified
-  - Complete Textual UI designs
-  - Shadow worksheet strategy
-  - Progress save/resume
-  - Error handling
-- [x] **Gap analysis complete:** (docs/ARCHITECTURE_GAP_ANALYSIS.md)
-  - 15 critical gaps identified & resolved
-  - 8 ambiguities clarified
-  - 5 big leaps simplified
-- [x] **Unresolved questions documented:** (docs/UNRESOLVED_QUESTIONS.md)
-  - 10 minor questions (none blocking)
-  - Can all be resolved during build
+#### ✅ COMPLETED:
+- [x] **Flask web application built** (`scripts/eoy_tool.py`, 1349 lines)
+  - Backend: Flask + gspread + rapidfuzz
+  - Frontend: HTML templates + vanilla JS + CSS
+  - Design: "Data Atelier" aesthetic (warm colors, easy on eyes for 2-4hr sessions)
+- [x] **Data loading works** (11 API calls, well under 60/min quota)
+  - Working List: 737 rows
+  - New Orders: 241 rows
+  - Status-to-color mapping (avoids reading 737 cell colors individually)
+- [x] **All validation pipelines implemented:**
+  - ✅ Yellow→NO fuzzy matching (97.6% high confidence, per TEST_RESULTS.md)
+  - ✅ Duplicate detection (exact matches, networks, similar entries)
+  - ✅ Status issue flagging (voicemail, email sent, potentially invalid)
+  - ✅ 11 review categories with row grouping
+- [x] **UI features working:**
+  - ✅ Expandable match details (click ▶ to see NO row, confidence %)
+  - ✅ Visual duplicate grouping (color-coded borders)
+  - ✅ Multi-select (shift/ctrl click)
+  - ✅ Sortable columns
+  - ✅ Progress auto-save to JSON
+  - ✅ Keyboard shortcuts
+- [x] **Testing framework created** (`scripts/test_eoy_output.py`)
+  - All 8 tests passing (as of 2024-11-16)
+  - Match accuracy: 97.6% high confidence
+- [x] **Documentation complete** (docs/README.md - 447 lines, current and accurate)
 
-#### 🏗️ NEXT: BUILD THE TOOL
-- [ ] **Build `scripts/eoy_obgyn_tool.py`**
-  - **Framework:** Textual TUI (modern Python terminal UI with mouse support!)
-  - **Features:**
-    - Phase 1: Load data (737 rows, colors via gspread-formatting)
-    - Phase 2: Validate (yellow→NO, duplicates, status issues, notes)
-    - Phase 3: Interactive review (category tabs, batch operations, editable fields)
-    - Phase 4: Create shadow worksheets (_CLEANUP suffix)
-    - Phase 5: Write changes, validate STATS
-  - **Replaces:** Debug sidebar + debug column + Apps Script EOY automation
-  - **Data:** 737 rows, 244 yellow, 269 New Orders, 289 notes
-  - **Time:** 4-6 hours to build, 2-4 hours to use
+#### ❌ NOT YET IMPLEMENTED (Write Phase):
+- [ ] Writing changes to Google Sheets (batch updates)
+- [ ] Shadow worksheet creation (_CLEANUP suffix)
+- [ ] Undo/redo restore logic (stack exists, restore not implemented)
+- [ ] Full edit modal for complex edits
+- [ ] Some bulk action handlers
 
-#### ⚠️ KNOWN ISSUES (Apps Script EOY - why we're replacing it):
-- **Step 2: Yellow validation BROKEN** - flags ALL 244 yellow rows as "not in New Orders"
-  - Test run showed 100% false positives
-  - Likely cause: fuzzy matching threshold too high OR data format mismatch
-  - Local tool will show exact confidence scores for debugging
-- **Apps Script limitations:**
-  - Client-side polling lag
-  - 6-minute execution limit
-  - Hard to debug (no console output for confidence scores)
-  - Browser cache issues for shared users
+#### 🔧 CURRENT STATE:
+**What works:** Load data → Run validations → Review in UI → See match details
+**What doesn't:** Actually writing changes back to Google Sheets
 
-#### 📦 ARCHIVED (Old Completed Work):
-- Google Places API removed (Oct 2025) - switched to 100% manual verification
-- Manual verification sidebar (v13.3) works after browser cache fix
-- DebugRepairSidebar field name fixes
-- Network notation format verified correct
+**To use tool:**
+```bash
+cd C:\Users\noagi\Desktop\JGDC
+python scripts/eoy_tool.py
+# Open http://127.0.0.1:5000
+```
+
+#### 📦 ARCHIVED PLANNING DOCS:
+These described a Textual TUI that was never built - Flask web app was built instead:
+- `docs/archive/EOY_TOOL_ARCHITECTURE_V2.md` (Textual UI design)
+- `docs/archive/ARCHITECTURE_GAP_ANALYSIS.md` (planning)
+- `docs/archive/UNRESOLVED_QUESTIONS.md` (pre-build questions)
 
 #### 📋 NEXT STEPS:
 
-**NEXT LLM (Fresh Mind):**
-1. Read `docs/EOY_TOOL_ARCHITECTURE_V2.md` (complete architecture, 1560 lines)
-2. Read `docs/UNRESOLVED_QUESTIONS.md` (10 minor questions, resolve during build)
-3. Build `scripts/eoy_obgyn_tool.py` following architecture (4-6 hours)
-4. Test with OBGYN data
+**TO COMPLETE WRITE PHASE:**
+1. Implement batch Google Sheets updates (`gspread.batch_update()`)
+2. Create shadow worksheets with _CLEANUP suffix
+3. Wire up undo/redo restore logic
+4. Test on real OBGYN data
 
-**USER:**
-1. Run completed EOY tool interactively (2-4 hours)
-2. QA and provide feedback
-3. Verify STATS_CLEANUP sheet after updates
-4. Rename shadow worksheets (remove _CLEANUP suffix)
-5. Manual reset phase (add 2026 QTY column, etc.)
+**APPS SCRIPT EOY AUTOMATION:**
+- Still exists in `scripts/obgyn-list/ToolboxSuite.js`
+- Steps 1-5 work (per commit `d219925`: "Mark EOY Steps 1, 2, network notation as FIXED/VERIFIED")
+- See `docs/OBGYN_CLEANUP_CHECKLIST_DEPRECATED.md` for usage
+- Flask tool is intended to replace this, but both currently functional
 
 ---
 
