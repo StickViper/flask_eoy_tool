@@ -198,8 +198,14 @@ These are not bugs - they're legitimate data issues that require human review.
 
 ### Future Testing
 1. Add integration tests for Flask routes
-2. Test edit/delete operations (not yet implemented)
-3. Test Google Sheets writing (not yet implemented)
+2. Test edit/delete operations (Write Phase - Pending)
+3. Test Google Sheets writing (Write Phase - Pending)
+
+### Node.js Tests
+To verify fuzzy matching logic in JavaScript (used by legacy Apps Script):
+```bash
+node test-data/similarity-test.js
+```
 
 ---
 
@@ -225,4 +231,5 @@ python scripts/run_all_tests.py
 
 **Tested by:** Automated test suite
 **Validated against:** Real OBGYN Working List 2025 data
-**Status:** ✅ READY FOR PRODUCTION
+**Status:** ✅ READY FOR PRODUCTION (Read/Validation Logic Only)
+**Last Updated:** 2025-11-20

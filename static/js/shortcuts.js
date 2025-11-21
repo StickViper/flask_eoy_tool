@@ -47,7 +47,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Escape - Clear selection / close modals
         if (e.key === 'Escape') {
-            if (typeof clearSelection === 'function') {
+            if (document.getElementById('searchModal') && document.getElementById('searchModal').style.display === 'block') {
+                closeSearchModal();
+            } else if (typeof clearSelection === 'function') {
                 clearSelection();
             }
         }
@@ -59,16 +61,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Ctrl+F - Search (TODO: implement search)
+        // Ctrl+F - Search
         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
             e.preventDefault();
-            // TODO: Open search modal
+            showSearchModal();
         }
 
         // Ctrl+E - Export to CSV
         if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
             e.preventDefault();
-            // TODO: Export current category
+            exportCategory();
         }
 
         // Ctrl+G - Google search selected
@@ -80,6 +82,82 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// Search Modal Functions
+function showSearchModal() {
+    let modal = document.getElementById('searchModal');
+    if (!modal) {
+        console.error('Search modal not found');
+        return;
+    }
+    modal.style.display = 'block';
+    document.getElementById('searchInput').focus();
+}
+
+function closeSearchModal() {
+    let modal = document.getElementById('searchModal');
+    if (modal) {
+        modal.style.display = 'none';
+        // Do NOT reset search filter or input
+        // This allows users to see the filtered results after closing the modal
+    }
+}
+
+function performSearch(query) {
+    const rows = document.querySelectorAll('.data-row');
+    const lowerQuery = query.toLowerCase();
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (text.includes(lowerQuery)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Export Function
+function exportCategory() {
+    const rows = document.querySelectorAll('.data-row');
+    if (rows.length === 0) {
+        alert('No data to export');
+        return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+
+    // Headers
+    const headers = ["Row", "Practice", "Phone", "Address", "City", "State", "QTY 2025", "Status", "Notes"];
+    csvContent += headers.join(",") + "\r\n";
+
+    // Rows
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        // Skip checkbox (0) and expand icon (1)
+        const rowData = [
+            cells[2].textContent.trim(), // Row
+            `"${cells[3].textContent.trim().replace(/"/g, '""')}"`, // Practice
+            `"${cells[4].textContent.trim()}"`, // Phone
+            `"${cells[5].textContent.trim().replace(/"/g, '""')}"`, // Address
+            `"${cells[6].textContent.trim()}"`, // City
+            `"${cells[7].textContent.trim()}"`, // State
+            `"${cells[8].textContent.trim()}"`, // QTY
+            `"${cells[9].textContent.trim()}"`, // Status
+            `"${cells[10].textContent.trim().replace(/"/g, '""')}"` // Notes
+        ];
+        csvContent += rowData.join(",") + "\r\n";
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    const categoryName = document.querySelector('.category-title h2')?.textContent.trim() || 'export';
+    link.setAttribute("download", `${categoryName}_export.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
 // Prevent default browser back button behavior
 // Instead, use back/forward for sidebar navigation history

@@ -55,6 +55,7 @@ date  # Check system date FIRST
 - User's chat messages = clarification only
 - When code changes, update docs in same commit
 - Delete deprecated info immediately (don't let it linger)
+- **CRITICAL:** Whenever you update a documentation file, you MUST update the "Last Updated" date at the top (or bottom) of the file to the current date. This is essential for future agents to know which docs are trustworthy.
 
 ### 3. Solving Already-Solved Problems
 **Symptom:** Creating new fuzzy matching function when one exists in line 850

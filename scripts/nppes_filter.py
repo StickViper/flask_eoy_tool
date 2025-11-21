@@ -18,6 +18,7 @@ with clear configuration sections and comprehensive filtering.
 
 import pandas as pd
 import os
+import argparse
 import re
 from datetime import datetime
 from pathlib import Path
@@ -35,18 +36,20 @@ CONFIG = {
     'PROVIDER_TYPE': 'PCP',  # Options: 'PCP', 'OBGYN', 'BOTH'
 
     # State Filter (use 2-letter state codes)
-    'TARGET_STATES': ['FL'],  # Florida campaign
+    'TARGET_STATES': ['NM', 'UT', 'NE', 'AL'],  # New Mexico, Utah, Nebraska, Alabama test campaign
 
     # State-specific sampling limits (smart sampling for API efficiency)
-    # Goal: 150-200 verified FL PCPs (target 175)
-    # Based on actual 25% verification success rate (not 70% guess!)
+    # Set to None or empty dict to get ALL providers (no sampling)
     'STATE_SAMPLE_LIMITS': {
-        'FL': 700,   # Target 175 verified (25% success rate)
+        'NM': 3000,  # New Mexico - sample 3K for testing
+        'UT': 3000,  # Utah - sample 3K for testing
+        'NE': 3000,  # Nebraska - sample 3K for testing
+        'AL': 3000,  # Alabama - sample 3K for testing
     },
 
     # Input/Output Files
-    'INPUT_FILE': '../../data/nppes/NPPES_Data_Dissemination_September_2025_V2/npidata_pfile_20050523-20250907.csv',
-    'OUTPUT_PREFIX': 'FILTERED_pcps',  # Will create: FILTERED_pcps_FL.csv, etc.
+    'INPUT_FILE': 'npidata_pfile_20050523-20250907.csv',
+    'OUTPUT_PREFIX': 'FILTERED_pcps',  # Will create: FILTERED_pcps_ALL_[date].csv
 
     # Dry Run Mode - Set True to preview what would be filtered WITHOUT actually filtering
     'DRY_RUN': False,  # When True: generates preview stats, no output files created
@@ -62,6 +65,66 @@ CONFIG = {
         '208D00000X',  # General Practice (physicians)
         '207R00000X',  # Internal Medicine (adult-focused physicians)
         '363LF0000X',  # Family Nurse Practitioner (FNP only)
+    ],
+
+    # SPECIALIST TAXONOMY CODES - BLACKLIST (Exclude if found in ANY taxonomy slot)
+    # These are providers who should NEVER be included even if they also have a PCP taxonomy
+    'SPECIALIST_TAXONOMIES': [
+        # Internal Medicine Subspecialties (207R*)
+        '207RC0000X',  # Cardiovascular Disease
+        '207RC0001X',  # Clinical Cardiac Electrophysiology
+        '207RI0011X',  # Interventional Cardiology
+        '207RG0100X',  # Gastroenterology
+        '207RP1001X',  # Pulmonary Disease
+        '207RC0200X',  # Critical Care Medicine
+        '207RE0101X',  # Endocrinology, Diabetes & Metabolism
+        '207RN0300X',  # Nephrology
+        '207RH0003X',  # Hematology & Oncology
+        '207RH0002X',  # Hematology
+        '207RX0202X',  # Medical Oncology
+        '207RI0200X',  # Infectious Disease
+        '207RR0500X',  # Rheumatology
+        '207RI0008X',  # Hepatology
+        '207RG0300X',  # Geriatric Medicine (Internal Medicine)
+
+        # Pediatrics (208*)
+        '208000000X',  # Pediatrics (general)
+        '2080A0000X',  # Pediatric Adolescent Medicine
+        '2080P0202X',  # Pediatric Cardiology
+        '2080P0203X',  # Pediatric Critical Care Medicine
+        '2080P0204X',  # Pediatric Emergency Medicine
+        '2080P0205X',  # Pediatric Endocrinology
+        '2080P0206X',  # Pediatric Gastroenterology
+        '2080P0207X',  # Pediatric Hematology & Oncology
+        '2080P0208X',  # Pediatric Infectious Diseases
+        '2080P0210X',  # Pediatric Nephrology
+        '2080P0214X',  # Pediatric Pulmonology
+        '2080P0216X',  # Pediatric Rheumatology
+
+        # Surgery Specialties
+        '207T00000X',  # Neurological Surgery
+        '208200000X',  # Plastic Surgery
+        '2082S0099X',  # Plastic Surgery Within the Head and Neck
+        '2082S0105X',  # Surgery of the Hand
+        '208G00000X',  # Thoracic Surgery (Cardiothoracic Vascular Surgery)
+        '2086S0122X',  # Plastic and Reconstructive Surgery
+        '2086S0127X',  # Trauma Surgery
+        '2086X0206X',  # Surgical Oncology
+        '208600000X',  # Surgery (general)
+        '2086S0120X',  # Pediatric Surgery
+
+        # Other Medical Specialties
+        '207V00000X',  # Obstetrics & Gynecology (keep separate - has own filter)
+        '207N00000X',  # Dermatology
+        '207K00000X',  # Allergy & Immunology
+        '2084P0800X',  # Psychiatry
+        '2084N0400X',  # Neurology
+        '207U00000X',  # Nuclear Medicine
+        '2085R0202X',  # Diagnostic Radiology
+        '207L00000X',  # Anesthesiology
+        '207P00000X',  # Emergency Medicine
+        '207RA0201X',  # Addiction Medicine
+        '207RX0201X',  # Sports Medicine (Internal Medicine)
     ],
 
     # OBGYN Taxonomy Codes
@@ -97,6 +160,11 @@ CONFIG = {
             'cardiology', 'oncology', 'dermatology', 'orthopedic', 'neurology',
             'pediatric', 'pediatrics', 'children', "children's", 'kids health',
             'surgery center', 'surgical', 'specialty',
+
+            # Non-target age groups (pre-marital/pre-kid genetic screening focus)
+            'geriatric', 'senior', 'senior care', 'senior health', 'elder care',
+            'retirement', 'assisted living', 'nursing home', 'hospice',
+            'palliative', 'gerontology',
 
             # Non-outpatient
             'inpatient', 'hospitalist', 'icu', 'nicu',
@@ -381,6 +449,7 @@ def filter_providers(df, provider_type='PCP', states=None):
     else:  # BOTH
         taxonomies = CONFIG['PCP_TAXONOMIES'] + CONFIG['OBGYN_TAXONOMIES']
 
+    # First, check if provider has a VALID PCP/OBGYN taxonomy
     taxonomy_mask = (
         df['Healthcare Provider Taxonomy Code_1'].isin(taxonomies) |
         df['Healthcare Provider Taxonomy Code_2'].isin(taxonomies) |
@@ -395,6 +464,25 @@ def filter_providers(df, provider_type='PCP', states=None):
 
     df = df[taxonomy_mask]
     print(f"  [OK] After taxonomy filter (strict): {len(df):,} rows")
+
+    # Step 2b: EXCLUDE specialists (even if they have a PCP taxonomy code)
+    # Many specialists list "Internal Medicine" as primary and subspecialty as secondary
+    specialist_codes = CONFIG['SPECIALIST_TAXONOMIES']
+    specialist_mask = (
+        df['Healthcare Provider Taxonomy Code_1'].isin(specialist_codes) |
+        df['Healthcare Provider Taxonomy Code_2'].isin(specialist_codes) |
+        df['Healthcare Provider Taxonomy Code_3'].isin(specialist_codes)
+    )
+
+    specialists = df[specialist_mask]
+    excluded_records.extend([
+        {'NPI': row['NPI'], 'Name': _get_name(row),
+         'Reason': f'Specialist taxonomy detected: {[row["Healthcare Provider Taxonomy Code_1"], row["Healthcare Provider Taxonomy Code_2"], row["Healthcare Provider Taxonomy Code_3"]]}'}
+        for _, row in specialists.iterrows()
+    ])
+
+    df = df[~specialist_mask]
+    print(f"  [OK] After excluding specialists: {len(df):,} rows (excluded {len(specialists):,} specialists)")
 
     # Step 3: Filter by state
     if states:
@@ -517,48 +605,66 @@ def _get_name(row):
 
 def deduplicate_providers(df):
     """
-    Deduplicate providers at same location.
-    Strategy: prefer_individual = keep individual doctors, remove clinic NPI
+    Deduplicate providers by phone number - keep only ONE per phone.
+    Strategy:
+    1. Keep FIRST individual (Entity Type 1) if any exist for this phone
+    2. Otherwise keep FIRST organization (Entity Type 2)
+    3. Track how many duplicates were found (for network detection in Sheets)
     """
     excluded = []
 
-    # Create location key (phone + address)
-    df['_location_key'] = (
-        df['Provider Business Practice Location Address Telephone Number'].astype(str) + '|' +
-        df['Provider First Line Business Practice Location Address'].astype(str)
+    # Normalize phone numbers for grouping (remove extensions, keep last 10 digits)
+    df['_normalized_phone'] = df['Provider Business Practice Location Address Telephone Number'].apply(
+        lambda p: ''.join(filter(str.isdigit, str(p)))[-10:] if pd.notna(p) else ''
     )
 
-    # Group by location
-    grouped = df.groupby('_location_key')
+    # Group by normalized phone
+    grouped = df.groupby('_normalized_phone')
 
     keep_rows = []
-    for location, group in grouped:
+    for phone, group in grouped:
         if len(group) == 1:
+            # Only one provider with this phone - keep it
             keep_rows.append(group.iloc[0])
             continue
 
-        # Check if group has both individuals and organizations
-        has_individual = (group['Entity Type Code'] == '1').any()
-        has_org = (group['Entity Type Code'] == '2').any()
+        # Multiple providers with same phone - this is a network!
+        # Count unique addresses to determine network size
+        unique_addresses = group['Provider First Line Business Practice Location Address'].nunique()
+        network_size = len(group)
 
-        if has_individual and has_org:
-            # Prefer individuals, exclude organizations
-            individuals = group[group['Entity Type Code'] == '1']
-            organizations = group[group['Entity Type Code'] == '2']
+        # Separate individuals and organizations
+        individuals = group[group['Entity Type Code'] == '1']
+        organizations = group[group['Entity Type Code'] == '2']
 
-            keep_rows.extend([row for _, row in individuals.iterrows()])
+        # Choose ONE representative (prefer individual over org)
+        if len(individuals) > 0:
+            # Keep FIRST individual
+            kept_row = individuals.iloc[0]
+            keep_rows.append(kept_row)
 
-            for _, row in organizations.iterrows():
+            # Mark ALL others as excluded (including other individuals)
+            for idx, row in group.iterrows():
+                if row['NPI'] != kept_row['NPI']:
+                    excluded.append({
+                        'NPI': row['NPI'],
+                        'Name': _get_name(row),
+                        'Reason': f'Duplicate phone: network with {network_size} locations (kept {_get_name(kept_row)})'
+                    })
+        else:
+            # No individuals - keep FIRST organization
+            kept_row = organizations.iloc[0]
+            keep_rows.append(kept_row)
+
+            # Mark all other orgs as excluded
+            for idx, row in organizations.iloc[1:].iterrows():
                 excluded.append({
                     'NPI': row['NPI'],
                     'Name': _get_name(row),
-                    'Reason': 'Duplicate: individual provider exists at same location'
+                    'Reason': f'Duplicate phone: network with {network_size} locations (kept {_get_name(kept_row)})'
                 })
-        else:
-            # All same type - keep all (might be group practice with multiple doctors)
-            keep_rows.extend([row for _, row in group.iterrows()])
 
-    result_df = pd.DataFrame(keep_rows).drop(columns=['_location_key'])
+    result_df = pd.DataFrame(keep_rows).drop(columns=['_normalized_phone'])
     return result_df, excluded
 
 def apply_state_sampling(df):
@@ -666,25 +772,28 @@ def format_output(df):
     
     return output_df
 
-def save_by_state(df, output_prefix):
+def save_by_state(df, output_prefix, output_dir='.'):
     """
     Save filtered data by state into separate CSV files.
     """
-    print(f"\n[SAVE] Saving filtered data...")
+    print(f"\n[SAVE] Saving filtered data to: {output_dir}")
+    
+    if output_dir != '.' and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     states = df['State'].unique()
     files_created = []
 
     for state in states:
         state_df = df[df['State'] == state]
-        filename = f"{output_prefix}_{state}_{datetime.now().strftime('%Y%m%d')}.csv"
+        filename = os.path.join(output_dir, f"{output_prefix}_{state}_{datetime.now().strftime('%Y%m%d')}.csv")
         state_df.to_csv(filename, index=False)
         files_created.append(filename)
         print(f"  [OK] Saved {len(state_df):,} {state} providers to: {filename}")
     
     # Also save combined file if multiple states
     if len(states) > 1:
-        combined_filename = f"{output_prefix}_ALL_{datetime.now().strftime('%Y%m%d')}.csv"
+        combined_filename = os.path.join(output_dir, f"{output_prefix}_ALL_{datetime.now().strftime('%Y%m%d')}.csv")
         df.to_csv(combined_filename, index=False)
         files_created.append(combined_filename)
         print(f"  [OK] Saved combined file: {combined_filename}")
@@ -695,6 +804,16 @@ def main():
     """
     Main processing function - Enhanced in v3.0
     """
+    parser = argparse.ArgumentParser(description='NPPES PCP Filter Script v3.0')
+    parser.add_argument('--states', nargs='+', help='List of target states (e.g. TX WA)')
+    parser.add_argument('--output-dir', default='.', help='Directory to save output files')
+    args = parser.parse_args()
+
+    # Override config with CLI args
+    if args.states:
+        CONFIG['TARGET_STATES'] = args.states
+        print(f"[CLI] Overriding target states: {CONFIG['TARGET_STATES']}")
+
     print("=" * 80)
     print("NPPES PCP FILTER SCRIPT v3.0 - ENHANCED EDITION")
     print("=" * 80)
@@ -765,12 +884,12 @@ def main():
         return output_df
 
     # NORMAL MODE - Save files
-    files = save_by_state(output_df, CONFIG['OUTPUT_PREFIX'])
+    files = save_by_state(output_df, CONFIG['OUTPUT_PREFIX'], args.output_dir)
 
     # Save excluded providers audit trail
     if excluded_records:
         excluded_df = pd.DataFrame(excluded_records)
-        excluded_filename = f"EXCLUDED_{CONFIG['OUTPUT_PREFIX']}_{datetime.now().strftime('%Y%m%d')}.csv"
+        excluded_filename = os.path.join(args.output_dir, f"EXCLUDED_{CONFIG['OUTPUT_PREFIX']}_{datetime.now().strftime('%Y%m%d')}.csv")
         excluded_df.to_csv(excluded_filename, index=False)
         files.append(excluded_filename)
         print(f"  [OK] Saved excluded providers audit: {excluded_filename}")

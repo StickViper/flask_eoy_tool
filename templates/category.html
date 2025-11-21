@@ -50,6 +50,16 @@
             <button class="btn btn-ghost btn-sm" onclick="window.location.href='/'" style="width: 100%;">
                 ← Back to Start
             </button>
+            
+            <!-- Undo/Redo (WIP) -->
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                <button class="btn btn-ghost btn-sm" onclick="undo()" style="flex: 1; font-size: 0.75rem;" title="Undo (Ctrl+Z)">
+                    ↶ Undo <span style="font-size: 0.6rem; opacity: 0.7;">(WIP)</span>
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="redo()" style="flex: 1; font-size: 0.75rem;" title="Redo (Ctrl+Y)">
+                    ↷ Redo <span style="font-size: 0.6rem; opacity: 0.7;">(WIP)</span>
+                </button>
+            </div>
         </div>
     </aside>
 
@@ -277,6 +287,22 @@
     <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="editNoteChunk()">
         Edit this chunk
     </button>
+</div>
+
+<!-- Search Modal -->
+<div id="searchModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000;">
+    <div style="position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 500px; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0; font-size: 1.25rem; color: var(--color-primary);">Search Category</h3>
+            <button onclick="closeSearchModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--color-text-tertiary);">&times;</button>
+        </div>
+        <input type="text" id="searchInput" placeholder="Type to filter rows..." 
+               style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;"
+               onkeyup="performSearch(this.value)">
+        <div style="text-align: right; font-size: 0.875rem; color: var(--color-text-tertiary);">
+            Press ESC to close
+        </div>
+    </div>
 </div>
 
 <script>

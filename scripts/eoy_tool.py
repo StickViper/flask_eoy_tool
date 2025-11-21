@@ -8,7 +8,7 @@ Design: "Data Atelier" - Refined craftsmanship aesthetic
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import gspread
-from gspread_formatting import get_effective_format
+# from gspread_formatting import get_effective_format  # Unused
 from oauth2client.service_account import ServiceAccountCredentials
 from rapidfuzz import fuzz
 from dataclasses import dataclass, field, asdict
@@ -23,6 +23,7 @@ import threading
 
 import sys
 import os
+import argparse
 
 # Configure Flask to look for templates/static in parent directory
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +31,7 @@ template_dir = os.path.join(parent_dir, 'templates')
 static_dir = os.path.join(parent_dir, 'static')
 
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
-app.secret_key = 'eoy-cleanup-tool-secret-key-2025'  # Change in production
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-key-change-in-prod')
 
 # ============================================================================
 # DATA MODELS
@@ -189,19 +190,20 @@ def status_to_color(status: str) -> str:
 
     status_lower = status.lower().strip()
 
-    # Status -> Color mapping (from Working List dropdown)
-    if "successful" in status_lower and "order" in status_lower:
-        return "#ffff00"  # Yellow
-    elif "voicemail" in status_lower or "no answer" in status_lower:
-        return "#ff00ff"  # Fuschia
-    elif "not interested" in status_lower:
-        return "#ffffff"  # White
-    elif "invalid" in status_lower:
-        return "#ff0000"  # Red
-    elif "email" in status_lower or "requested email" in status_lower:
-        return "#00ff00"  # Green
-    else:
-        return "#ffffff"  # Default white
+    # EXACT MATCH enforcement (Decision Q1)
+    # We do NOT use substring matching anymore to prevent "Voicemail" matching "Voicemail/No Answer"
+    
+    status_map = {
+        'successful order': '#ffff00',    # Yellow
+        'voicemail/no answer': '#ff00ff', # Fuschia
+        'not interested': '#ffffff',      # White
+        'potentially invalid': '#ff0000', # Red
+        'requested email': '#00ff00',     # Green
+        'email': '#00ff00',               # Green (Legacy/Alternative)
+        '': '#ffffff'                     # Empty = White
+    }
+    
+    return status_map.get(status_lower, '#ffffff')
 
 def load_data(year: int = 2025):
     """Load all data from Google Sheets"""
@@ -313,7 +315,7 @@ def load_data(year: int = 2025):
     print(f"\n[Phase 1] Complete!")
     return wl_rows, no_rows, invalid_reasons, stats_sheet
 
-def validate_stats_color_counts(wl_rows, stats_sheet, year=2025):
+def validate_stats_color_counts(wl_rows, stats_sheet, year=2025, assume_yes=False):
     """
     Validate Status-derived colors against STATS worksheet color counts.
 
@@ -428,6 +430,10 @@ def validate_stats_color_counts(wl_rows, stats_sheet, year=2025):
             print("     b) Manually update color to match Status (in cell formatting)")
             print("  4. Re-run this tool after fixing")
             print()
+            if assume_yes:
+                print("  [Automation] --assume-yes active: Continuing despite mismatch.")
+                return True
+                
             response = input("  Continue anyway? (y/n): ").strip().lower()
             if response != 'y':
                 print("\n[Validation] User chose to exit. Please fix Status/color mismatch first.")
@@ -1338,8 +1344,14 @@ def open_browser():
     webbrowser.open('http://localhost:5000')
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='EOY Cleanup Tool')
+    parser.add_argument('--assume-yes', action='store_true', help='Automatically answer yes to prompts')
+    args = parser.parse_args()
+
     print("\n" + "="*80)
     print("EOY Cleanup Tool - Starting...")
+    if args.assume_yes:
+        print("Mode: AUTOMATED (Input prompts disabled)")
     print("="*80)
 
     # Open browser in background thread

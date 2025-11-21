@@ -40,7 +40,7 @@ This codebase automates the boring parts (filtering, verification) while providi
 │ STEP 2: FILTERING (Python - Local Computer)                     │
 │ Filter 11M → ~30K providers per state                           │
 │ • Only Family Medicine, Internal Medicine, Family NPs           │
-│ • Only specific states (currently: TX, TN, OK, OR)             │
+│ • Only specific states (configured via CLI args)             │
 │ • Remove: Pediatricians, Specialists, Hospitals, Closed practices│
 │ • Fix: ALL CAPS names, credential formats                       │
 │ Script: data/nppes/.../nppes_filter_pcps.py                    │
@@ -80,13 +80,13 @@ This codebase automates the boring parts (filtering, verification) while providi
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ STEP 8: YEAR-END CONSOLIDATION (First time specific List is touched after year-end)│
+│ STEP 8: YEAR-END CONSOLIDATION (Flask App)                      │
 │ Merge all data sources into master archive:                     │
 │ • Combine multiple working lists from same year                 │
 │ • Deduplicate by phone/NPI/address                              │
 │ • Preserve order history across years                           │
 │ • Clear statuses for next year's calling cycle                  │
-│ Script: scripts/pcp-list/ToolboxSuite.js (consolidation tools)  │
+│ Script: scripts/eoy_tool.py (Flask Web App)                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -362,7 +362,7 @@ CONFIG = {
     'PROVIDER_TYPE': 'PCP',  # Options: 'PCP', 'OBGYN', 'BOTH'
 
     # Which states (2-letter codes)
-    'TARGET_STATES': ['OK','OR','TN'],  # Change this!
+    'TARGET_STATES': ['TX', 'WA'],  # Example - can be overridden by CLI args
 
     # Preview mode (no files created, just shows what would happen)
     'DRY_RUN': False,  # Set True to preview
@@ -393,7 +393,7 @@ CONFIG = {
 ```javascript
 const PROVIDER_CONFIG = {
   PROVIDER_TYPE: 'PCP',  // Options: 'PCP', 'OBGYN', 'SPECIALIST'
-  TARGET_STATE: 'TX',     // 2-letter state code
+  TARGET_STATE: 'TX',     // 2-letter state code (Example)
 
   USE_UNIFIED_OUTPUT: true,  // All states in one sheet vs. separate
 
@@ -798,6 +798,8 @@ womenshealthcenter network (~3);
 - Enables independent testing (can test on PCP without affecting OBGYN)
 
 ---
+
+**Last Updated:** 2025-11-20
 
 ### Invalid/Inactive List Sheet Structure
 

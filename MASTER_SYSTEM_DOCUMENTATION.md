@@ -37,8 +37,9 @@
 **Version Control:** Git + clasp
 
 **Scripts:**
-- `UniversalProviderSuite.js` v8.0 - API verification
-- `ToolboxSuite.js` v10.0 - EOY automation
+- `UniversalProviderSuite.js` v8.0 - API verification (Manual Mode)
+- `ToolboxSuite.js` v10.0 - EOY automation (Legacy/Deprecated)
+- `eoy_tool.py` (Flask) - Primary EOY tool (In Development)
 
 ---
 
@@ -128,7 +129,8 @@ K: Notes
 
 **Color Coding (onEdit trigger on column J):**
 
-See README.md MISC > Color Coding & Status System for full table
+See README.md MISC > Color Coding & Status System for full table.
+**CRITICAL:** The system enforces **EXACT MATCH** for status strings. "Voicemail" will NOT match "Voicemail/No Answer". Typos will break color coding. Dropdown validation is enforced to prevent this.
 
 ---
 
@@ -211,9 +213,11 @@ notesColumn = 11      // Column K
 
 **See `OBGYN_CLEANUP_CHECKLIST.md` for detailed procedures**
 
-### Local Python Tool (December 2024+)
+### Local Python Tool (Flask App) - Primary
+**Status:** In Development (Read/Validation Ready, Write Phase Pending)
+**Location:** `scripts/eoy_tool.py`
 
-**New Approach:** `scripts/eoy_obgyn_tool.py` - Local Python tool with gspread
+**New Approach:** Local Flask web application replacing Apps Script.
 
 **Why:** Apps Script EOY validation broken (flags all 244 yellow rows as false positives)
 
@@ -239,9 +243,10 @@ notesColumn = 11      // Column K
 
 **See:** `docs/EOY_TOOL_SPEC.md` for full specification
 
-### Apps Script EOY (Deprecated - October 2024)
+### Apps Script EOY (Deprecated)
 
-**Status:** Replaced by local Python tool
+**Status:** DEPRECATED / LEGACY. Do not use for new campaigns.
+**Replaced by:** `scripts/eoy_tool.py` (Flask App)
 
 **Old Location:** Misc. Tools → End-of-Year Workflow
 
@@ -370,7 +375,7 @@ git status
 
 ---
 
-**Last Updated:** 2025-10-11
+**Last Updated:** 2025-11-20
 **Critical Bugs:** See TODO.md section 0
 **Procedures:** See OBGYN_CLEANUP_CHECKLIST.md
 # System Properties Documentation
