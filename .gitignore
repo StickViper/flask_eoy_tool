@@ -1,9 +1,17 @@
-# CSV Data Files
-*.csv
+# Data Files (all directories)
+**/*.csv
+**/*.tsv
 
 # NPPES bulk data
 npidata_*.csv
 NPPES_Data_Dissemination*/
+data/nppes/
+
+# Claude Code local settings
+.claude/
+
+# Error files
+nul
 
 # Temporary files
 *.tmp
@@ -25,9 +33,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# clasp files
-.clasp.json
-.claspignore
+# clasp files (all directories)
+**/.clasp.json
+**/.claspignore
 
 # Node modules (if using clasp)
 node_modules/
