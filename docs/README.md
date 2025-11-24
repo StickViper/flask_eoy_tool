@@ -1,8 +1,10 @@
 # EOY Cleanup Tool - Documentation
 
+**Last Updated:** 2025-11-24
+
 **Purpose:** Web application for cleaning up OBGYN Working List data at end of year
 
-**Status:** Active development - Flask web app implementation
+**Status:** Active development - Flask web app implementation (read-only mode functional, write phase pending)
 
 ---
 
@@ -291,22 +293,17 @@ After loading data:
 
 ### Automated Testing
 
-```python
-from scripts.test_eoy_output import run_all_tests
-run_all_tests(state)  # After loading data
-```
+**Status:** ⚠️ **NOT YET IMPLEMENTED**
 
-**Tests:**
-- Category counts
-- Match confidence distribution (warns if <70% high confidence)
-- Duplicate group distribution
-- Color distribution
+Comprehensive test suite needed for:
+- Status-to-color mapping (edge cases)
+- Fuzzy matching with different weight configurations
+- Duplicate detection and network identification
+- Undo/redo functionality
+- Categorization logic
+- Data loading from gspread
 
-**Expected Results:**
-- Yellow rows: ~247 (per STATS)
-- High confidence matches: >70% of yellow rows
-- Duplicates: 10-30 groups typically
-- Colors: Match STATS worksheet counts
+See TODO.md for test suite implementation priority.
 
 ---
 
@@ -373,7 +370,7 @@ Server starts at http://127.0.0.1:5000
 
 **Validation Logic:**
 - Functions in `scripts/eoy_tool.py`
-- Test with `scripts/test_validation_logic.py`
+- Tests: See TODO.md for test suite implementation plan
 
 ### Adding New Categories
 

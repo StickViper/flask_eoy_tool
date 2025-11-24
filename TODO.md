@@ -57,7 +57,27 @@ These described a Textual TUI that was never built - Flask web app was built ins
 - `docs/archive/ARCHITECTURE_GAP_ANALYSIS.md` (planning)
 - `docs/archive/UNRESOLVED_QUESTIONS.md` (pre-build questions)
 
-#### 📋 NEXT STEPS:
+#### 🔴 CRITICAL - TEST SUITE (HIGH PRIORITY)
+
+**Status:** ❌ NOT IMPLEMENTED - Comprehensive test suite needed BEFORE completing write phase
+
+**Priority:** Must complete before implementing write phase to ensure data integrity
+
+**Scope:**
+1. **Status-to-color mapping** - Test exact match logic, edge cases
+2. **Fuzzy matching** - Test with different weight configurations (70/30 name/addr)
+   - A/B testing with real data samples to optimize weights
+   - Network detection (same phone, ~# format)
+3. **Duplicate detection** - Exact, fuzzy, and network identification
+4. **Undo/redo** - Extensive testing of state snapshots and restoration
+5. **Categorization logic** - Verify all 11 categories populate correctly
+6. **Data loading** - gspread integration, Status-to-color derivation
+
+**Framework:** pytest recommended (better reporting, fixtures, parametrize for edge cases)
+
+**Why critical:** Write phase modifies Google Sheets data. Without tests, risk data loss/corruption.
+
+#### 📋 NEXT STEPS (After Test Suite):
 
 **TO COMPLETE WRITE PHASE:**
 1. Implement batch Google Sheets updates (`gspread.batch_update()`)

@@ -191,7 +191,7 @@ p {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  /* Remove overflow-y to prevent scrolling - all categories visible */
 
   /* Subtle shadow for depth */
   box-shadow: 2px 0 12px rgba(42, 37, 32, 0.04);

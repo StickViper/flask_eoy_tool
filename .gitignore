@@ -21,7 +21,7 @@ nul
 .env
 config/secrets.js
 *_secrets.*
-credentials.json
+# credentials.json - NOW TRACKED (private repo)
 
 # OS Files
 .DS_Store
