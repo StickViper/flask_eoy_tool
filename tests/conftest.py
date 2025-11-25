@@ -3,10 +3,18 @@ pytest configuration and fixtures for EOY tool testing
 
 Fixtures provide real data samples for fast, repeatable testing
 without hitting Google Sheets API every time.
+
+Data Loading Strategy:
+1. If real_data_cache.json exists: Load real sampled data from Google Sheets
+2. Otherwise: Use synthetic fixture data (small but comprehensive)
+
+To populate real data cache:
+    python tests/load_real_data.py
 """
 
 import pytest
 import sys
+import json
 from pathlib import Path
 
 # Add scripts/ to path so we can import eoy_tool
@@ -19,12 +27,43 @@ from eoy_tool import (
 
 
 # =============================================================================
-# REAL DATA FIXTURES - Sampled from OBGYN List 2025
+# DATA LOADING - Real or Synthetic
 # =============================================================================
 
-@pytest.fixture
-def sample_wl_rows():
-    """Sample Working List rows with various statuses and edge cases"""
+def load_cached_real_data():
+    """Load real data from cache if available, otherwise return None"""
+    cache_path = Path(__file__).parent / "fixtures" / "real_data_cache.json"
+
+    if not cache_path.exists():
+        return None, None
+
+    try:
+        with open(cache_path, 'r') as f:
+            cache_data = json.load(f)
+
+        # Reconstruct ProviderRow and NewOrderRow objects
+        wl_rows = []
+        for row_dict in cache_data['wl_rows']:
+            row = ProviderRow(**row_dict)
+            wl_rows.append(row)
+
+        no_rows = []
+        for row_dict in cache_data['no_rows']:
+            row = NewOrderRow(**row_dict)
+            no_rows.append(row)
+
+        print(f"\n✅ Using REAL data cache: {len(wl_rows)} WL rows, {len(no_rows)} NO rows")
+        print(f"   Generated: {cache_data.get('generated_at', 'unknown')}")
+
+        return wl_rows, no_rows
+
+    except Exception as e:
+        print(f"\n⚠️  Failed to load cache: {e}")
+        return None, None
+
+
+def get_synthetic_wl_rows():
+    """Synthetic Working List rows for testing when no real data cache"""
     return [
         # Yellow - Successful order (exact match expected)
         ProviderRow(
@@ -209,9 +248,8 @@ def sample_wl_rows():
     ]
 
 
-@pytest.fixture
-def sample_no_rows():
-    """Sample New Orders rows for matching tests"""
+def get_synthetic_no_rows():
+    """Synthetic New Orders rows for testing when no real data cache"""
     return [
         # Exact match to WL row 45
         NewOrderRow(
@@ -246,6 +284,43 @@ def sample_no_rows():
             qty_2025="100"
         ),
     ]
+
+
+# =============================================================================
+# MAIN DATA FIXTURES - Real or Synthetic
+# =============================================================================
+
+@pytest.fixture
+def sample_wl_rows():
+    """
+    Working List rows for testing
+
+    Uses real cached data if available (from python tests/load_real_data.py),
+    otherwise falls back to synthetic data
+    """
+    cached_wl, cached_no = load_cached_real_data()
+
+    if cached_wl is not None:
+        return cached_wl
+
+    print("\n⚠️  Using synthetic data - run 'python tests/load_real_data.py' for real data")
+    return get_synthetic_wl_rows()
+
+
+@pytest.fixture
+def sample_no_rows():
+    """
+    New Orders rows for testing
+
+    Uses real cached data if available (from python tests/load_real_data.py),
+    otherwise falls back to synthetic data
+    """
+    cached_wl, cached_no = load_cached_real_data()
+
+    if cached_no is not None:
+        return cached_no
+
+    return get_synthetic_no_rows()
 
 
 # =============================================================================
