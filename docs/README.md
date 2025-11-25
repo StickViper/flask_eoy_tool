@@ -293,17 +293,37 @@ After loading data:
 
 ### Automated Testing
 
-**Status:** ⚠️ **NOT YET IMPLEMENTED**
+**Status:** ✅ **COMPREHENSIVE TEST SUITE COMPLETE** (124 tests passing)
 
-Comprehensive test suite needed for:
-- Status-to-color mapping (edge cases)
-- Fuzzy matching with different weight configurations
-- Duplicate detection and network identification
-- Undo/redo functionality
-- Categorization logic
-- Data loading from gspread
+Run tests with: `cd scripts && python -m pytest ../tests/ -v`
 
-See TODO.md for test suite implementation priority.
+**Test Coverage Summary:**
+- **Phase 1:** Status-to-color mapping (38 tests) - Exact match logic, case sensitivity, edge cases
+- **Phase 2:** Fuzzy matching & duplicates (48 tests) - 70/30 weighting, normalization, networks
+- **Phase 3:** Categorization & undo/redo (38 tests) - 11 categories, state management
+
+**Code Coverage:** 34% of eoy_tool.py (647 lines, 219 covered)
+- Focuses on critical validation logic (status mapping, fuzzy matching, duplicate detection)
+- Flask routes and gspread integration tested manually
+
+**Test Files:**
+- `tests/test_status_to_color.py` - Status-to-color exact matching (31 tests)
+- `tests/test_verification.py` - Meta-tests proving tests catch failures (7 tests)
+- `tests/test_fuzzy_matching.py` - 70/30 name/address weighting (26 tests)
+- `tests/test_duplicates.py` - Exact, network, fuzzy detection (22 tests)
+- `tests/test_categorization.py` - 11 review categories (16 tests)
+- `tests/test_undo_redo.py` - State snapshots, 50-action limit (22 tests)
+- `tests/conftest.py` - Fixtures with realistic Austin TX provider data
+
+**Coverage Report:** `cd scripts && python -m pytest ../tests/ --cov=eoy_tool --cov-report=html`
+Open `scripts/htmlcov/index.html` to view detailed coverage
+
+**Verified Behavior:**
+- ✅ Status-to-color uses exact match (NOT substring)
+- ✅ Fuzzy matching: 70% name + 30% address weight
+- ✅ Networks: Same phone, ≥85% name similarity, <70% address similarity
+- ✅ Undo stack: 50-action limit, sequential IDs, timestamps
+- ✅ Categorization: 11 categories, sorted row numbers, empty filtered out
 
 ---
 
