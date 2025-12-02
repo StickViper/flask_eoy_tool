@@ -963,6 +963,19 @@ def categorize_issues(wl_rows, no_rows):
             primary_action=None,
             secondary_actions=["move_to_invalid", "keep_as_is"]
         ),
+        ReviewCategory(
+            id="manual_review",
+            name="Manual Review",
+            description="Edge cases sent for manual review - all actions available",
+            row_nums=[],
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=[
+                "edit", "delete", "merge", "change_status",
+                "move_to_invalid", "change_to_white", "mark_not_found",
+                "fix_qty_mismatches", "add_vm_note", "remove_sent"
+            ]
+        ),
     ]
 
     # Populate categories from WL rows
@@ -1595,6 +1608,39 @@ def api_mass_invalid():
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
             count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/send_to_manual_review', methods=['POST'])
+def api_send_to_manual_review():
+    """Send selected rows to manual review category"""
+    data = request.get_json()
+    source_category_id = data.get('category_id')
+    row_nums = data.get('row_nums', [])
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No rows selected'}), 400
+
+    # Find source category
+    category = next((c for c in state.categories if c.id == source_category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Add manual_review issue to each row
+    count = 0
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            # Add issue
+            row.issues.append({
+                'category': 'manual_review',
+                'severity': 'review',
+                'description': f'Sent from {category.name} for manual review'
+            })
+            count += 1
+
+    # Re-categorize to update category lists
+    state.categories = categorize_issues(state.wl_rows, state.no_rows)
 
     return jsonify({'success': True, 'count': count})
 
