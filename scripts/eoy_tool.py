@@ -1333,6 +1333,225 @@ def api_move_to_invalid():
 
     return jsonify({'success': True, 'count': count})
 
+@app.route('/api/fix_qty_mismatches', methods=['POST'])
+def api_fix_qty_mismatches():
+    """Update qty_2025 in WL rows to match NO rows"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Fix qty mismatches
+    count = 0
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.matched_no_row:
+            # Find matching NO row
+            no_row = next((n for n in state.no_rows if n.row_num == row.matched_no_row), None)
+            if no_row:
+                # Update qty to match NO row
+                row.field_edits['qty_2025'] = no_row.qty_2025
+                row.action = 'edit'
+                count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/mark_not_found', methods=['POST'])
+def api_mark_not_found():
+    """Add 'not found in new orders' note to yellow rows"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Mark as not found
+    count = 0
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            # Add note
+            existing_notes = row.notes if row.notes else ""
+            note_to_add = "not found in new orders"
+
+            # Only add if not already present
+            if note_to_add not in existing_notes.lower():
+                if existing_notes and not existing_notes.endswith(';'):
+                    existing_notes += '; '
+                elif existing_notes:
+                    existing_notes += ' '
+                row.field_edits['notes'] = existing_notes + note_to_add + ';'
+                row.action = 'edit'
+                count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/add_vm_note', methods=['POST'])
+def api_add_vm_note():
+    """Parse and increment voicemail counter in notes"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+    row_nums = data.get('row_nums', [])  # Specific rows if provided
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Use provided row_nums or all in category
+    target_rows = row_nums if row_nums else category.row_nums
+
+    import re
+    count = 0
+    for row_num in target_rows:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            notes = row.notes if row.notes else ""
+
+            # Parse existing vm count: "vm x2" or "vm x3"
+            vm_match = re.search(r'vm x(\d+)', notes, re.IGNORECASE)
+            if vm_match:
+                # Increment counter
+                current_count = int(vm_match.group(1))
+                new_count = current_count + 1
+                new_notes = re.sub(r'vm x\d+', f'vm x{new_count}', notes, flags=re.IGNORECASE)
+            else:
+                # Add new vm x2 (assuming this is 2nd attempt)
+                if notes and not notes.endswith(';'):
+                    notes += '; '
+                elif notes:
+                    notes += ' '
+                new_notes = notes + 'vm x2;'
+
+            row.field_edits['notes'] = new_notes
+            row.action = 'edit'
+            count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/change_status', methods=['POST'])
+def api_change_status():
+    """Change status and derive bg_color"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+    row_nums = data.get('row_nums', [])
+    new_status = data.get('status')
+
+    if not new_status:
+        return jsonify({'success': False, 'error': 'Status required'}), 400
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Use provided row_nums or all in category
+    target_rows = row_nums if row_nums else category.row_nums
+
+    count = 0
+    for row_num in target_rows:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            # Update status
+            row.field_edits['status'] = new_status
+            # Derive color from status
+            row.field_edits['bg_color'] = status_to_color(new_status)
+            row.action = 'edit'
+            count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/change_to_white', methods=['POST'])
+def api_change_to_white():
+    """Change status to 'Not interested' (white)"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    count = 0
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            row.field_edits['status'] = 'Not interested'
+            row.field_edits['bg_color'] = '#ffffff'
+            row.field_edits['qty_2025'] = '0'
+
+            # Add "not interested" to notes if not present
+            notes = row.notes if row.notes else ""
+            if 'not interested' not in notes.lower():
+                if notes and not notes.endswith(';'):
+                    notes += '; '
+                elif notes:
+                    notes += ' '
+                row.field_edits['notes'] = notes + 'not interested;'
+
+            row.action = 'edit'
+            count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/remove_sent', methods=['POST'])
+def api_remove_sent():
+    """Remove 'sent' from notes column"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    import re
+    count = 0
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.notes:
+            # Remove "sent" (case-insensitive)
+            new_notes = re.sub(r'\bsent\b', '', row.notes, flags=re.IGNORECASE)
+            # Clean up extra semicolons and spaces
+            new_notes = re.sub(r';\s*;', ';', new_notes)
+            new_notes = re.sub(r'^\s*;\s*', '', new_notes)
+            new_notes = re.sub(r'\s*;\s*$', '', new_notes)
+            new_notes = re.sub(r'\s+', ' ', new_notes).strip()
+
+            if new_notes != row.notes:
+                row.field_edits['notes'] = new_notes
+                row.action = 'edit'
+                count += 1
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/mass_invalid', methods=['POST'])
+def api_mass_invalid():
+    """Mark all rows in network as invalid"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+    reason = data.get('reason', 'INVALID - Network closed')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    count = 0
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            row.action = 'move_to_invalid'
+            row.field_edits['invalid_reason'] = reason
+            count += 1
+
+    return jsonify({'success': True, 'count': count})
+
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================

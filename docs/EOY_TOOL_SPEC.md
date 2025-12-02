@@ -1,8 +1,16 @@
 # EOY Tool Specification & Planning
 
-**File:** `scripts/eoy_obgyn_tool.py`
+**⚠️ DEPRECATED:** This document describes an abandoned Terminal UI (TUI) approach using Textual library. The actual implementation is a Flask web application.
+
+**See instead:** `docs/README.md` for current Flask web app documentation
+
+**Historical context preserved below for reference:**
+
+---
+
+**File:** `scripts/eoy_obgyn_tool.py` (never created - Flask app built instead)
 **Purpose:** Local Python tool to replace Apps Script EOY validation
-**Status:** Planning phase - need answers to questions below before building
+**Status:** Superseded by Flask implementation (`scripts/eoy_tool.py`)
 
 ---
 
