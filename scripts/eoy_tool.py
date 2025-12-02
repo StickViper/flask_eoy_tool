@@ -214,7 +214,8 @@ def load_data(year: int = 2025):
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     gc = gspread.authorize(creds)
 
-    sh = gc.open('OBGYN List 2025 - Use This List!')
+    # Open by spreadsheet ID to bypass Drive API
+    sh = gc.open_by_key('1z1YC98ALnwu_HLth1gA1RM4U_LsqASaGiTcqY7_dwj0')
 
     # Get worksheets
     wl_sheet = sh.worksheet(f'Working List {year}')
