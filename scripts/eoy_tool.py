@@ -118,6 +118,32 @@ class NewOrderRow:
         }
 
 @dataclass
+class InvalidRow:
+    """Single row from Invalid/Inactive List"""
+    row_num: int
+    practice: str
+    phone: str
+    address: str
+    city: str
+    state: str
+    zip: str
+    reason: str      # Column G: INVALID/INACTIVE reason
+    notes: str       # Column H: Notes (may contain QTY info)
+
+    def to_dict(self):
+        return {
+            'row_num': self.row_num,
+            'practice': self.practice,
+            'phone': self.phone,
+            'address': self.address,
+            'city': self.city,
+            'state': self.state,
+            'zip': self.zip,
+            'reason': self.reason,
+            'notes': self.notes
+        }
+
+@dataclass
 class ReviewCategory:
     """Group of issues for review"""
     id: str
@@ -149,6 +175,7 @@ class AppState:
     def __init__(self):
         self.wl_rows: List[ProviderRow] = []
         self.no_rows: List[NewOrderRow] = []
+        self.invalid_rows: List[InvalidRow] = []
         self.categories: List[ReviewCategory] = []
         self.invalid_reasons: set = set()
         self.year: int = 2025
@@ -162,6 +189,7 @@ class AppState:
         return {
             'wl_rows': [row.to_dict() for row in self.wl_rows],
             'no_rows': [row.to_dict() for row in self.no_rows],
+            'invalid_rows': [row.to_dict() for row in self.invalid_rows],
             'categories': [cat.to_dict() for cat in self.categories],
             'invalid_reasons': list(self.invalid_reasons),
             'year': self.year,
@@ -276,6 +304,23 @@ def load_data(year: int = 2025):
             qty_2025=row[7] if len(row) > 7 else ""
         ))
 
+    # Parse Invalid/Inactive List
+    invalid_rows = []
+    for i, row in enumerate(invalid_data[1:], 2):
+        if len(row) < 7:  # Skip if not enough columns
+            continue
+        invalid_rows.append(InvalidRow(
+            row_num=i,
+            practice=row[0] if len(row) > 0 else "",
+            phone=row[1] if len(row) > 1 else "",
+            address=row[2] if len(row) > 2 else "",
+            city=row[3] if len(row) > 3 else "",
+            state=row[4] if len(row) > 4 else "",
+            zip=row[5] if len(row) > 5 else "",
+            reason=row[6] if len(row) > 6 else "",
+            notes=row[7] if len(row) > 7 else ""
+        ))
+
     # Get common invalid reasons
     invalid_reasons = set()
     for row in invalid_data[1:]:
@@ -314,7 +359,7 @@ def load_data(year: int = 2025):
         print(f"  [OK] All status values are recognized")
 
     print(f"\n[Phase 1] Complete!")
-    return wl_rows, no_rows, invalid_reasons, stats_sheet
+    return wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet
 
 def validate_stats_color_counts(wl_rows, stats_sheet, year=2025, assume_yes=False):
     """
@@ -951,7 +996,7 @@ def run_validations(year=2025):
     print(f"\n[Phase 2] Running validations...")
 
     # Load data
-    wl_rows, no_rows, invalid_reasons, stats_sheet = load_data(year)
+    wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet = load_data(year)
 
     # IMPORTANT: Validate Status-derived colors against STATS
     # This ensures Status column matches actual cell colors
@@ -971,7 +1016,7 @@ def run_validations(year=2025):
 
     print(f"\n[Phase 2] Complete!")
 
-    return wl_rows, no_rows, categories, invalid_reasons
+    return wl_rows, no_rows, invalid_rows, categories, invalid_reasons
 
 # ============================================================================
 # UNDO/REDO SYSTEM
@@ -1040,7 +1085,7 @@ def load():
         state.year = year
 
         # Run validations
-        state.wl_rows, state.no_rows, state.categories, state.invalid_reasons = run_validations(year)
+        state.wl_rows, state.no_rows, state.invalid_rows, state.categories, state.invalid_reasons = run_validations(year)
         state.loaded = True
         state.current_category_id = state.categories[0].id if state.categories else None
 
