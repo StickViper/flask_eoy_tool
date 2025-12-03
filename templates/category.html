@@ -116,7 +116,55 @@
                 <button class="btn btn-danger btn-sm" onclick="moveAllToInvalid()">
                     Move All to Invalid
                 </button>
+                {% elif category.primary_action == 'mark_not_found' %}
+                <button class="btn btn-primary btn-sm" onclick="markNotFound()">
+                    📝 Mark Not Found
+                </button>
                 {% endif %}
+            {% endif %}
+
+            <!-- Secondary Actions -->
+            {% if category.secondary_actions %}
+                {% for action in category.secondary_actions %}
+                    {% if action == 'fix_qty_mismatches' %}
+                    <button class="btn btn-secondary btn-sm" onclick="fixQtyMismatches()">
+                        🔧 Fix QTY Mismatches
+                    </button>
+                    {% elif action == 'mark_not_found' %}
+                    <button class="btn btn-secondary btn-sm" onclick="markNotFound()">
+                        📝 Mark Not Found
+                    </button>
+                    {% elif action == 'change_to_white' %}
+                    <button class="btn btn-secondary btn-sm" onclick="changeToWhite()">
+                        ⬜ Change to White
+                    </button>
+                    {% elif action == 'add_vm_note' %}
+                    <button class="btn btn-secondary btn-sm" onclick="addVmNote()">
+                        📞 Increment VM Count
+                    </button>
+                    {% elif action == 'change_status' %}
+                    <button class="btn btn-secondary btn-sm" onclick="showChangeStatusModal()">
+                        🔄 Change Status
+                    </button>
+                    {% elif action == 'remove_sent' %}
+                    <button class="btn btn-secondary btn-sm" onclick="removeSent()">
+                        ✂️ Remove 'Sent'
+                    </button>
+                    {% elif action == 'mass_invalid' %}
+                    <button class="btn btn-danger btn-sm" onclick="massInvalid()">
+                        ❌ Mark Network Invalid
+                    </button>
+                    {% elif action == 'move_to_invalid' %}
+                    <button class="btn btn-danger btn-sm" onclick="moveAllToInvalid()">
+                        ❌ Move to Invalid
+                    </button>
+                    {% endif %}
+                {% endfor %}
+
+                <!-- Universal: Send to Manual Review -->
+                <button class="btn btn-warning btn-sm" onclick="sendToManualReview()">
+                    ⚠️ Send to Manual Review
+                </button>
             {% endif %}
         </div>
         {% endif %}
@@ -833,5 +881,286 @@ function sortTable(columnIndex) {
     // Re-append sorted rows
     rows.forEach(row => tbody.appendChild(row));
 }
+
+// ============================================================================
+// NEW ACTION HANDLERS
+// ============================================================================
+
+async function fixQtyMismatches() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Fix QTY mismatches for ${allRows.length} rows?\n\nThis will update qty_2025 to match New Orders.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/fix_qty_mismatches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Fixed ${result.count} QTY mismatches`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function markNotFound() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Mark ${allRows.length} rows as "not found in new orders"?\n\nThis will add a note to each row.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/mark_not_found', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Marked ${result.count} rows as not found`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function changeToWhite() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Change ${allRows.length} rows to "Not Interested" (white)?\n\nThis will:\n- Set status to "Not Interested"\n- Set qty_2025 to 0\n- Add note`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/change_to_white', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Changed ${result.count} rows to Not Interested`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function addVmNote() {
+    const selected = getSelectedRowNums();
+
+    if (selected.length === 0) {
+        alert('Please select rows to increment VM count');
+        return;
+    }
+
+    if (!confirm(`Increment voicemail count for ${selected.length} selected rows?\n\nThis will parse "vm x#" and increment the counter.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/add_vm_note', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}',
+                row_nums: selected
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Incremented VM count for ${result.count} rows`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function showChangeStatusModal() {
+    const selected = getSelectedRowNums();
+
+    if (selected.length === 0) {
+        alert('Please select rows to change status');
+        return;
+    }
+
+    const statusOptions = [
+        'Successful Order',
+        'Voicemail/No Answer',
+        'Not interested',
+        'Potentially Invalid',
+        'Requested Email',
+        'Email'
+    ];
+
+    const statusList = statusOptions.map((s, i) => `${i+1}. ${s}`).join('\n');
+    const choice = prompt(`Change status for ${selected.length} selected rows?\n\nEnter number:\n${statusList}`);
+
+    if (!choice) return;
+
+    const index = parseInt(choice) - 1;
+    if (index < 0 || index >= statusOptions.length) {
+        alert('Invalid choice');
+        return;
+    }
+
+    const newStatus = statusOptions[index];
+
+    try {
+        const response = await fetch('/api/change_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}',
+                row_nums: selected,
+                status: newStatus
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Changed status to "${newStatus}" for ${result.count} rows`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function removeSent() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    if (!confirm(`Remove "sent" from notes for ${allRows.length} rows?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/remove_sent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Removed "sent" from ${result.count} rows`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function massInvalid() {
+    const allRows = Array.from(document.querySelectorAll('.data-row'));
+
+    const reason = prompt(`Mark all ${allRows.length} network locations as invalid?\n\nEnter reason (e.g., "Network closed", "Out of business"):`);
+
+    if (!reason) return;
+
+    try {
+        const response = await fetch('/api/mass_invalid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}',
+                reason: reason
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Marked ${result.count} rows as invalid`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+async function sendToManualReview() {
+    const selected = getSelectedRowNums();
+
+    if (selected.length === 0) {
+        alert('Please select rows to send to manual review');
+        return;
+    }
+
+    if (!confirm(`Send ${selected.length} selected rows to Manual Review category?\n\nThese will be moved to a special category for edge cases.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/send_to_manual_review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: '{{ category.id }}',
+                row_nums: selected
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Sent ${result.count} rows to Manual Review`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error}`);
+    }
+}
+
+// Helper function to get selected row numbers
+function getSelectedRowNums() {
+    const checkboxes = document.querySelectorAll('.data-row input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => parseInt(cb.closest('tr').dataset.rowNum));
+}
+
 </script>
 {% endblock %}
