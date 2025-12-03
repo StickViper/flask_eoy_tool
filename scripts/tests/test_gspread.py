@@ -6,6 +6,11 @@ Run this AFTER completing gspread setup (see setup instructions below)
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+# Spreadsheet configuration
+# Get the ID from the URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
+SPREADSHEET_ID = "1z1YC98ALnwu_HLth1gA1RM4U_LsqASaGiTcqY7_dwj0"
+SPREADSHEET_NAME = 'OBGYN List 2025 - Use This List!'
+
 def test_connection():
     """Test basic gspread connection and data access"""
 
@@ -28,25 +33,82 @@ def test_connection():
         print("✅ Authentication successful!")
     except FileNotFoundError:
         print("❌ ERROR: credentials.json not found!")
-        print("   Place credentials.json in C:\\Users\\noagi\\Desktop\\JGDC\\")
+        print("   Place credentials.json in the project root directory")
         return False
     except Exception as e:
         print(f"❌ ERROR: Authentication failed: {e}")
         return False
 
     # Step 2: Open spreadsheet
-    print("\n[2/5] Opening 'OBGYN List 2025 - Use This List!'...")
+    # Get service account email for error messages
     try:
-        sh = gc.open('OBGYN List 2025 - Use This List!')
-        print(f"✅ Spreadsheet opened: {sh.title}")
-        print(f"   URL: {sh.url}")
-    except gspread.SpreadsheetNotFound:
-        print("❌ ERROR: Spreadsheet not found!")
-        print("   Make sure you shared the sheet with the service account email")
-        return False
-    except Exception as e:
-        print(f"❌ ERROR: Failed to open spreadsheet: {e}")
-        return False
+        import json
+        with open('credentials.json') as f:
+            service_email = json.load(f).get('client_email', 'unknown')
+    except:
+        service_email = 'unknown'
+
+    if SPREADSHEET_ID:
+        print(f"\n[2/5] Opening spreadsheet by ID: {SPREADSHEET_ID[:20]}...")
+        try:
+            sh = gc.open_by_key(SPREADSHEET_ID)
+            print(f"✅ Spreadsheet opened: {sh.title}")
+            print(f"   URL: {sh.url}")
+        except gspread.exceptions.APIError as e:
+            error_str = str(e)
+            if '403' in error_str:
+                print("❌ ERROR: 403 Forbidden - Permission denied!")
+                print("")
+                print("   This usually means one of:")
+                print("   1. Google Sheets API is NOT enabled")
+                print("      → Go to: https://console.cloud.google.com/apis/library")
+                print("      → Search 'Google Sheets API' and ENABLE it")
+                print("")
+                print("   2. Sheet not shared with service account")
+                print(f"      → Share the spreadsheet with: {service_email}")
+                print("      → Give 'Editor' access")
+                print("")
+                print("   3. Wrong spreadsheet ID")
+                print(f"      → Current ID: {SPREADSHEET_ID}")
+            else:
+                print(f"❌ ERROR: API error: {e}")
+            return False
+        except PermissionError as e:
+            print("❌ ERROR: Permission denied!")
+            print(f"   Share the spreadsheet with: {service_email}")
+            print("   Or enable Google Sheets API at:")
+            print("   https://console.cloud.google.com/apis/library")
+            return False
+        except Exception as e:
+            print(f"❌ ERROR: Failed to open spreadsheet: {type(e).__name__}: {e}")
+            return False
+    else:
+        print(f"\n[2/5] Opening '{SPREADSHEET_NAME}'...")
+        print("   (searching by name requires Drive API)")
+        try:
+            sh = gc.open(SPREADSHEET_NAME)
+            print(f"✅ Spreadsheet opened: {sh.title}")
+            print(f"   URL: {sh.url}")
+        except gspread.SpreadsheetNotFound:
+            print("❌ ERROR: Spreadsheet not found!")
+            print("   Make sure you shared the sheet with the service account email")
+            return False
+        except gspread.exceptions.APIError as e:
+            error_str = str(e)
+            if '403' in error_str and '/drive/' in error_str:
+                print("❌ ERROR: Google Drive API not enabled!")
+                print("   SOLUTION: Either:")
+                print("   1. Enable Drive API at: https://console.cloud.google.com/apis/library")
+                print("      (search for 'Google Drive API' and enable it)")
+                print("   OR")
+                print("   2. Set SPREADSHEET_ID in this test file to open by ID instead")
+                print("      (Get ID from sheet URL: .../spreadsheets/d/SPREADSHEET_ID/edit)")
+            else:
+                print(f"❌ ERROR: API error: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ ERROR: Failed to open spreadsheet: {e}")
+            return False
 
     # Step 3: List all worksheets
     print("\n[3/5] Listing all worksheets...")
@@ -103,28 +165,35 @@ def show_setup_instructions():
 1. Install gspread:
    pip install gspread oauth2client
 
-2. Create Google Service Account (3 min):
+2. Enable APIs (CRITICAL - most common issue!):
+   a. Go to: https://console.cloud.google.com/apis/library
+   b. Enable "Google Sheets API"
+   c. Enable "Google Drive API" (only needed if opening by name)
+
+3. Create Google Service Account:
    a. Go to: https://console.cloud.google.com
    b. Select project or create new one
    c. APIs & Services → Credentials
    d. Create Credentials → Service Account
       - Name: "gspread-eoy-tool"
-      - Role: None (we'll grant per-sheet)
    e. Click the service account email
    f. Keys tab → Add Key → Create New Key → JSON
-   g. Download saves as project-id-abc123.json
-   h. Rename to: credentials.json
-   i. Move to: C:\\Users\\noagi\\Desktop\\JGDC\\credentials.json
+   g. Rename downloaded file to: credentials.json
+   h. Place in project root directory
 
-3. Share Sheet with Service Account (1 min):
-   a. Open 'OBGYN List 2025 - Use This List!' in browser
-   b. Share button (top right)
-   c. Paste service account email (from step 2.e)
+4. Share Sheet with Service Account:
+   a. Open your Google Sheet in browser
+   b. Click Share button (top right)
+   c. Paste service account email (ends with .iam.gserviceaccount.com)
    d. Set to Editor
    e. Send
 
-4. Run this script again:
-   python scripts/test_gspread.py
+5. (Optional) Use spreadsheet ID to skip Drive API:
+   - Get ID from URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
+   - Set SPREADSHEET_ID at top of this file
+
+6. Run this script again:
+   python scripts/tests/test_gspread.py
 """)
 
 

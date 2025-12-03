@@ -12,6 +12,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import sys
 
+# Spreadsheet configuration - use ID to bypass Drive API requirement
+SPREADSHEET_ID = "1z1YC98ALnwu_HLth1gA1RM4U_LsqASaGiTcqY7_dwj0"
+
 def test_color_reading():
     """Test if we can read cell background colors"""
     print("\n" + "=" * 80)
@@ -29,7 +32,7 @@ def test_color_reading():
             scope
         )
         gc = gspread.authorize(creds)
-        sh = gc.open('OBGYN List 2025 - Use This List!')
+        sh = gc.open_by_key(SPREADSHEET_ID)
         wl = sh.worksheet('Working List 2025')
 
         # Try to read a cell with color
@@ -199,7 +202,7 @@ def test_worksheet_duplicate():
             scope
         )
         gc = gspread.authorize(creds)
-        sh = gc.open('OBGYN List 2025 - Use This List!')
+        sh = gc.open_by_key(SPREADSHEET_ID)
 
         # Try to duplicate STATS sheet (has formulas)
         print("\nDuplicating STATS sheet...")
@@ -256,7 +259,7 @@ def test_empty_vs_zero():
             scope
         )
         gc = gspread.authorize(creds)
-        sh = gc.open('OBGYN List 2025 - Use This List!')
+        sh = gc.open_by_key(SPREADSHEET_ID)
         wl = sh.worksheet('Working List 2025')
 
         # Read QTY column (column I, index 8)
