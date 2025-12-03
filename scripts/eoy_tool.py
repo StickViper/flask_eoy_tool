@@ -921,11 +921,11 @@ def categorize_issues(wl_rows, no_rows):
         ReviewCategory(
             id="orphan_no",
             name="Unmatched Orders",
-            description="New Orders without yellow match in Working List",
+            description="New Orders without yellow match - fuzzy check against Invalid List",
             row_nums=[],
             allow_batch=False,
             primary_action=None,
-            secondary_actions=[]
+            secondary_actions=["check_invalid_matches", "send_to_manual_review"]
         ),
         ReviewCategory(
             id="green_sent",
@@ -1946,6 +1946,89 @@ def api_send_to_manual_review():
     state.categories = categorize_issues(state.wl_rows, state.no_rows)
 
     return jsonify({'success': True, 'count': count})
+
+@app.route('/api/get_orphan_no_matches', methods=['GET'])
+def api_get_orphan_no_matches():
+    """Get orphan NO rows with fuzzy matches against Invalid/Inactive List"""
+    from rapidfuzz import fuzz
+
+    orphan_matches = []
+
+    for no_row in state.no_rows:
+        if no_row.is_orphan:
+            # Fuzzy match against invalid list
+            matches = []
+            for invalid_row in state.invalid_rows:
+                # Calculate fuzzy scores
+                name_score = fuzz.token_set_ratio(no_row.practice, invalid_row.practice)
+                address_score = fuzz.ratio(no_row.address, invalid_row.address)
+
+                # Weighted average (70% name, 30% address)
+                combined_score = (name_score * 0.7) + (address_score * 0.3)
+
+                # Only include matches ≥80% confidence
+                if combined_score >= 80:
+                    matches.append({
+                        'invalid_row_num': invalid_row.row_num,
+                        'practice': invalid_row.practice,
+                        'phone': invalid_row.phone,
+                        'address': invalid_row.address,
+                        'city': invalid_row.city,
+                        'state': invalid_row.state,
+                        'zip': invalid_row.zip,
+                        'reason': invalid_row.reason,
+                        'notes': invalid_row.notes,
+                        'name_score': round(name_score, 1),
+                        'address_score': round(address_score, 1),
+                        'combined_score': round(combined_score, 1)
+                    })
+
+            # Sort matches by combined score (descending)
+            matches.sort(key=lambda x: x['combined_score'], reverse=True)
+
+            orphan_matches.append({
+                'no_row_num': no_row.row_num,
+                'practice': no_row.practice,
+                'address': no_row.address,
+                'city': no_row.city,
+                'state': no_row.state,
+                'zip': no_row.zip,
+                'qty_2025': no_row.qty_2025,
+                'matches': matches[:5]  # Top 5 matches
+            })
+
+    return jsonify({
+        'success': True,
+        'orphan_nos': orphan_matches,
+        'count': len(orphan_matches)
+    })
+
+@app.route('/api/confirm_orphan_invalid', methods=['POST'])
+def api_confirm_orphan_invalid():
+    """Confirm that an orphan NO matches an invalid provider"""
+    data = request.get_json()
+    no_row_num = data.get('no_row_num')
+    invalid_row_num = data.get('invalid_row_num')
+
+    # Find the NO row
+    no_row = next((r for r in state.no_rows if r.row_num == no_row_num), None)
+    if not no_row:
+        return jsonify({'success': False, 'error': 'NO row not found'}), 404
+
+    # Find the invalid row
+    invalid_row = next((r for r in state.invalid_rows if r.row_num == invalid_row_num), None)
+    if not invalid_row:
+        return jsonify({'success': False, 'error': 'Invalid row not found'}), 404
+
+    # Mark the NO row as confirmed invalid
+    # Add a note to track this decision
+    no_row.is_orphan = False  # Remove from orphan list
+
+    # Log the confirmation (could add to undo stack if needed)
+    return jsonify({
+        'success': True,
+        'message': f"Confirmed {no_row.practice} matches invalid provider {invalid_row.practice}"
+    })
 
 # ============================================================================
 # MAIN ENTRY POINT
