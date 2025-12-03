@@ -1,0 +1,88 @@
+{
+  "_comment": "Note pattern configuration with action associations",
+  "_instructions": "Populate this file after running /api/download_notes_csv and categorizing chunks with LLM",
+  "_workflow": [
+    "1. Run /api/analyze_notes to see frequency analysis",
+    "2. Download /api/download_notes_csv for export",
+    "3. Review CSV with Claude/GPT to identify pattern types",
+    "4. Categorize chunks into types below",
+    "5. Assign specific actions for each category"
+  ],
+
+  "phone_context": {
+    "description": "Tech-added phone call tracking (VM counts, call attempts)",
+    "action": "PRESERVE",
+    "suggested_actions": ["add_vm_note", "mark_not_found"],
+    "patterns": [
+      "vm x",
+      "spoke with",
+      "left message",
+      "voicemail",
+      "no answer",
+      "called x times"
+    ]
+  },
+
+  "status_updates": {
+    "description": "Delivery/tracking indicators that may be outdated",
+    "action": "FLAG_REVIEW",
+    "suggested_actions": ["remove_sent", "change_status"],
+    "patterns": [
+      "sent ",
+      "mailed ",
+      "emailed ",
+      "delivered ",
+      "shipped "
+    ]
+  },
+
+  "network_notation": {
+    "description": "Network membership indicators (manually added)",
+    "action": "FLAG_REVIEW",
+    "suggested_actions": ["merge_rows", "mass_invalid"],
+    "patterns": [
+      "network (~",
+      "~2)",
+      "~3)",
+      "~4)",
+      "~5)",
+      "part of network"
+    ]
+  },
+
+  "provider_status": {
+    "description": "Provider availability/closure notes",
+    "action": "FLAG_REVIEW",
+    "suggested_actions": ["change_to_white", "send_to_manual_review"],
+    "patterns": [
+      "retired",
+      "closed",
+      "no longer practicing",
+      "moved",
+      "deceased",
+      "out of business"
+    ]
+  },
+
+  "data_quality": {
+    "description": "Address/contact validation notes",
+    "action": "PRESERVE",
+    "suggested_actions": ["send_to_manual_review"],
+    "patterns": [
+      "not found",
+      "bad address",
+      "wrong number",
+      "invalid phone",
+      "no such number",
+      "address unverified"
+    ]
+  },
+
+  "placeholder_example": {
+    "_comment": "This is a placeholder. Replace with real categories from data analysis",
+    "description": "Example category - replace after analyzing real data",
+    "action": "SAFE_TO_MODIFY",
+    "suggested_actions": [],
+    "patterns": []
+  }
+}

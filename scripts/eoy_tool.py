@@ -198,8 +198,119 @@ class AppState:
             'loaded': self.loaded
         }
 
+class NotesValidator:
+    """Validator for note patterns with action associations
+
+    Loads patterns from config/notes_patterns.json and provides methods
+    to categorize note chunks and suggest appropriate actions.
+    """
+
+    def __init__(self, config_path='config/notes_patterns.json'):
+        self.config_path = config_path
+        self.patterns = {}
+        self.loaded = False
+
+    def load_patterns(self) -> bool:
+        """Load patterns from config file"""
+        import json
+        import os
+
+        if not os.path.exists(self.config_path):
+            print(f"Warning: Notes patterns config not found at {self.config_path}")
+            return False
+
+        try:
+            with open(self.config_path, 'r') as f:
+                config = json.load(f)
+
+            # Filter out underscore-prefixed metadata keys
+            self.patterns = {k: v for k, v in config.items() if not k.startswith('_')}
+            self.loaded = True
+            return True
+
+        except Exception as e:
+            print(f"Error loading notes patterns: {e}")
+            return False
+
+    def get_note_category(self, note_chunk: str) -> dict:
+        """Determine category and suggested actions for a note chunk
+
+        Args:
+            note_chunk: The note text to categorize
+
+        Returns:
+            dict with keys: category, action, suggested_actions, description
+        """
+        if not self.loaded:
+            self.load_patterns()
+
+        chunk_lower = note_chunk.lower().strip()
+
+        # Check each pattern category
+        for category, config in self.patterns.items():
+            for pattern in config.get('patterns', []):
+                if pattern.lower() in chunk_lower:
+                    return {
+                        'category': category,
+                        'action': config.get('action', 'FLAG_REVIEW'),
+                        'suggested_actions': config.get('suggested_actions', []),
+                        'description': config.get('description', '')
+                    }
+
+        # Unknown pattern - flag for review
+        return {
+            'category': 'unknown',
+            'action': 'FLAG_REVIEW',
+            'suggested_actions': [],
+            'description': 'Unrecognized pattern - needs manual review'
+        }
+
+    def categorize_notes(self, notes: str) -> list:
+        """Categorize all chunks in a notes field
+
+        Args:
+            notes: Semicolon-separated notes string
+
+        Returns:
+            list of dicts with chunk, category, action, suggested_actions
+        """
+        if not notes:
+            return []
+
+        chunks = [c.strip() for c in notes.split(';') if c.strip()]
+        results = []
+
+        for chunk in chunks:
+            category_info = self.get_note_category(chunk)
+            results.append({
+                'chunk': chunk,
+                **category_info
+            })
+
+        return results
+
+    def should_preserve_notes(self, notes: str) -> tuple:
+        """Check if notes should be preserved during edits
+
+        Args:
+            notes: Semicolon-separated notes string
+
+        Returns:
+            (should_preserve: bool, reason: str)
+        """
+        categorized = self.categorize_notes(notes)
+
+        for item in categorized:
+            if item['action'] == 'PRESERVE':
+                return (True, f"Contains {item['category']}: {item['chunk']}")
+
+        return (False, "No preservation patterns found")
+
 # Global state instance
 state = AppState()
+
+# Global notes validator instance
+notes_validator = NotesValidator()
 
 # ============================================================================
 # PHASE 1: DATA LOADING
@@ -2180,6 +2291,110 @@ def api_execute_merge():
         'deleted_rows': deleted_rows,
         'count': len(row_nums)
     })
+
+@app.route('/api/analyze_notes', methods=['GET'])
+def api_analyze_notes():
+    """Extract and analyze all note chunks from Working List
+
+    Returns frequency analysis of note patterns for manual categorization.
+    Used to build data-driven notes_patterns.json configuration.
+    """
+    from collections import Counter
+
+    all_chunks = []
+    chunk_locations = {}
+
+    # Extract all note chunks
+    for row in state.wl_rows:
+        if row.notes:
+            # Split by semicolon, strip whitespace
+            chunks = [c.strip() for c in row.notes.split(';') if c.strip()]
+
+            for chunk in chunks:
+                chunk_lower = chunk.lower()
+                all_chunks.append(chunk_lower)
+
+                # Track which rows contain this chunk
+                if chunk_lower not in chunk_locations:
+                    chunk_locations[chunk_lower] = []
+                chunk_locations[chunk_lower].append(row.row_num)
+
+    # Count frequencies
+    chunk_counts = Counter(all_chunks)
+
+    # Build analysis results
+    analysis = []
+    total_rows_with_notes = sum(1 for r in state.wl_rows if r.notes)
+
+    for chunk, count in chunk_counts.most_common():
+        pct = round(count / len(state.wl_rows) * 100, 1) if state.wl_rows else 0
+
+        analysis.append({
+            'chunk': chunk,
+            'count': count,
+            'pct': pct,
+            'example_rows': chunk_locations[chunk][:3]  # First 3 examples
+        })
+
+    return jsonify({
+        'success': True,
+        'total_unique_chunks': len(analysis),
+        'total_rows': len(state.wl_rows),
+        'total_with_notes': total_rows_with_notes,
+        'chunks': analysis
+    })
+
+@app.route('/api/download_notes_csv', methods=['GET'])
+def api_download_notes_csv():
+    """Export notes analysis as CSV for LLM categorization
+
+    Returns CSV file with note chunks, frequencies, and examples.
+    User can review with Claude/GPT to categorize patterns.
+    """
+    from collections import Counter
+    import io
+    import csv
+    from flask import make_response
+
+    all_chunks = []
+    chunk_locations = {}
+
+    # Extract all note chunks
+    for row in state.wl_rows:
+        if row.notes:
+            chunks = [c.strip() for c in row.notes.split(';') if c.strip()]
+            for chunk in chunks:
+                chunk_lower = chunk.lower()
+                all_chunks.append(chunk_lower)
+
+                if chunk_lower not in chunk_locations:
+                    chunk_locations[chunk_lower] = []
+                chunk_locations[chunk_lower].append(row.row_num)
+
+    # Count frequencies
+    chunk_counts = Counter(all_chunks)
+
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow(['chunk', 'count', 'pct', 'example_rows'])
+
+    # Write data rows
+    total_rows = len(state.wl_rows)
+    for chunk, count in chunk_counts.most_common():
+        pct = round(count / total_rows * 100, 1) if total_rows else 0
+        example_rows = ','.join(str(r) for r in chunk_locations[chunk][:3])
+        writer.writerow([chunk, count, pct, example_rows])
+
+    # Create response
+    output.seek(0)
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = 'attachment; filename=notes_analysis.csv'
+
+    return response
 
 # ============================================================================
 # MAIN ENTRY POINT
