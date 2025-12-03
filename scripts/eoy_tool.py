@@ -1060,6 +1060,65 @@ def add_to_undo_stack(action_type: str, description: str, before_state: Any, aft
     # Save to disk
     save_undo_log()
 
+def restore_state(state_dict: Dict) -> bool:
+    """Restore row state from undo/redo dictionary
+
+    Args:
+        state_dict: Dictionary containing state to restore
+                   Can have formats:
+                   - {'row_num': X, 'field': value, ...} - single row restoration
+                   - {'row_nums': [X, Y, Z]} - multi-row deletion restoration
+                   - {'rows': [{row_num: X, field: value}, ...]} - multi-row field restoration
+
+    Returns:
+        True if restoration successful, False otherwise
+    """
+    if not state_dict:
+        return False
+
+    # Handle single row restoration
+    if 'row_num' in state_dict:
+        row_num = state_dict['row_num']
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+
+        if not row:
+            return False
+
+        # Restore all fields present in state_dict (except row_num)
+        for field, value in state_dict.items():
+            if field != 'row_num' and hasattr(row, field):
+                setattr(row, field, value)
+
+        return True
+
+    # Handle multi-row field restoration (new action handlers)
+    elif 'rows' in state_dict:
+        for row_state in state_dict['rows']:
+            row_num = row_state['row_num']
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+
+            if not row:
+                continue
+
+            # Restore all fields from row_state
+            for field, value in row_state.items():
+                if field != 'row_num' and hasattr(row, field):
+                    setattr(row, field, value)
+
+        return True
+
+    # Handle multi-row deletion restoration
+    elif 'row_nums' in state_dict:
+        # For delete_rows, we marked action='delete'
+        # To undo, clear the delete marker
+        for row_num in state_dict['row_nums']:
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+            if row and row.action == 'delete':
+                row.action = None
+        return True
+
+    return False
+
 def save_undo_log():
     """Save undo stack to JSON file"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1165,7 +1224,16 @@ def api_undo():
     state.redo_stack.append(action)
 
     # Apply undo (restore before_state)
-    # TODO: Implement state restoration logic
+    success = restore_state(action['before_state'])
+
+    if not success:
+        # Restore the action back if restoration failed
+        state.undo_stack.append(action)
+        state.redo_stack.pop()
+        return jsonify({'success': False, 'error': 'Failed to restore state'}), 500
+
+    # Re-categorize issues after restoration
+    state.categories = categorize_issues(state.wl_rows, state.no_rows)
 
     return jsonify({
         'success': True,
@@ -1184,7 +1252,16 @@ def api_redo():
     state.undo_stack.append(action)
 
     # Apply redo (restore after_state)
-    # TODO: Implement state restoration logic
+    success = restore_state(action['after_state'])
+
+    if not success:
+        # Restore the action back if restoration failed
+        state.redo_stack.append(action)
+        state.undo_stack.pop()
+        return jsonify({'success': False, 'error': 'Failed to restore state'}), 500
+
+    # Re-categorize issues after restoration
+    state.categories = categorize_issues(state.wl_rows, state.no_rows)
 
     return jsonify({
         'success': True,
@@ -1407,6 +1484,10 @@ def api_fix_qty_mismatches():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     # Fix qty mismatches
     count = 0
     for row_num in category.row_nums:
@@ -1415,10 +1496,34 @@ def api_fix_qty_mismatches():
             # Find matching NO row
             no_row = next((n for n in state.no_rows if n.row_num == row.matched_no_row), None)
             if no_row:
+                # Capture before state
+                before_states.append({
+                    'row_num': row_num,
+                    'field_edits': dict(row.field_edits),
+                    'action': row.action
+                })
+
                 # Update qty to match NO row
                 row.field_edits['qty_2025'] = no_row.qty_2025
                 row.action = 'edit'
+
+                # Capture after state
+                after_states.append({
+                    'row_num': row_num,
+                    'field_edits': dict(row.field_edits),
+                    'action': row.action
+                })
+
                 count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='fix_qty_mismatches',
+            description=f"Fixed {count} QTY mismatches",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1433,6 +1538,10 @@ def api_mark_not_found():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     # Mark as not found
     count = 0
     for row_num in category.row_nums:
@@ -1444,13 +1553,37 @@ def api_mark_not_found():
 
             # Only add if not already present
             if note_to_add not in existing_notes.lower():
+                # Capture before state
+                before_states.append({
+                    'row_num': row_num,
+                    'field_edits': dict(row.field_edits),
+                    'action': row.action
+                })
+
                 if existing_notes and not existing_notes.endswith(';'):
                     existing_notes += '; '
                 elif existing_notes:
                     existing_notes += ' '
                 row.field_edits['notes'] = existing_notes + note_to_add + ';'
                 row.action = 'edit'
+
+                # Capture after state
+                after_states.append({
+                    'row_num': row_num,
+                    'field_edits': dict(row.field_edits),
+                    'action': row.action
+                })
+
                 count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='mark_not_found',
+            description=f"Marked {count} rows as not found",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1469,11 +1602,22 @@ def api_add_vm_note():
     # Use provided row_nums or all in category
     target_rows = row_nums if row_nums else category.row_nums
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     import re
     count = 0
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Capture before state
+            before_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             notes = row.notes if row.notes else ""
 
             # Parse existing vm count: "vm x2" or "vm x3"
@@ -1493,7 +1637,24 @@ def api_add_vm_note():
 
             row.field_edits['notes'] = new_notes
             row.action = 'edit'
+
+            # Capture after state
+            after_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='add_vm_note',
+            description=f"Added/incremented VM note for {count} rows",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1516,16 +1677,44 @@ def api_change_status():
     # Use provided row_nums or all in category
     target_rows = row_nums if row_nums else category.row_nums
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     count = 0
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Capture before state
+            before_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             # Update status
             row.field_edits['status'] = new_status
             # Derive color from status
             row.field_edits['bg_color'] = status_to_color(new_status)
             row.action = 'edit'
+
+            # Capture after state
+            after_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='change_status',
+            description=f"Changed status for {count} rows to '{new_status}'",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1540,10 +1729,21 @@ def api_change_to_white():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     count = 0
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Capture before state
+            before_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             row.field_edits['status'] = 'Not interested'
             row.field_edits['bg_color'] = '#ffffff'
             row.field_edits['qty_2025'] = '0'
@@ -1558,7 +1758,24 @@ def api_change_to_white():
                 row.field_edits['notes'] = notes + 'not interested;'
 
             row.action = 'edit'
+
+            # Capture after state
+            after_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='change_to_white',
+            description=f"Changed {count} rows to 'Not interested'",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1572,6 +1789,10 @@ def api_remove_sent():
     category = next((c for c in state.categories if c.id == category_id), None)
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Track changes for undo
+    before_states = []
+    after_states = []
 
     import re
     count = 0
@@ -1587,9 +1808,33 @@ def api_remove_sent():
             new_notes = re.sub(r'\s+', ' ', new_notes).strip()
 
             if new_notes != row.notes:
+                # Capture before state
+                before_states.append({
+                    'row_num': row_num,
+                    'field_edits': dict(row.field_edits),
+                    'action': row.action
+                })
+
                 row.field_edits['notes'] = new_notes
                 row.action = 'edit'
+
+                # Capture after state
+                after_states.append({
+                    'row_num': row_num,
+                    'field_edits': dict(row.field_edits),
+                    'action': row.action
+                })
+
                 count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='remove_sent',
+            description=f"Removed 'sent' from {count} rows",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1605,13 +1850,41 @@ def api_mass_invalid():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     count = 0
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Capture before state
+            before_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
+
+            # Capture after state
+            after_states.append({
+                'row_num': row_num,
+                'field_edits': dict(row.field_edits),
+                'action': row.action
+            })
+
             count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='mass_invalid',
+            description=f"Marked {count} network rows as invalid",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1630,18 +1903,44 @@ def api_send_to_manual_review():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
     # Add manual_review issue to each row
     count = 0
     for row_num in row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Capture before state (deep copy of issues list)
+            before_states.append({
+                'row_num': row_num,
+                'issues': [dict(issue) for issue in row.issues]
+            })
+
             # Add issue
             row.issues.append({
                 'category': 'manual_review',
                 'severity': 'review',
                 'description': f'Sent from {category.name} for manual review'
             })
+
+            # Capture after state
+            after_states.append({
+                'row_num': row_num,
+                'issues': [dict(issue) for issue in row.issues]
+            })
+
             count += 1
+
+    # Add to undo stack
+    if count > 0:
+        add_to_undo_stack(
+            action_type='send_to_manual_review',
+            description=f"Sent {count} rows to manual review",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     # Re-categorize to update category lists
     state.categories = categorize_issues(state.wl_rows, state.no_rows)
