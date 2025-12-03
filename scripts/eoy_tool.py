@@ -957,11 +957,15 @@ def categorize_issues(wl_rows, no_rows):
         ReviewCategory(
             id="not_interested_invalid",
             name="Not Int (Invalid?)",
-            description="'Not interested' but notes suggest invalid provider",
+            description="'Not interested' but notes suggest invalid - could be various colors/statuses with misc note patterns",
             row_nums=[],
             allow_batch=False,
             primary_action=None,
-            secondary_actions=["move_to_invalid", "keep_as_is"]
+            secondary_actions=[
+                "edit", "change_status", "move_to_invalid",
+                "change_to_white", "remove_sent", "mark_not_found",
+                "delete"
+            ]
         ),
         ReviewCategory(
             id="manual_review",
