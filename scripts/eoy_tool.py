@@ -2030,6 +2030,157 @@ def api_confirm_orphan_invalid():
         'message': f"Confirmed {no_row.practice} matches invalid provider {invalid_row.practice}"
     })
 
+@app.route('/api/get_merge_candidates', methods=['POST'])
+def api_get_merge_candidates():
+    """Get detailed info for rows to merge"""
+    data = request.get_json()
+    row_nums = data.get('row_nums', [])
+
+    if len(row_nums) < 2:
+        return jsonify({'success': False, 'error': 'At least 2 rows required for merge'}), 400
+
+    rows = []
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            rows.append({
+                'row_num': row.row_num,
+                'practice': row.practice,
+                'phone': row.phone,
+                'address': row.address,
+                'city': row.city,
+                'state': row.state,
+                'zip': row.zip,
+                'qty_2023': row.qty_2023,
+                'qty_2024': row.qty_2024,
+                'qty_2025': row.qty_2025,
+                'status': row.status,
+                'notes': row.notes,
+                'bg_color': row.bg_color
+            })
+
+    # Extract unique phone numbers for selection
+    phones = list(set(r['phone'] for r in rows if r['phone']))
+
+    # Extract note chunks from all rows
+    all_note_chunks = []
+    for row in rows:
+        if row['notes']:
+            chunks = [c.strip() for c in row['notes'].split(';') if c.strip()]
+            for chunk in chunks:
+                if chunk not in all_note_chunks:
+                    all_note_chunks.append(chunk)
+
+    # Suggest network name from common words in practice names
+    practice_words = []
+    for row in rows:
+        words = row['practice'].split()
+        practice_words.extend(words)
+
+    # Count word frequency (excluding common articles)
+    from collections import Counter
+    word_counts = Counter(w.lower() for w in practice_words if len(w) > 3 and w.lower() not in ['obgyn', 'gynecology', 'obstetrics'])
+    suggested_network = word_counts.most_common(1)[0][0].title() if word_counts else ""
+
+    return jsonify({
+        'success': True,
+        'rows': rows,
+        'phones': phones,
+        'all_note_chunks': all_note_chunks,
+        'suggested_network': suggested_network
+    })
+
+@app.route('/api/execute_merge', methods=['POST'])
+def api_execute_merge():
+    """Execute merge of multiple rows into one"""
+    data = request.get_json()
+    row_nums = data.get('row_nums', [])  # All rows to merge
+    keep_row_num = data.get('keep_row_num')  # Row to keep
+    network_name = data.get('network_name', '')
+    selected_phone = data.get('selected_phone', '')
+    selected_notes = data.get('selected_notes', [])  # List of note chunks to keep
+
+    if len(row_nums) < 2:
+        return jsonify({'success': False, 'error': 'At least 2 rows required'}), 400
+
+    if keep_row_num not in row_nums:
+        return jsonify({'success': False, 'error': 'Keep row must be in merge list'}), 400
+
+    # Track changes for undo
+    before_states = []
+    after_states = []
+
+    # Find the row to keep
+    keep_row = next((r for r in state.wl_rows if r.row_num == keep_row_num), None)
+    if not keep_row:
+        return jsonify({'success': False, 'error': 'Keep row not found'}), 404
+
+    # Capture before state of keep row
+    before_states.append({
+        'row_num': keep_row.row_num,
+        'practice': keep_row.practice,
+        'phone': keep_row.phone,
+        'notes': keep_row.notes,
+        'network_name': keep_row.network_name,
+        'action': keep_row.action
+    })
+
+    # Update the keep row
+    if network_name:
+        keep_row.practice = network_name
+        keep_row.network_name = network_name
+
+    if selected_phone:
+        keep_row.field_edits['phone'] = selected_phone
+
+    # Merge notes
+    merged_notes = '; '.join(selected_notes) if selected_notes else keep_row.notes
+    keep_row.field_edits['notes'] = merged_notes
+    keep_row.action = 'edit'
+
+    # Capture after state of keep row
+    after_states.append({
+        'row_num': keep_row.row_num,
+        'practice': keep_row.practice,
+        'phone': keep_row.phone if 'phone' not in keep_row.field_edits else keep_row.field_edits['phone'],
+        'notes': merged_notes,
+        'network_name': keep_row.network_name,
+        'action': keep_row.action,
+        'field_edits': dict(keep_row.field_edits)
+    })
+
+    # Mark other rows for deletion
+    deleted_rows = []
+    for row_num in row_nums:
+        if row_num != keep_row_num:
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+            if row:
+                before_states.append({
+                    'row_num': row.row_num,
+                    'action': row.action
+                })
+                row.action = 'delete'
+                after_states.append({
+                    'row_num': row.row_num,
+                    'action': 'delete'
+                })
+                deleted_rows.append(row_num)
+
+    # Add to undo stack
+    add_to_undo_stack(
+        action_type='merge_rows',
+        description=f"Merged {len(row_nums)} rows into row {keep_row_num}",
+        before_state={'rows': before_states, 'deleted_rows': deleted_rows},
+        after_state={'rows': after_states}
+    )
+
+    return jsonify({
+        'success': True,
+        'kept_row': keep_row_num,
+        'deleted_rows': deleted_rows,
+        'count': len(row_nums)
+    })
+
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
