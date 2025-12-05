@@ -1153,6 +1153,129 @@ def api_save_progress():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def restore_state(action: Dict, direction: str = 'undo') -> bool:
+    """
+    Restore state based on action type.
+    direction: 'undo' restores before_state, 'redo' restores after_state
+    Returns True if restoration was successful.
+    """
+    action_type = action.get('action_type')
+    before_state = action.get('before_state', {})
+    after_state = action.get('after_state', {})
+
+    # Choose which state to restore
+    target_state = before_state if direction == 'undo' else after_state
+
+    try:
+        if action_type == 'edit_field':
+            # Single field edit
+            row_num = target_state.get('row_num') if direction == 'undo' else after_state.get('row_num')
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+            if row:
+                if direction == 'undo':
+                    field = target_state.get('field')
+                    old_value = target_state.get('old_value', '')
+                    setattr(row, field, old_value)
+                    if field == 'status':
+                        row.bg_color = status_to_color(old_value)
+                else:
+                    field = after_state.get('field')
+                    new_value = after_state.get('new_value', '')
+                    setattr(row, field, new_value)
+                    if field == 'status':
+                        row.bg_color = status_to_color(new_value)
+            return True
+
+        elif action_type in ['delete', 'delete_rows']:
+            # Row deletion - restore or re-delete
+            rows_data = before_state.get('rows', [])
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                if row:
+                    if direction == 'undo':
+                        # Restore deleted row
+                        row.action = row_data.get('fields', {}).get('action', None)
+                    else:
+                        # Re-delete
+                        row.action = 'deleted'
+            return True
+
+        elif action_type == 'mark_reviewed':
+            rows_data = before_state.get('rows', [])
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                if row:
+                    if direction == 'undo':
+                        # Restore original action
+                        row.action = row_data.get('fields', {}).get('action', None)
+                    else:
+                        row.action = 'reviewed_no_change'
+            return True
+
+        elif action_type == 'send_to_manual_review':
+            rows_data = before_state.get('rows', [])
+            manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+
+                if direction == 'undo':
+                    # Remove from manual review
+                    if manual_review_cat and row_num in manual_review_cat.row_nums:
+                        manual_review_cat.row_nums.remove(row_num)
+                    # Remove manual_review issue
+                    if row:
+                        row.issues = [i for i in row.issues if i.get('category') != 'manual_review']
+                else:
+                    # Re-add to manual review
+                    if manual_review_cat and row_num not in manual_review_cat.row_nums:
+                        manual_review_cat.row_nums.append(row_num)
+            return True
+
+        elif action_type == 'confirm_orphan_match':
+            orphan_row_num = before_state.get('orphan_row_num')
+            no_row = next((r for r in state.no_rows if r.row_num == orphan_row_num), None)
+            orphan_cat = next((c for c in state.categories if c.id == 'orphan_no'), None)
+
+            if no_row:
+                if direction == 'undo':
+                    # Restore orphan status
+                    no_row.is_orphan = True
+                    if orphan_cat and orphan_row_num not in orphan_cat.row_nums:
+                        orphan_cat.row_nums.append(orphan_row_num)
+                else:
+                    no_row.is_orphan = False
+                    if orphan_cat and orphan_row_num in orphan_cat.row_nums:
+                        orphan_cat.row_nums.remove(orphan_row_num)
+            return True
+
+        elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action']:
+            # Bulk actions - restore all affected rows
+            rows_data = before_state.get('rows', [])
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                fields = row_data.get('fields', {})
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                if row:
+                    if direction == 'undo':
+                        for field, value in fields.items():
+                            if hasattr(row, field):
+                                setattr(row, field, value)
+                    # For redo, use after_state if available
+            return True
+
+        else:
+            # Unknown action type - log but don't fail
+            print(f"[Undo/Redo] Unknown action type: {action_type}")
+            return True
+
+    except Exception as e:
+        print(f"[Undo/Redo] Error restoring state: {e}")
+        return False
+
 @app.route('/api/undo', methods=['POST'])
 def api_undo():
     """API endpoint to undo last action"""
@@ -1160,13 +1283,15 @@ def api_undo():
         return jsonify({'success': False, 'error': 'Nothing to undo'}), 400
 
     action = state.undo_stack.pop()
-    state.redo_stack.append(action)
 
     # Apply undo (restore before_state)
-    # TODO: Implement state restoration logic
+    success = restore_state(action, 'undo')
+
+    if success:
+        state.redo_stack.append(action)
 
     return jsonify({
-        'success': True,
+        'success': success,
         'action': action['description'],
         'can_undo': len(state.undo_stack) > 0,
         'can_redo': len(state.redo_stack) > 0
@@ -1179,13 +1304,15 @@ def api_redo():
         return jsonify({'success': False, 'error': 'Nothing to redo'}), 400
 
     action = state.redo_stack.pop()
-    state.undo_stack.append(action)
 
     # Apply redo (restore after_state)
-    # TODO: Implement state restoration logic
+    success = restore_state(action, 'redo')
+
+    if success:
+        state.undo_stack.append(action)
 
     return jsonify({
-        'success': True,
+        'success': success,
         'action': action['description'],
         'can_undo': len(state.undo_stack) > 0,
         'can_redo': len(state.redo_stack) > 0

@@ -51,13 +51,13 @@
                 ⟲ Reload Data
             </button>
             
-            <!-- Undo/Redo (WIP) -->
+            <!-- Undo/Redo -->
             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                <button class="btn btn-ghost btn-sm" onclick="undo()" style="flex: 1; font-size: 0.75rem;" title="Undo (Ctrl+Z)">
-                    ↶ Undo <span style="font-size: 0.6rem; opacity: 0.7;">(WIP)</span>
+                <button class="btn btn-ghost btn-sm" id="undoBtn" onclick="undo()" style="flex: 1; font-size: 0.75rem;" title="Undo (Ctrl+Z)">
+                    ↶ Undo
                 </button>
-                <button class="btn btn-ghost btn-sm" onclick="redo()" style="flex: 1; font-size: 0.75rem;" title="Redo (Ctrl+Y)">
-                    ↷ Redo <span style="font-size: 0.6rem; opacity: 0.7;">(WIP)</span>
+                <button class="btn btn-ghost btn-sm" id="redoBtn" onclick="redo()" style="flex: 1; font-size: 0.75rem;" title="Redo (Ctrl+Y)">
+                    ↷ Redo
                 </button>
             </div>
         </div>
@@ -963,6 +963,100 @@ function updateRowColor(row, bgColor) {
         row.classList.add('row-fuschia');
     }
 }
+
+// =============================================================================
+// UNDO/REDO SYSTEM
+// =============================================================================
+
+async function undo() {
+    try {
+        const response = await fetch('/api/undo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Show notification
+            showNotification(`Undone: ${result.action}`, 'info');
+
+            // Reload page to reflect changes
+            // In the future, could update UI incrementally instead
+            location.reload();
+        } else {
+            showNotification(result.error || 'Nothing to undo', 'warning');
+        }
+    } catch (error) {
+        showNotification(`Undo failed: ${error}`, 'error');
+    }
+}
+
+async function redo() {
+    try {
+        const response = await fetch('/api/redo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Show notification
+            showNotification(`Redone: ${result.action}`, 'info');
+
+            // Reload page to reflect changes
+            location.reload();
+        } else {
+            showNotification(result.error || 'Nothing to redo', 'warning');
+        }
+    } catch (error) {
+        showNotification(`Redo failed: ${error}`, 'error');
+    }
+}
+
+// Simple notification helper
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        background: ${type === 'error' ? '#f8d7da' : type === 'warning' ? '#fff3cd' : '#d1ecf1'};
+        color: ${type === 'error' ? '#721c24' : type === 'warning' ? '#856404' : '#0c5460'};
+        border: 1px solid ${type === 'error' ? '#f5c6cb' : type === 'warning' ? '#ffeeba' : '#bee5eb'};
+        z-index: 9999;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        animation: slideIn 0.3s ease;
+    `;
+    notification.textContent = message;
+
+    document.body.appendChild(notification);
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Add keyboard shortcuts for undo/redo
+document.addEventListener('keydown', (e) => {
+    // Ctrl+Z for undo
+    if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+    }
+    // Ctrl+Y or Ctrl+Shift+Z for redo
+    if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        redo();
+    }
+});
 
 // Category-specific actions
 async function keepFirstDeleteRest() {
