@@ -118,6 +118,28 @@ class NewOrderRow:
         }
 
 @dataclass
+class InvalidRow:
+    """Single row from Invalid/Inactive List"""
+    row_num: int
+    practice: str
+    phone: str
+    address: str
+    city: str
+    state: str
+    reason: str  # Why they're invalid
+
+    def to_dict(self):
+        return {
+            'row_num': self.row_num,
+            'practice': self.practice,
+            'phone': self.phone,
+            'address': self.address,
+            'city': self.city,
+            'state': self.state,
+            'reason': self.reason
+        }
+
+@dataclass
 class ReviewCategory:
     """Group of issues for review"""
     id: str
@@ -149,6 +171,7 @@ class AppState:
     def __init__(self):
         self.wl_rows: List[ProviderRow] = []
         self.no_rows: List[NewOrderRow] = []
+        self.invalid_rows: List[InvalidRow] = []  # Invalid/Inactive List providers
         self.categories: List[ReviewCategory] = []
         self.invalid_reasons: set = set()
         self.year: int = 2025
@@ -162,6 +185,7 @@ class AppState:
         return {
             'wl_rows': [row.to_dict() for row in self.wl_rows],
             'no_rows': [row.to_dict() for row in self.no_rows],
+            'invalid_rows': [row.to_dict() for row in self.invalid_rows],
             'categories': [cat.to_dict() for cat in self.categories],
             'invalid_reasons': list(self.invalid_reasons),
             'year': self.year,
@@ -275,11 +299,38 @@ def load_data(year: int = 2025):
             qty_2025=row[7] if len(row) > 7 else ""
         ))
 
-    # Get common invalid reasons
+    # Parse Invalid/Inactive List rows and extract reasons
+    # Assumed structure: Practice, Phone, Address, City, State, [Zip], Reason
+    invalid_rows = []
     invalid_reasons = set()
-    for row in invalid_data[1:]:
-        if len(row) > 6 and row[6]:
-            invalid_reasons.add(row[6])
+    for i, row in enumerate(invalid_data[1:], start=2):  # Start at row 2 (after header)
+        if len(row) >= 5:  # Need at least practice through state
+            practice = row[0] if len(row) > 0 else ""
+            phone = row[1] if len(row) > 1 else ""
+            address = row[2] if len(row) > 2 else ""
+            city = row[3] if len(row) > 3 else ""
+            state_val = row[4] if len(row) > 4 else ""
+            # Reason might be in column 5, 6, or beyond
+            reason = ""
+            for j in range(5, min(len(row), 10)):
+                if row[j] and len(row[j]) > 5:  # Looks like a reason, not zip
+                    reason = row[j]
+                    break
+
+            if practice or address:  # Only add if has some identifying info
+                invalid_rows.append(InvalidRow(
+                    row_num=i,
+                    practice=practice,
+                    phone=phone,
+                    address=address,
+                    city=city,
+                    state=state_val,
+                    reason=reason
+                ))
+                if reason:
+                    invalid_reasons.add(reason)
+
+    print(f"  Loaded {len(invalid_rows)} Invalid/Inactive rows")
 
     # Load STATS worksheet for validation
     stats_sheet = sh.worksheet('STATS')
@@ -313,7 +364,7 @@ def load_data(year: int = 2025):
         print(f"  [OK] All status values are recognized")
 
     print(f"\n[Phase 1] Complete!")
-    return wl_rows, no_rows, invalid_reasons, stats_sheet
+    return wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet
 
 def validate_stats_color_counts(wl_rows, stats_sheet, year=2025, assume_yes=False):
     """
@@ -917,6 +968,16 @@ def categorize_issues(wl_rows, no_rows):
             primary_action=None,
             secondary_actions=["move_to_invalid", "keep_as_is"]
         ),
+        ReviewCategory(
+            id="manual_review",
+            name="Manual Review",
+            description="Complex cases requiring engineer judgment",
+            row_nums=[],
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit", "delete", "change_status", "move_to_invalid",
+                             "merge", "add_vm_note", "mark_reviewed", "keep_as_is"]
+        ),
     ]
 
     # Populate categories from WL rows
@@ -950,14 +1011,14 @@ def run_validations(year=2025):
     print(f"\n[Phase 2] Running validations...")
 
     # Load data
-    wl_rows, no_rows, invalid_reasons, stats_sheet = load_data(year)
+    wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet = load_data(year)
 
     # IMPORTANT: Validate Status-derived colors against STATS
     # This ensures Status column matches actual cell colors
     # If mismatch, user is warned to fix manually before proceeding
     if not validate_stats_color_counts(wl_rows, stats_sheet, year):
         # User chose to exit due to Status/color mismatch
-        return None, None, None, None
+        return None, None, None, None, None
 
     # Validation pipeline
     validate_yellow_to_no(wl_rows, no_rows)
@@ -970,7 +1031,7 @@ def run_validations(year=2025):
 
     print(f"\n[Phase 2] Complete!")
 
-    return wl_rows, no_rows, categories, invalid_reasons
+    return wl_rows, no_rows, invalid_rows, categories, invalid_reasons
 
 # ============================================================================
 # UNDO/REDO SYSTEM
@@ -1039,7 +1100,7 @@ def load():
         state.year = year
 
         # Run validations
-        state.wl_rows, state.no_rows, state.categories, state.invalid_reasons = run_validations(year)
+        state.wl_rows, state.no_rows, state.invalid_rows, state.categories, state.invalid_reasons = run_validations(year)
         state.loaded = True
         state.current_category_id = state.categories[0].id if state.categories else None
 
@@ -1551,6 +1612,257 @@ def api_mass_invalid():
             count += 1
 
     return jsonify({'success': True, 'count': count})
+
+@app.route('/api/send_to_manual_review', methods=['POST'])
+def api_send_to_manual_review():
+    """Send row(s) to Manual Review category for closer inspection"""
+    data = request.get_json()
+    row_nums = data.get('row_nums', [])
+    reason = data.get('reason', 'Needs manual review')
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No row numbers provided'}), 400
+
+    # Find or create manual_review category
+    manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+    if not manual_review_cat:
+        # Create it if it doesn't exist (e.g., was filtered out as empty)
+        manual_review_cat = ReviewCategory(
+            id="manual_review",
+            name="Manual Review",
+            description="Complex cases requiring engineer judgment",
+            row_nums=[],
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit", "delete", "change_status", "move_to_invalid",
+                             "merge", "add_vm_note", "mark_reviewed", "keep_as_is"]
+        )
+        state.categories.append(manual_review_cat)
+
+    count = 0
+    before_states = []
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row_num not in manual_review_cat.row_nums:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'practice': row.practice, 'status': row.status, 'notes': row.notes}
+            })
+            manual_review_cat.row_nums.append(row_num)
+            # Add issue to row
+            row.issues.append({
+                'category': 'manual_review',
+                'severity': 'review',
+                'message': reason
+            })
+            count += 1
+
+    manual_review_cat.row_nums.sort()
+
+    if before_states:
+        add_to_undo_stack(
+            'send_to_manual_review',
+            f'Sent {count} row(s) to Manual Review',
+            {'rows': before_states, 'reason': reason}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/mark_reviewed', methods=['POST'])
+def api_mark_reviewed():
+    """Mark row as reviewed (no changes needed) for progress tracking"""
+    data = request.get_json()
+    row_nums = data.get('row_nums', [])
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No row numbers provided'}), 400
+
+    count = 0
+    before_states = []
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'action': row.action}
+            })
+            row.action = 'reviewed_no_change'
+            count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'mark_reviewed',
+            f'Marked {count} row(s) as reviewed',
+            {'rows': before_states}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/match_orphan_to_invalid', methods=['POST'])
+def api_match_orphan_to_invalid():
+    """
+    Match an orphan New Order row against the Invalid/Inactive List.
+    Returns match info if found (≥80% confidence) or suggests manual review.
+    """
+    data = request.get_json()
+    row_num = data.get('row_num')
+
+    if not row_num:
+        return jsonify({'success': False, 'error': 'No row number provided'}), 400
+
+    # Find the orphan NO row
+    no_row = next((r for r in state.no_rows if r.row_num == row_num and r.is_orphan), None)
+    if not no_row:
+        return jsonify({'success': False, 'error': 'Orphan row not found'}), 404
+
+    # Fuzzy match against Invalid/Inactive List
+    best_match = None
+    best_score = 0.0
+
+    for inv_row in state.invalid_rows:
+        # Skip if different state
+        if inv_row.state and no_row.state and inv_row.state.lower() != no_row.state.lower():
+            continue
+
+        # Calculate weighted match score (70% name, 30% address)
+        name_score = fuzz.token_set_ratio(
+            normalize_name(no_row.practice),
+            normalize_name(inv_row.practice)
+        ) / 100.0
+
+        address_score = fuzz.token_set_ratio(
+            normalize_address(no_row.address + ' ' + no_row.city),
+            normalize_address(inv_row.address + ' ' + inv_row.city)
+        ) / 100.0
+
+        combined_score = (name_score * 0.7) + (address_score * 0.3)
+
+        if combined_score > best_score:
+            best_score = combined_score
+            best_match = inv_row
+
+    result = {
+        'orphan_row': no_row.to_dict(),
+        'match_found': best_score >= 0.80,
+        'match_confidence': round(best_score * 100, 1)
+    }
+
+    if best_match and best_score >= 0.80:
+        result['matched_invalid'] = best_match.to_dict()
+        result['recommendation'] = 'confirm_match'
+        result['message'] = f"Matches invalid provider: {best_match.practice}. Reason: {best_match.reason or 'Not specified'}"
+    else:
+        result['recommendation'] = 'manual_review'
+        result['message'] = "No match found in Invalid/Inactive List. Send to Manual Review."
+
+    return jsonify({'success': True, **result})
+
+@app.route('/api/process_orphan_batch', methods=['POST'])
+def api_process_orphan_batch():
+    """
+    Process all orphan NO rows at once, matching against Invalid List.
+    Returns categorized results for bulk handling.
+    """
+    # Get all orphan rows
+    orphan_rows = [r for r in state.no_rows if r.is_orphan]
+
+    results = {
+        'matched': [],      # Found in Invalid List (≥80% match)
+        'unmatched': [],    # No match - need manual review
+        'total': len(orphan_rows)
+    }
+
+    for no_row in orphan_rows:
+        best_match = None
+        best_score = 0.0
+
+        for inv_row in state.invalid_rows:
+            # Skip if different state
+            if inv_row.state and no_row.state and inv_row.state.lower() != no_row.state.lower():
+                continue
+
+            # Calculate weighted match score
+            name_score = fuzz.token_set_ratio(
+                normalize_name(no_row.practice),
+                normalize_name(inv_row.practice)
+            ) / 100.0
+
+            address_score = fuzz.token_set_ratio(
+                normalize_address(no_row.address + ' ' + no_row.city),
+                normalize_address(inv_row.address + ' ' + inv_row.city)
+            ) / 100.0
+
+            combined_score = (name_score * 0.7) + (address_score * 0.3)
+
+            if combined_score > best_score:
+                best_score = combined_score
+                best_match = inv_row
+
+        if best_match and best_score >= 0.80:
+            results['matched'].append({
+                'orphan': no_row.to_dict(),
+                'invalid_match': best_match.to_dict(),
+                'confidence': round(best_score * 100, 1)
+            })
+        else:
+            results['unmatched'].append({
+                'orphan': no_row.to_dict(),
+                'best_score': round(best_score * 100, 1) if best_score > 0 else 0
+            })
+
+    return jsonify({'success': True, **results})
+
+@app.route('/api/confirm_orphan_match', methods=['POST'])
+def api_confirm_orphan_match():
+    """
+    Confirm that an orphan NO row matches an Invalid List entry.
+    Marks the orphan as resolved (explained by invalid provider).
+    """
+    data = request.get_json()
+    orphan_row_num = data.get('orphan_row_num')
+    invalid_row_num = data.get('invalid_row_num')
+    action = data.get('action', 'confirm')  # 'confirm' or 'reject'
+
+    if not orphan_row_num:
+        return jsonify({'success': False, 'error': 'No orphan row number provided'}), 400
+
+    # Find the orphan
+    no_row = next((r for r in state.no_rows if r.row_num == orphan_row_num), None)
+    if not no_row:
+        return jsonify({'success': False, 'error': 'Orphan row not found'}), 404
+
+    if action == 'confirm':
+        # Mark orphan as resolved (matched to invalid)
+        no_row.is_orphan = False  # No longer orphan - explained
+        inv_row = next((r for r in state.invalid_rows if r.row_num == invalid_row_num), None)
+        reason = inv_row.reason if inv_row else 'Matched to Invalid List'
+
+        # Remove from orphan_no category
+        orphan_cat = next((c for c in state.categories if c.id == 'orphan_no'), None)
+        if orphan_cat and orphan_row_num in orphan_cat.row_nums:
+            orphan_cat.row_nums.remove(orphan_row_num)
+
+        add_to_undo_stack(
+            'confirm_orphan_match',
+            f'Confirmed orphan #{orphan_row_num} matches invalid provider',
+            {'orphan_row_num': orphan_row_num, 'invalid_row_num': invalid_row_num}
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Confirmed match. Reason: {reason}'
+        })
+    else:
+        # Reject match - send to manual review
+        manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+        if manual_review_cat and orphan_row_num not in manual_review_cat.row_nums:
+            manual_review_cat.row_nums.append(orphan_row_num)
+            manual_review_cat.row_nums.sort()
+
+        return jsonify({
+            'success': True,
+            'message': 'Sent to Manual Review for further investigation'
+        })
 
 # ============================================================================
 # MAIN ENTRY POINT

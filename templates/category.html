@@ -273,10 +273,36 @@
         <button class="btn btn-danger btn-sm" onclick="deleteSelected()">
             Delete Selected
         </button>
+        <button class="btn btn-sm" onclick="sendToManualReview()">
+            📋 Manual Review
+        </button>
+        <button class="btn btn-sm" onclick="markAsReviewed()">
+            ✓ Mark Reviewed
+        </button>
         <button class="btn btn-ghost btn-sm" onclick="clearSelection()">
             Clear
         </button>
     </div>
+</div>
+
+<!-- Context Menu for Rows (right-click) -->
+<div id="rowContextMenu" style="display: none; position: fixed; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 0.5rem; min-width: 200px; z-index: 2000;">
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="editSelectedFromMenu()">
+        ✎ Edit Row
+    </button>
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="googleSearchFromMenu()">
+        🔍 Google Search
+    </button>
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="sendToManualReview()">
+        📋 Send to Manual Review
+    </button>
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="markAsReviewed()">
+        ✓ Mark Reviewed
+    </button>
+    <hr style="margin: 0.25rem 0; border: none; border-top: 1px solid var(--border-color);">
+    <button class="btn btn-ghost btn-sm btn-danger-text" style="width: 100%; justify-content: flex-start; color: var(--color-danger);" onclick="deleteSelectedFromMenu()">
+        Delete Row
+    </button>
 </div>
 
 <!-- Context Menu for Note Chunks (right-click) -->
@@ -428,8 +454,11 @@ function handleRowRightClick(event, rowElement) {
         updateSelectionBar();
     }
 
-    // Show row context menu (TODO: implement)
-    // For now, just keep the row highlighted
+    // Show row context menu
+    const menu = document.getElementById('rowContextMenu');
+    menu.style.display = 'block';
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
 }
 
 // Handle checkbox click
@@ -512,9 +541,10 @@ function showNoteChunkMenu(event, rowNum, chunkIndex, chunkText) {
     currentNoteChunkContext = { rowNum, chunkIndex, chunkText };
 }
 
-// Hide context menu when clicking elsewhere
+// Hide context menus when clicking elsewhere
 document.addEventListener('click', () => {
     document.getElementById('noteChunkContextMenu').style.display = 'none';
+    document.getElementById('rowContextMenu').style.display = 'none';
 });
 
 // Delete note chunk
@@ -644,6 +674,94 @@ async function deleteSelected() {
     } catch (error) {
         alert(`Error deleting rows: ${error}`);
     }
+}
+
+// Send selected rows to Manual Review category
+async function sendToManualReview() {
+    if (selectedRows.size === 0) {
+        alert('No rows selected');
+        return;
+    }
+
+    const reason = prompt('Reason for manual review (optional):', 'Needs closer inspection');
+    if (reason === null) return; // Cancelled
+
+    try {
+        const response = await fetch('/api/send_to_manual_review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                row_nums: Array.from(selectedRows).map(n => parseInt(n)),
+                reason: reason || 'Needs manual review'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            clearSelection();
+            alert(`Sent ${result.count} row(s) to Manual Review`);
+            location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error sending to manual review: ${error}`);
+    }
+}
+
+// Mark selected rows as reviewed (no changes needed)
+async function markAsReviewed() {
+    if (selectedRows.size === 0) {
+        alert('No rows selected');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/mark_reviewed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                row_nums: Array.from(selectedRows).map(n => parseInt(n))
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Update UI to show reviewed status
+            selectedRows.forEach(rowNum => {
+                const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+                if (row) {
+                    row.style.backgroundColor = 'var(--color-bg-tertiary)';
+                    row.classList.add('reviewed');
+                }
+            });
+
+            clearSelection();
+            alert(`Marked ${result.count} row(s) as reviewed`);
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (error) {
+        alert(`Error marking as reviewed: ${error}`);
+    }
+}
+
+// Context menu helper functions
+function editSelectedFromMenu() {
+    document.getElementById('rowContextMenu').style.display = 'none';
+    editSelected();
+}
+
+function googleSearchFromMenu() {
+    document.getElementById('rowContextMenu').style.display = 'none';
+    googleSearchSelected();
+}
+
+function deleteSelectedFromMenu() {
+    document.getElementById('rowContextMenu').style.display = 'none';
+    deleteSelected();
 }
 
 // Category-specific actions

@@ -68,9 +68,9 @@ This document captures the implementation roadmap for completing the EOY (End of
 
 | Priority | Task | Status |
 |----------|------|--------|
-| 1 | Verify test suite runs with real data | ⬜ Pending |
-| 2 | Manual Review category (Category 12) | ⬜ Pending |
-| 3 | orphan_no_handler logic | ⬜ Pending |
+| 1 | Verify test suite runs with real data | ✅ Complete |
+| 2 | Manual Review category (Category 12) | ✅ Complete |
+| 3 | orphan_no_handler logic | ✅ Complete |
 | 4 | Inline editing (double-click) | ⬜ Pending |
 | 5 | Undo/redo restoration | ⬜ Pending |
 | 6 | merge_rows UI | ⬜ Pending |
