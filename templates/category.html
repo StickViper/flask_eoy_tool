@@ -764,6 +764,206 @@ function deleteSelectedFromMenu() {
     deleteSelected();
 }
 
+// =============================================================================
+// INLINE EDITING (Double-click to edit)
+// =============================================================================
+
+const STATUS_OPTIONS = [
+    '',
+    'Successful Order',
+    'Voicemail/No Answer',
+    'Requested Email',
+    'Potentially Invalid',
+    'Not interested'
+];
+
+// Field to column index mapping (0-indexed from data columns, excluding checkbox and expand)
+const FIELD_MAP = {
+    'practice': 3,
+    'phone': 4,
+    'address': 5,
+    'city': 6,
+    'state': 7,
+    'qty_2025': 8,
+    'status': 9,
+    'notes': 10
+};
+
+// Currently editing cell
+let currentEditingCell = null;
+
+// Initialize inline editing on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Add double-click handlers to editable cells
+    document.querySelectorAll('.data-row').forEach(row => {
+        const rowNum = row.dataset.rowNum;
+        const cells = row.querySelectorAll('td');
+
+        // Add dblclick to editable columns
+        Object.entries(FIELD_MAP).forEach(([field, colIndex]) => {
+            if (cells[colIndex]) {
+                cells[colIndex].addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    startInlineEdit(row, cells[colIndex], field, rowNum);
+                });
+                cells[colIndex].style.cursor = 'pointer';
+                cells[colIndex].title = 'Double-click to edit';
+            }
+        });
+    });
+});
+
+function startInlineEdit(row, cell, field, rowNum) {
+    // Don't start if already editing
+    if (currentEditingCell) {
+        cancelInlineEdit();
+    }
+
+    currentEditingCell = { row, cell, field, rowNum };
+    const currentValue = cell.textContent.trim();
+
+    // Store original content for cancel
+    cell.dataset.originalContent = cell.innerHTML;
+    cell.dataset.originalValue = currentValue;
+
+    if (field === 'status') {
+        // Create dropdown for status
+        const select = document.createElement('select');
+        select.className = 'inline-edit-select';
+        select.style.cssText = 'width: 100%; padding: 4px; font-size: 0.8125rem; border: 2px solid var(--color-accent); border-radius: 4px;';
+
+        STATUS_OPTIONS.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt || '(empty)';
+            if (opt.toLowerCase() === currentValue.toLowerCase() || (opt === '' && currentValue === '—')) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', () => saveInlineEdit(select.value));
+        select.addEventListener('keydown', handleEditKeydown);
+        select.addEventListener('blur', () => saveInlineEdit(select.value));
+
+        cell.innerHTML = '';
+        cell.appendChild(select);
+        select.focus();
+    } else {
+        // Create text input for other fields
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue === '—' ? '' : currentValue;
+        input.className = 'inline-edit-input';
+        input.style.cssText = 'width: 100%; padding: 4px; font-size: 0.8125rem; border: 2px solid var(--color-accent); border-radius: 4px; box-sizing: border-box;';
+
+        input.addEventListener('keydown', handleEditKeydown);
+        input.addEventListener('blur', () => saveInlineEdit(input.value));
+
+        cell.innerHTML = '';
+        cell.appendChild(input);
+        input.focus();
+        input.select();
+    }
+
+    cell.classList.add('editing');
+}
+
+function handleEditKeydown(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        saveInlineEdit(e.target.value);
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelInlineEdit();
+    } else if (e.key === 'Tab') {
+        e.preventDefault();
+        saveInlineEdit(e.target.value);
+        // Could add logic to move to next editable cell
+    }
+}
+
+async function saveInlineEdit(newValue) {
+    if (!currentEditingCell) return;
+
+    const { row, cell, field, rowNum } = currentEditingCell;
+    const originalValue = cell.dataset.originalValue;
+
+    // Don't save if unchanged
+    if (newValue === originalValue || (newValue === '' && originalValue === '—')) {
+        cancelInlineEdit();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/edit_field', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                row_num: parseInt(rowNum),
+                field: field,
+                value: newValue
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Update cell content
+            cell.classList.remove('editing');
+            cell.innerHTML = newValue || '—';
+
+            // Flash green to indicate success
+            cell.style.backgroundColor = '#d4edda';
+            setTimeout(() => {
+                cell.style.backgroundColor = '';
+            }, 500);
+
+            // Update row color if status changed
+            if (field === 'status' && result.bg_color) {
+                updateRowColor(row, result.bg_color);
+            }
+
+            // Mark row as edited
+            row.classList.add('edited');
+
+            currentEditingCell = null;
+        } else {
+            alert(`Error: ${result.error}`);
+            cancelInlineEdit();
+        }
+    } catch (error) {
+        alert(`Error saving: ${error}`);
+        cancelInlineEdit();
+    }
+}
+
+function cancelInlineEdit() {
+    if (!currentEditingCell) return;
+
+    const { cell } = currentEditingCell;
+    cell.classList.remove('editing');
+    cell.innerHTML = cell.dataset.originalContent;
+    currentEditingCell = null;
+}
+
+function updateRowColor(row, bgColor) {
+    // Remove existing color classes
+    row.classList.remove('row-yellow', 'row-green', 'row-red', 'row-fuschia');
+
+    // Add new color class based on bg_color
+    const colorLower = bgColor.toLowerCase();
+    if (colorLower.includes('ffff00') || colorLower.includes('ffff01')) {
+        row.classList.add('row-yellow');
+    } else if (colorLower.includes('00ff00')) {
+        row.classList.add('row-green');
+    } else if (colorLower.includes('ff0000')) {
+        row.classList.add('row-red');
+    } else if (colorLower.includes('ff00ff')) {
+        row.classList.add('row-fuschia');
+    }
+}
+
 // Category-specific actions
 async function keepFirstDeleteRest() {
     // Get all rows in current category (duplicate groups)

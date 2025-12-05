@@ -1698,6 +1698,67 @@ def api_mark_reviewed():
 
     return jsonify({'success': True, 'count': count})
 
+@app.route('/api/edit_field', methods=['POST'])
+def api_edit_field():
+    """
+    Edit a single field of a row.
+    Used for inline editing (double-click to edit).
+    """
+    data = request.get_json()
+    row_num = data.get('row_num')
+    field = data.get('field')
+    value = data.get('value', '')
+
+    if not row_num or not field:
+        return jsonify({'success': False, 'error': 'Missing row_num or field'}), 400
+
+    # Find the row
+    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+    if not row:
+        return jsonify({'success': False, 'error': 'Row not found'}), 404
+
+    # Editable fields
+    editable_fields = ['practice', 'phone', 'address', 'city', 'state', 'zip', 'status', 'notes', 'qty_2025']
+
+    if field not in editable_fields:
+        return jsonify({'success': False, 'error': f'Field {field} is not editable'}), 400
+
+    # Store before state for undo
+    old_value = getattr(row, field, '')
+    before_state = {
+        'row_num': row_num,
+        'field': field,
+        'old_value': old_value
+    }
+
+    # Update the field
+    setattr(row, field, value)
+
+    # If status changed, update bg_color
+    if field == 'status':
+        row.bg_color = status_to_color(value)
+
+    # Track field edit
+    if 'field_edits' not in row.field_edits:
+        row.field_edits = {}
+    row.field_edits[field] = value
+    row.action = 'edited'
+
+    add_to_undo_stack(
+        'edit_field',
+        f'Changed {field} on row #{row_num}',
+        before_state,
+        {'row_num': row_num, 'field': field, 'new_value': value}
+    )
+
+    return jsonify({
+        'success': True,
+        'row_num': row_num,
+        'field': field,
+        'value': value,
+        'bg_color': row.bg_color if field == 'status' else None
+    })
+
 @app.route('/api/match_orphan_to_invalid', methods=['POST'])
 def api_match_orphan_to_invalid():
     """

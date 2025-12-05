@@ -71,7 +71,7 @@ This document captures the implementation roadmap for completing the EOY (End of
 | 1 | Verify test suite runs with real data | ✅ Complete |
 | 2 | Manual Review category (Category 12) | ✅ Complete |
 | 3 | orphan_no_handler logic | ✅ Complete |
-| 4 | Inline editing (double-click) | ⬜ Pending |
+| 4 | Inline editing (double-click) | ✅ Complete |
 | 5 | Undo/redo restoration | ⬜ Pending |
 | 6 | merge_rows UI | ⬜ Pending |
 | 7 | confirm_network with auto-suggest | ⬜ Pending |
