@@ -44,7 +44,7 @@ python scripts/eoy_tool.py
 
 ### First-Time Setup
 
-1. **Get credentials.json**: Set up Google Sheets API service account (see docs/GSPREAD_SETUP.md)
+1. **Get credentials.json**: Set up Google Sheets API service account (see scripts/tests/archive/test_gspread.py for setup instructions)
 2. **Place in root**: `flask_eoy_tool/credentials.json`
 3. **Run app**: It will connect to "OBGYN List 2025 - Use This List!" sheet
 

@@ -1,6 +1,6 @@
 # AI Agent Principles - Anti-Spaghettification Rules
 
-**Last Modified:** 2025-11-17
+**Last Updated:** 2025-12-05
 
 ## Source of Truth Hierarchy
 
@@ -56,6 +56,18 @@ date  # Check system date FIRST
 - When code changes, update docs in same commit
 - Delete deprecated info immediately (don't let it linger)
 - **CRITICAL:** Whenever you update a documentation file, you MUST update the "Last Updated" date at the top (or bottom) of the file to the current date. This is essential for future agents to know which docs are trustworthy.
+
+### Documentation Best Practices
+
+**Date placement:**
+- "Last Updated" dates belong at the TOP of files (first 5 lines)
+- Use single date per file (not scattered dates throughout sections)
+- Format: `**Last Updated:** YYYY-MM-DD`
+
+**Provider counts and dynamic data:**
+- Use approximate/estimate language: "~700 providers", "approximately 250 orders"
+- Counts change over time - exact numbers become stale quickly
+- If precision needed, reference the source: "see STATS sheet for current counts"
 
 ### 3. Solving Already-Solved Problems
 **Symptom:** Creating new fuzzy matching function when one exists in line 850
