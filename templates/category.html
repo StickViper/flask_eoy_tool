@@ -299,6 +299,9 @@
     <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="markAsReviewed()">
         ✓ Mark Reviewed
     </button>
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="mergeFromMenu()">
+        ⊕ Merge Duplicates
+    </button>
     <hr style="margin: 0.25rem 0; border: none; border-top: 1px solid var(--border-color);">
     <button class="btn btn-ghost btn-sm btn-danger-text" style="width: 100%; justify-content: flex-start; color: var(--color-danger);" onclick="deleteSelectedFromMenu()">
         Delete Row
@@ -327,6 +330,28 @@
                onkeyup="performSearch(this.value)">
         <div style="text-align: right; font-size: 0.875rem; color: var(--color-text-tertiary);">
             Press ESC to close
+        </div>
+    </div>
+</div>
+
+<!-- Merge Modal -->
+<div id="mergeModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; overflow-y: auto;">
+    <div style="position: relative; margin: 40px auto; width: 90%; max-width: 1200px; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+            <h3 style="margin: 0; font-size: 1.25rem; color: var(--color-primary);">Merge Duplicate Rows</h3>
+            <button onclick="closeMergeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--color-text-tertiary);">&times;</button>
+        </div>
+        <p style="color: var(--color-text-secondary); margin-bottom: 1rem;">
+            Select which row should survive. Non-survivors will be marked for deletion. Notes will be merged.
+        </p>
+        <div id="mergeRowsContainer" style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+            <!-- Rows will be inserted here -->
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <button class="btn btn-ghost" onclick="closeMergeModal()">Cancel</button>
+            <button class="btn btn-primary" id="mergeConfirmBtn" onclick="confirmMerge()" disabled>
+                Merge Selected
+            </button>
         </div>
     </div>
 </div>
@@ -1093,7 +1118,141 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         redo();
     }
+    // Escape to close modals
+    if (e.key === 'Escape') {
+        closeMergeModal();
+    }
 });
+
+// =============================================================================
+// MERGE ROWS MODAL
+// =============================================================================
+
+let mergeGroupRows = [];
+let selectedSurvivor = null;
+
+async function openMergeModal(rowNum) {
+    // Get duplicate group for this row
+    try {
+        const response = await fetch('/api/get_duplicate_group', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row_num: rowNum })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            showNotification(result.error || 'Could not load duplicate group', 'error');
+            return;
+        }
+
+        mergeGroupRows = result.rows;
+        selectedSurvivor = null;
+        renderMergeModal();
+        document.getElementById('mergeModal').style.display = 'block';
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+function renderMergeModal() {
+    const container = document.getElementById('mergeRowsContainer');
+    container.innerHTML = '';
+
+    mergeGroupRows.forEach(row => {
+        const card = document.createElement('div');
+        card.className = 'merge-card' + (selectedSurvivor === row.row_num ? ' selected' : '');
+        card.style.cssText = `
+            flex: 1;
+            min-width: 280px;
+            max-width: 400px;
+            border: 2px solid ${selectedSurvivor === row.row_num ? 'var(--color-accent)' : 'var(--border-color)'};
+            border-radius: 8px;
+            padding: 1rem;
+            background: ${selectedSurvivor === row.row_num ? 'var(--color-bg-secondary)' : 'white'};
+            cursor: pointer;
+            transition: all 0.2s ease;
+        `;
+        card.onclick = () => selectSurvivor(row.row_num);
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-weight: 600; color: var(--color-primary);">Row #${row.row_num}</span>
+                <input type="radio" name="survivor" value="${row.row_num}"
+                       ${selectedSurvivor === row.row_num ? 'checked' : ''}
+                       style="width: 18px; height: 18px;">
+            </div>
+            <div style="font-size: 0.875rem; line-height: 1.6;">
+                <div><strong>Practice:</strong> ${row.practice || '—'}</div>
+                <div><strong>Phone:</strong> ${row.phone || '—'}</div>
+                <div><strong>Address:</strong> ${row.address || '—'}</div>
+                <div><strong>City/State:</strong> ${row.city || '—'}, ${row.state || '—'}</div>
+                <div><strong>Status:</strong> ${row.status || '—'}</div>
+                <div><strong>Notes:</strong> <span style="color: var(--color-text-secondary);">${row.notes || '—'}</span></div>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    // Update button state
+    document.getElementById('mergeConfirmBtn').disabled = !selectedSurvivor;
+}
+
+function selectSurvivor(rowNum) {
+    selectedSurvivor = rowNum;
+    renderMergeModal();
+}
+
+function closeMergeModal() {
+    document.getElementById('mergeModal').style.display = 'none';
+    mergeGroupRows = [];
+    selectedSurvivor = null;
+}
+
+async function confirmMerge() {
+    if (!selectedSurvivor) {
+        showNotification('Please select a survivor row', 'warning');
+        return;
+    }
+
+    const otherRowNums = mergeGroupRows
+        .filter(r => r.row_num !== selectedSurvivor)
+        .map(r => r.row_num);
+
+    try {
+        const response = await fetch('/api/merge_rows', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                survivor_row_num: selectedSurvivor,
+                other_row_nums: otherRowNums
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification(`Merged ${result.deleted_count + 1} rows. Survivor: #${result.survivor_row_num}`, 'info');
+            closeMergeModal();
+            location.reload();
+        } else {
+            showNotification(result.error || 'Merge failed', 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+// Add merge option to row context menu
+function mergeFromMenu() {
+    document.getElementById('rowContextMenu').style.display = 'none';
+    if (selectedRows.size > 0) {
+        const firstRow = Array.from(selectedRows)[0];
+        openMergeModal(parseInt(firstRow));
+    }
+}
 
 // Category-specific actions
 async function keepFirstDeleteRest() {

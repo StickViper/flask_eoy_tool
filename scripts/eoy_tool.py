@@ -1253,7 +1253,8 @@ def restore_state(action: Dict, direction: str = 'undo') -> bool:
             return True
 
         elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action',
-                              'change_status', 'change_to_white', 'remove_sent', 'mass_invalid']:
+                              'change_status', 'change_to_white', 'remove_sent', 'mass_invalid',
+                              'merge_rows']:
             # Bulk actions - restore all affected rows
             rows_data = before_state.get('rows', [])
             for row_data in rows_data:
@@ -1792,6 +1793,118 @@ def api_mass_invalid():
         )
 
     return jsonify({'success': True, 'count': count})
+
+@app.route('/api/get_duplicate_group', methods=['POST'])
+def api_get_duplicate_group():
+    """Get all rows in a duplicate group for merge UI"""
+    data = request.get_json()
+    group_id = data.get('group_id')
+    row_num = data.get('row_num')
+
+    # Find group_id from row_num if not provided
+    if not group_id and row_num:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            group_id = row.duplicate_group_id
+
+    if not group_id:
+        return jsonify({'success': False, 'error': 'No duplicate group specified'}), 400
+
+    # Get all rows in this group
+    group_rows = [r for r in state.wl_rows if r.duplicate_group_id == group_id]
+
+    if len(group_rows) < 2:
+        return jsonify({'success': False, 'error': 'Not enough rows in group'}), 400
+
+    return jsonify({
+        'success': True,
+        'group_id': group_id,
+        'rows': [r.to_dict() for r in group_rows]
+    })
+
+@app.route('/api/merge_rows', methods=['POST'])
+def api_merge_rows():
+    """
+    Merge duplicate rows into a survivor.
+    - survivor_row_num: Row that will keep existing
+    - other_row_nums: Rows to merge into survivor then delete
+    - merge_fields: Optional dict of field -> row_num to take value from
+    """
+    data = request.get_json()
+    survivor_row_num = data.get('survivor_row_num')
+    other_row_nums = data.get('other_row_nums', [])
+    merge_fields = data.get('merge_fields', {})  # field -> row_num
+
+    if not survivor_row_num:
+        return jsonify({'success': False, 'error': 'No survivor row specified'}), 400
+
+    if not other_row_nums:
+        return jsonify({'success': False, 'error': 'No rows to merge'}), 400
+
+    # Find survivor row
+    survivor = next((r for r in state.wl_rows if r.row_num == survivor_row_num), None)
+    if not survivor:
+        return jsonify({'success': False, 'error': 'Survivor row not found'}), 404
+
+    # Find other rows
+    others = [r for r in state.wl_rows if r.row_num in other_row_nums]
+    if not others:
+        return jsonify({'success': False, 'error': 'No other rows found'}), 404
+
+    # Store before states for undo
+    before_states = [{
+        'row_num': survivor.row_num,
+        'fields': {
+            'practice': survivor.practice, 'phone': survivor.phone,
+            'address': survivor.address, 'city': survivor.city,
+            'state': survivor.state, 'zip': survivor.zip,
+            'notes': survivor.notes, 'action': survivor.action
+        }
+    }]
+    for other in others:
+        before_states.append({
+            'row_num': other.row_num,
+            'fields': {'action': other.action}
+        })
+
+    # Apply field merges from specific rows
+    for field, source_row_num in merge_fields.items():
+        source = next((r for r in state.wl_rows if r.row_num == source_row_num), None)
+        if source and hasattr(survivor, field):
+            value = getattr(source, field, '')
+            setattr(survivor, field, value)
+            survivor.field_edits[field] = value
+
+    # Merge notes from all rows (combine unique chunks)
+    all_notes = set()
+    if survivor.notes:
+        all_notes.update(c.strip() for c in survivor.notes.split(';') if c.strip())
+    for other in others:
+        if other.notes:
+            all_notes.update(c.strip() for c in other.notes.split(';') if c.strip())
+
+    if all_notes:
+        merged_notes = '; '.join(sorted(all_notes))
+        survivor.notes = merged_notes
+        survivor.field_edits['notes'] = merged_notes
+
+    survivor.action = 'merged_survivor'
+
+    # Mark others as deleted
+    for other in others:
+        other.action = 'merged_deleted'
+
+    add_to_undo_stack(
+        'merge_rows',
+        f'Merged {len(others) + 1} rows (survivor: #{survivor_row_num})',
+        {'rows': before_states, 'survivor_row_num': survivor_row_num, 'other_row_nums': other_row_nums}
+    )
+
+    return jsonify({
+        'success': True,
+        'survivor_row_num': survivor_row_num,
+        'deleted_count': len(others)
+    })
 
 @app.route('/api/send_to_manual_review', methods=['POST'])
 def api_send_to_manual_review():
