@@ -302,6 +302,9 @@
     <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="mergeFromMenu()">
         ⊕ Merge Duplicates
     </button>
+    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="confirmNetworkFromMenu()">
+        🔗 Confirm Network
+    </button>
     <hr style="margin: 0.25rem 0; border: none; border-top: 1px solid var(--border-color);">
     <button class="btn btn-ghost btn-sm btn-danger-text" style="width: 100%; justify-content: flex-start; color: var(--color-danger);" onclick="deleteSelectedFromMenu()">
         Delete Row
@@ -351,6 +354,39 @@
             <button class="btn btn-ghost" onclick="closeMergeModal()">Cancel</button>
             <button class="btn btn-primary" id="mergeConfirmBtn" onclick="confirmMerge()" disabled>
                 Merge Selected
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Network Confirmation Modal -->
+<div id="networkModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; overflow-y: auto;">
+    <div style="position: relative; margin: 40px auto; width: 90%; max-width: 900px; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+            <h3 style="margin: 0; font-size: 1.25rem; color: var(--color-primary);">Confirm Network</h3>
+            <button onclick="closeNetworkModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--color-text-tertiary);">&times;</button>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Network Name:</label>
+            <input type="text" id="networkNameInput" style="width: 100%; padding: 0.75rem; border: 2px solid var(--border-color); border-radius: 8px; font-size: 1rem;">
+            <p style="font-size: 0.8125rem; color: var(--color-text-tertiary); margin-top: 0.25rem;">
+                Auto-suggested name. Edit if needed.
+            </p>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Add Note to All Rows (optional):</label>
+            <input type="text" id="networkNoteInput" placeholder="e.g., Network confirmed 2025" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.875rem;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Network Locations:</label>
+            <div id="networkRowsContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                <!-- Rows will be inserted here -->
+            </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <button class="btn btn-ghost" onclick="closeNetworkModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmNetworkAction()">
+                Confirm Network
             </button>
         </div>
     </div>
@@ -1121,6 +1157,7 @@ document.addEventListener('keydown', (e) => {
     // Escape to close modals
     if (e.key === 'Escape') {
         closeMergeModal();
+        closeNetworkModal();
     }
 });
 
@@ -1251,6 +1288,140 @@ function mergeFromMenu() {
     if (selectedRows.size > 0) {
         const firstRow = Array.from(selectedRows)[0];
         openMergeModal(parseInt(firstRow));
+    }
+}
+
+// =============================================================================
+// NETWORK CONFIRMATION MODAL
+// =============================================================================
+
+let networkGroupRows = [];
+let selectedNetworkRows = new Set();
+
+async function openNetworkModal(rowNum) {
+    try {
+        const response = await fetch('/api/get_network_group', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row_num: rowNum })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            showNotification(result.error || 'Could not load network', 'error');
+            return;
+        }
+
+        networkGroupRows = result.rows;
+        selectedNetworkRows = new Set(result.rows.map(r => r.row_num));
+
+        // Set the suggested network name
+        document.getElementById('networkNameInput').value = result.suggested_name || 'Network';
+        document.getElementById('networkNoteInput').value = '';
+
+        renderNetworkModal();
+        document.getElementById('networkModal').style.display = 'block';
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+function renderNetworkModal() {
+    const container = document.getElementById('networkRowsContainer');
+    container.innerHTML = '';
+
+    networkGroupRows.forEach(row => {
+        const isSelected = selectedNetworkRows.has(row.row_num);
+        const rowEl = document.createElement('div');
+        rowEl.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            background: ${isSelected ? 'var(--color-bg-secondary)' : 'white'};
+        `;
+
+        rowEl.innerHTML = `
+            <input type="checkbox" ${isSelected ? 'checked' : ''}
+                   onchange="toggleNetworkRow(${row.row_num})"
+                   style="width: 18px; height: 18px;">
+            <div style="flex: 1; font-size: 0.875rem;">
+                <div style="font-weight: 500;">#${row.row_num}: ${row.practice || '—'}</div>
+                <div style="color: var(--color-text-secondary);">
+                    ${row.address || '—'}, ${row.city || '—'} ${row.state || '—'}
+                </div>
+            </div>
+            <div style="font-size: 0.8125rem; color: var(--color-text-tertiary);">
+                ${row.phone || '—'}
+            </div>
+        `;
+
+        container.appendChild(rowEl);
+    });
+}
+
+function toggleNetworkRow(rowNum) {
+    if (selectedNetworkRows.has(rowNum)) {
+        selectedNetworkRows.delete(rowNum);
+    } else {
+        selectedNetworkRows.add(rowNum);
+    }
+    renderNetworkModal();
+}
+
+function closeNetworkModal() {
+    document.getElementById('networkModal').style.display = 'none';
+    networkGroupRows = [];
+    selectedNetworkRows.clear();
+}
+
+async function confirmNetworkAction() {
+    const networkName = document.getElementById('networkNameInput').value.trim();
+    const addNote = document.getElementById('networkNoteInput').value.trim();
+
+    if (!networkName) {
+        showNotification('Please enter a network name', 'warning');
+        return;
+    }
+
+    if (selectedNetworkRows.size === 0) {
+        showNotification('Please select at least one row', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/confirm_network', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                network_name: networkName,
+                row_nums: Array.from(selectedNetworkRows),
+                add_note: addNote
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification(`Confirmed ${result.count} rows as "${result.network_name}"`, 'info');
+            closeNetworkModal();
+            location.reload();
+        } else {
+            showNotification(result.error || 'Failed to confirm network', 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+// Add confirm network option to context menu
+function confirmNetworkFromMenu() {
+    document.getElementById('rowContextMenu').style.display = 'none';
+    if (selectedRows.size > 0) {
+        const firstRow = Array.from(selectedRows)[0];
+        openNetworkModal(parseInt(firstRow));
     }
 }
 

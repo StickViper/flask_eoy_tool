@@ -1254,7 +1254,7 @@ def restore_state(action: Dict, direction: str = 'undo') -> bool:
 
         elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action',
                               'change_status', 'change_to_white', 'remove_sent', 'mass_invalid',
-                              'merge_rows']:
+                              'merge_rows', 'confirm_network']:
             # Bulk actions - restore all affected rows
             rows_data = before_state.get('rows', [])
             for row_data in rows_data:
@@ -1432,38 +1432,6 @@ def api_accept_all_matches():
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
             row.action = 'accepted'
-            count += 1
-
-    return jsonify({'success': True, 'count': count})
-
-@app.route('/api/confirm_network', methods=['POST'])
-def api_confirm_network():
-    """Confirm network and add notation to notes"""
-    data = request.get_json()
-    category_id = data.get('category_id')
-    network_name = data.get('network_name', '').strip()
-
-    if not network_name:
-        return jsonify({'success': False, 'error': 'Network name required'}), 400
-
-    # Find category
-    category = next((c for c in state.categories if c.id == category_id), None)
-    if not category:
-        return jsonify({'success': False, 'error': 'Category not found'}), 404
-
-    # Add network notation to all rows
-    count = 0
-    network_notation = f"{network_name.lower().replace(' ', '')} network (~{len(category.row_nums)})"
-
-    for row_num in category.row_nums:
-        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
-        if row:
-            # Remove old network notations
-            notes = re.sub(r'\b\w+ network \(~\d+\)', '', row.notes, flags=re.IGNORECASE)
-            notes = re.sub(r'\s*;\s*;', ';', notes).strip(';').strip()
-
-            # Add new notation
-            row.notes = f"{network_notation}; {notes}" if notes else network_notation
             count += 1
 
     return jsonify({'success': True, 'count': count})
@@ -1904,6 +1872,140 @@ def api_merge_rows():
         'success': True,
         'survivor_row_num': survivor_row_num,
         'deleted_count': len(others)
+    })
+
+@app.route('/api/get_network_group', methods=['POST'])
+def api_get_network_group():
+    """Get all rows in a network for confirm_network UI"""
+    data = request.get_json()
+    row_num = data.get('row_num')
+
+    if not row_num:
+        return jsonify({'success': False, 'error': 'No row number provided'}), 400
+
+    # Find the row and its network_name
+    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+    if not row or not row.network_name:
+        return jsonify({'success': False, 'error': 'Row is not part of a network'}), 400
+
+    network_name = row.network_name
+
+    # Get all rows with the same network_name
+    network_rows = [r for r in state.wl_rows if r.network_name == network_name]
+
+    # Auto-derive a better network name from common words
+    suggested_name = derive_network_name(network_rows)
+
+    return jsonify({
+        'success': True,
+        'network_name': network_name,
+        'suggested_name': suggested_name,
+        'rows': [r.to_dict() for r in network_rows]
+    })
+
+def derive_network_name(rows):
+    """
+    Derive a readable network name from common practice name words.
+    E.g., "Downtown Medical", "Uptown Medical" -> "Medical"
+    """
+    if not rows:
+        return "Unknown Network"
+
+    # Get words from all practice names, excluding common suffixes
+    exclude_words = {'the', 'of', 'and', 'at', 'in', 'for', 'a', 'an',
+                     'north', 'south', 'east', 'west', 'downtown', 'uptown',
+                     'medical', 'clinic', 'center', 'office', 'health',
+                     'healthcare', 'care', 'group', 'associates', 'llc', 'pc', 'md'}
+
+    word_lists = []
+    for r in rows:
+        words = set(w.lower() for w in re.split(r'\W+', r.practice) if len(w) > 2)
+        word_lists.append(words)
+
+    # Find common words across all practices
+    if word_lists:
+        common = word_lists[0].copy()
+        for wl in word_lists[1:]:
+            common &= wl
+
+        # Remove excluded words
+        meaningful = common - exclude_words
+
+        if meaningful:
+            # Return the longest meaningful word, capitalized
+            best_word = max(meaningful, key=len)
+            return best_word.title() + " Network"
+
+    # Fallback: use first practice name
+    first_name = rows[0].practice.split()[0] if rows[0].practice else "Unknown"
+    return first_name + " Network"
+
+@app.route('/api/confirm_network', methods=['POST'])
+def api_confirm_network():
+    """
+    Confirm rows as a network.
+    - network_name: The name for this network
+    - row_nums: Rows to include in the network
+    - add_note: Optional note to add to all rows
+    """
+    data = request.get_json()
+    network_name = data.get('network_name', 'Confirmed Network')
+    row_nums = data.get('row_nums', [])
+    add_note = data.get('add_note', '')
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No rows specified'}), 400
+
+    count = 0
+    before_states = []
+
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {
+                    'network_name': row.network_name,
+                    'notes': row.notes,
+                    'action': row.action
+                }
+            })
+
+            # Update network name
+            row.network_name = network_name
+
+            # Add note if provided
+            if add_note:
+                current_notes = row.notes or ""
+                if add_note.lower() not in current_notes.lower():
+                    if current_notes and not current_notes.endswith(';'):
+                        current_notes += '; '
+                    elif current_notes:
+                        current_notes += ' '
+                    row.notes = current_notes + add_note
+                    row.field_edits['notes'] = row.notes
+
+            row.action = 'network_confirmed'
+            count += 1
+
+    # Remove from networks category since confirmed
+    networks_cat = next((c for c in state.categories if c.id == 'networks'), None)
+    if networks_cat:
+        for row_num in row_nums:
+            if row_num in networks_cat.row_nums:
+                networks_cat.row_nums.remove(row_num)
+
+    if before_states:
+        add_to_undo_stack(
+            'confirm_network',
+            f'Confirmed {count} row(s) as "{network_name}"',
+            {'rows': before_states, 'network_name': network_name}
+        )
+
+    return jsonify({
+        'success': True,
+        'count': count,
+        'network_name': network_name
     })
 
 @app.route('/api/send_to_manual_review', methods=['POST'])

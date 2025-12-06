@@ -74,7 +74,7 @@ This document captures the implementation roadmap for completing the EOY (End of
 | 4 | Inline editing (double-click) | ✅ Complete |
 | 5 | Undo/redo restoration | ✅ Complete |
 | 6 | merge_rows UI | ✅ Complete |
-| 7 | confirm_network with auto-suggest | ⬜ Pending |
+| 7 | confirm_network with auto-suggest | ✅ Complete |
 | 8 | Urgency progress bar | ⬜ Pending |
 | 9 | Export functionality (CSV + copy-paste) | ⬜ Pending |
 
