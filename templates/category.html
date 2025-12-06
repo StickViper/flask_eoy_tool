@@ -820,7 +820,19 @@ function startInlineEdit(row, cell, field, rowNum) {
     }
 
     currentEditingCell = { row, cell, field, rowNum };
-    const currentValue = cell.textContent.trim();
+
+    // For notes, reconstruct from chunks with semicolons
+    let currentValue;
+    if (field === 'notes') {
+        const chunks = cell.querySelectorAll('.note-chunk');
+        if (chunks.length > 0) {
+            currentValue = Array.from(chunks).map(c => c.textContent.trim()).join('; ');
+        } else {
+            currentValue = cell.textContent.trim();
+        }
+    } else {
+        currentValue = cell.textContent.trim();
+    }
 
     // Store original content for cancel
     cell.dataset.originalContent = cell.innerHTML;
@@ -911,7 +923,32 @@ async function saveInlineEdit(newValue) {
         if (result.success) {
             // Update cell content
             cell.classList.remove('editing');
-            cell.innerHTML = newValue || '—';
+
+            // For notes, render as chunks
+            if (field === 'notes' && newValue) {
+                const chunks = newValue.split(';').filter(c => c.trim());
+                if (chunks.length > 0) {
+                    const chunkDiv = document.createElement('div');
+                    chunkDiv.className = 'note-chunks';
+                    chunks.forEach((chunk, idx) => {
+                        const span = document.createElement('span');
+                        span.className = 'note-chunk';
+                        span.dataset.chunkIndex = idx;
+                        span.textContent = chunk.trim();
+                        span.oncontextmenu = (e) => {
+                            showNoteChunkMenu(e, rowNum, idx, chunk.trim());
+                            return false;
+                        };
+                        chunkDiv.appendChild(span);
+                    });
+                    cell.innerHTML = '';
+                    cell.appendChild(chunkDiv);
+                } else {
+                    cell.innerHTML = '<span class="text-tertiary">—</span>';
+                }
+            } else {
+                cell.innerHTML = newValue || '—';
+            }
 
             // Flash green to indicate success
             cell.style.backgroundColor = '#d4edda';

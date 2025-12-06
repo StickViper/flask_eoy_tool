@@ -1252,7 +1252,8 @@ def restore_state(action: Dict, direction: str = 'undo') -> bool:
                         orphan_cat.row_nums.remove(orphan_row_num)
             return True
 
-        elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action']:
+        elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action',
+                              'change_status', 'change_to_white', 'remove_sent', 'mass_invalid']:
             # Bulk actions - restore all affected rows
             rows_data = before_state.get('rows', [])
             for row_data in rows_data:
@@ -1264,7 +1265,9 @@ def restore_state(action: Dict, direction: str = 'undo') -> bool:
                         for field, value in fields.items():
                             if hasattr(row, field):
                                 setattr(row, field, value)
-                    # For redo, use after_state if available
+                        # Clear field_edits that were set by the action
+                        row.field_edits = {}
+                    # For redo, would need to re-apply the action
             return True
 
         else:
@@ -1642,15 +1645,27 @@ def api_change_status():
     target_rows = row_nums if row_nums else category.row_nums
 
     count = 0
+    before_states = []
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'status': row.status, 'bg_color': row.bg_color, 'action': row.action}
+            })
             # Update status
             row.field_edits['status'] = new_status
             # Derive color from status
             row.field_edits['bg_color'] = status_to_color(new_status)
             row.action = 'edit'
             count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'change_status',
+            f'Changed status to "{new_status}" on {count} row(s)',
+            {'rows': before_states, 'new_status': new_status}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1666,9 +1681,17 @@ def api_change_to_white():
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
     count = 0
+    before_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {
+                    'status': row.status, 'bg_color': row.bg_color,
+                    'qty_2025': row.qty_2025, 'notes': row.notes, 'action': row.action
+                }
+            })
             row.field_edits['status'] = 'Not interested'
             row.field_edits['bg_color'] = '#ffffff'
             row.field_edits['qty_2025'] = '0'
@@ -1685,6 +1708,13 @@ def api_change_to_white():
             row.action = 'edit'
             count += 1
 
+    if before_states:
+        add_to_undo_stack(
+            'change_to_white',
+            f'Changed {count} row(s) to Not Interested',
+            {'rows': before_states}
+        )
+
     return jsonify({'success': True, 'count': count})
 
 @app.route('/api/remove_sent', methods=['POST'])
@@ -1698,8 +1728,8 @@ def api_remove_sent():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    import re
     count = 0
+    before_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row and row.notes:
@@ -1712,9 +1742,20 @@ def api_remove_sent():
             new_notes = re.sub(r'\s+', ' ', new_notes).strip()
 
             if new_notes != row.notes:
+                before_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': row.notes, 'action': row.action}
+                })
                 row.field_edits['notes'] = new_notes
                 row.action = 'edit'
                 count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'remove_sent',
+            f'Removed "sent" from {count} row(s)',
+            {'rows': before_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1731,12 +1772,24 @@ def api_mass_invalid():
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
     count = 0
+    before_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'action': row.action}
+            })
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
             count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'mass_invalid',
+            f'Marked {count} row(s) as invalid',
+            {'rows': before_states, 'reason': reason}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1866,8 +1919,6 @@ def api_edit_field():
         row.bg_color = status_to_color(value)
 
     # Track field edit
-    if 'field_edits' not in row.field_edits:
-        row.field_edits = {}
     row.field_edits[field] = value
     row.action = 'edited'
 
