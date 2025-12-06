@@ -14,6 +14,8 @@ from rapidfuzz import fuzz
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 import json
+import csv
+import io
 import os
 import re
 from datetime import datetime
@@ -1232,6 +1234,113 @@ def api_save_progress():
 def api_get_progress():
     """Get current progress by urgency level"""
     return jsonify(calculate_progress())
+
+
+def get_action_taken(row) -> str:
+    """
+    Derive action taken label for a row based on its action and field_edits.
+    Returns standard action labels for export.
+    """
+    if not row.action and not row.field_edits:
+        return ''
+
+    action = row.action or ''
+
+    # Map actions to standard labels
+    action_map = {
+        'deleted': 'DELETED',
+        'accepted': 'VERIFIED',
+        'verified': 'VERIFIED',
+        'marked_reviewed': 'VERIFIED',
+        'matched': 'VERIFIED',
+        'merged_into': 'MERGED',
+        'network_confirmed': 'NETWORK_CONFIRMED',
+        'moved_to_invalid': 'MOVED_TO_INVALID',
+        'converted': 'CONVERTED',
+    }
+
+    # Check for action match
+    for key, label in action_map.items():
+        if key in action.lower():
+            return label
+
+    # If has field edits but no specific action
+    if row.field_edits:
+        return 'EDITED'
+
+    # Has some action but not mapped
+    if action:
+        return 'MODIFIED'
+
+    return ''
+
+
+@app.route('/api/export')
+def api_export():
+    """
+    Export all rows as CSV.
+    Query params:
+    - mode: 'download' (file) or 'clipboard' (json with CSV text)
+    - include_deleted: 'true' or 'false' (default true)
+    """
+    from flask import Response
+
+    mode = request.args.get('mode', 'clipboard')
+    include_deleted = request.args.get('include_deleted', 'true').lower() == 'true'
+
+    # Filter rows
+    rows = state.wl_rows
+    if not include_deleted:
+        rows = [r for r in rows if 'deleted' not in (r.action or '').lower()]
+
+    # Sort by row_num
+    rows = sorted(rows, key=lambda r: r.row_num)
+
+    # Build CSV
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+
+    for row in rows:
+        # Clean notes (replace newlines with space)
+        notes = (row.notes or '').replace('\n', ' ').replace('\r', ' ')
+
+        # Get action taken
+        action_taken = get_action_taken(row)
+
+        # Write row: practice, phone, address, city, state, zip, qty_2023, qty_2024, qty_2025, status, notes, action_taken
+        writer.writerow([
+            row.practice,
+            row.phone,
+            row.address,
+            row.city,
+            row.state,
+            row.zip,
+            row.qty_2023,
+            row.qty_2024,
+            row.qty_2025,
+            row.status,
+            notes,
+            action_taken
+        ])
+
+    csv_text = output.getvalue()
+
+    if mode == 'download':
+        # Return as downloadable file
+        filename = f'eoy_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        return Response(
+            csv_text,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+    else:
+        # Return as JSON for clipboard copy
+        return jsonify({
+            'success': True,
+            'csv': csv_text,
+            'row_count': len(rows)
+        })
+
 
 def restore_state(action: Dict, direction: str = 'undo') -> bool:
     """

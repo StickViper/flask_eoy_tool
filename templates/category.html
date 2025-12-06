@@ -76,6 +76,27 @@
                     ↷ Redo
                 </button>
             </div>
+
+            <!-- Export Section -->
+            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-tertiary); margin-bottom: 0.5rem;">
+                    Export
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary btn-sm" onclick="exportToClipboard()" style="flex: 1; font-size: 0.75rem;" title="Copy CSV to clipboard">
+                        📋 Copy CSV
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportToFile()" style="flex: 1; font-size: 0.75rem;" title="Download CSV file">
+                        ⬇ Download
+                    </button>
+                </div>
+                <div style="margin-top: 0.5rem;">
+                    <label style="font-size: 0.7rem; color: var(--color-text-secondary); display: flex; align-items: center; gap: 0.25rem; cursor: pointer;">
+                        <input type="checkbox" id="includeDeleted" checked style="margin: 0;">
+                        Include deleted rows
+                    </label>
+                </div>
+            </div>
         </div>
     </aside>
 
@@ -1676,6 +1697,39 @@ function sortTable(columnIndex) {
 
     // Re-append sorted rows
     rows.forEach(row => tbody.appendChild(row));
+}
+
+// =====================================
+// Export Functions
+// =====================================
+
+async function exportToClipboard() {
+    const includeDeleted = document.getElementById('includeDeleted').checked;
+
+    try {
+        const response = await fetch(`/api/export?mode=clipboard&include_deleted=${includeDeleted}`);
+        const result = await response.json();
+
+        if (result.success) {
+            // Copy to clipboard
+            await navigator.clipboard.writeText(result.csv);
+            showNotification(`Copied ${result.row_count} rows to clipboard!`, 'info');
+        } else {
+            showNotification(`Export failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Export failed: ${error}`, 'error');
+    }
+}
+
+async function exportToFile() {
+    const includeDeleted = document.getElementById('includeDeleted').checked;
+
+    // Direct download via browser
+    const url = `/api/export?mode=download&include_deleted=${includeDeleted}`;
+    window.location.href = url;
+
+    showNotification('Download started...', 'info');
 }
 </script>
 {% endblock %}
