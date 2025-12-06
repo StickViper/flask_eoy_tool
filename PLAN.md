@@ -76,7 +76,7 @@ This document captures the implementation roadmap for completing the EOY (End of
 | 6 | merge_rows UI | ✅ Complete |
 | 7 | confirm_network with auto-suggest | ✅ Complete |
 | 8 | Urgency progress bar | ✅ Complete |
-| 9 | Export functionality (CSV + copy-paste) | ⬜ Pending |
+| 9 | Export functionality (CSV + copy-paste) | ✅ Complete |
 
 ---
 
