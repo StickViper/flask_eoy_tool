@@ -1083,6 +1083,79 @@ def save_progress():
     print(f"Progress saved to {filename}")
     return filename
 
+
+def calculate_progress() -> Dict:
+    """
+    Calculate progress counts by urgency level.
+    Returns dict with counts for critical, review, verify, and resolved.
+    """
+    # Define urgency levels
+    CRITICAL = {'exact_dupes', 'yellow_low', 'orphan_no', 'red_invalid'}
+    REVIEW = {'networks', 'fuzzy_dupes', 'yellow_80', 'green_sent', 'not_interested_invalid'}
+    VERIFY = {'yellow_95', 'fuschia_vm', 'manual_review'}
+
+    counts = {
+        'critical_total': 0,
+        'critical_resolved': 0,
+        'review_total': 0,
+        'review_resolved': 0,
+        'verify_total': 0,
+        'verify_resolved': 0,
+    }
+
+    # Track which rows we've already counted (for multi-category rows)
+    # Use highest urgency for each row
+    row_urgency = {}  # row_num -> urgency level
+
+    for cat in state.categories:
+        if cat.id in CRITICAL:
+            urgency = 'critical'
+            priority = 3
+        elif cat.id in REVIEW:
+            urgency = 'review'
+            priority = 2
+        elif cat.id in VERIFY:
+            urgency = 'verify'
+            priority = 1
+        else:
+            continue  # Unknown category
+
+        for row_num in cat.row_nums:
+            # Only count in highest urgency category
+            current = row_urgency.get(row_num)
+            if current is None or priority > current[1]:
+                row_urgency[row_num] = (urgency, priority)
+
+    # Now count by urgency
+    for row_num, (urgency, _) in row_urgency.items():
+        counts[f'{urgency}_total'] += 1
+
+        # Check if resolved (has action taken)
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.action:
+            counts[f'{urgency}_resolved'] += 1
+
+    # Calculate totals and percentages
+    total = counts['critical_total'] + counts['review_total'] + counts['verify_total']
+    resolved = counts['critical_resolved'] + counts['review_resolved'] + counts['verify_resolved']
+
+    counts['total'] = total
+    counts['resolved'] = resolved
+    counts['percent'] = round((resolved / total * 100) if total > 0 else 0, 1)
+
+    # Calculate segment widths for the progress bar
+    if total > 0:
+        counts['critical_width'] = round(counts['critical_total'] / total * 100, 1)
+        counts['review_width'] = round(counts['review_total'] / total * 100, 1)
+        counts['verify_width'] = round(counts['verify_total'] / total * 100, 1)
+    else:
+        counts['critical_width'] = 0
+        counts['review_width'] = 0
+        counts['verify_width'] = 0
+
+    return counts
+
+
 # ============================================================================
 # FLASK ROUTES
 # ============================================================================
@@ -1142,7 +1215,8 @@ def category(category_id):
     return render_template('category.html',
                          category=cat,
                          rows=rows,
-                         categories=state.categories)
+                         categories=state.categories,
+                         progress=calculate_progress())
 
 @app.route('/api/save_progress', methods=['POST'])
 def api_save_progress():
@@ -1152,6 +1226,12 @@ def api_save_progress():
         return jsonify({'success': True, 'filename': filename})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/get_progress')
+def api_get_progress():
+    """Get current progress by urgency level"""
+    return jsonify(calculate_progress())
 
 def restore_state(action: Dict, direction: str = 'undo') -> bool:
     """

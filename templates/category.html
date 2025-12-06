@@ -11,16 +11,32 @@
             <p class="sidebar-subtitle">OBGYN List {{ state.year if state else 2025 }}</p>
         </div>
 
-        <!-- Progress Section -->
+        <!-- Urgency Progress Section -->
         <div class="progress-section">
-            <div class="progress-label">Overall Progress</div>
-            {% set completed = categories | selectattr('row_count', 'equalto', 0) | list | length %}
-            {% set total = categories | length %}
-            {% set percent = (completed / total * 100) if total > 0 else 0 %}
-            <div class="progress-bar">
-                <div class="progress-bar-fill" style="width: {{ percent }}%;"></div>
+            <div class="progress-label">Urgency Progress</div>
+            <div class="urgency-bar">
+                {% if progress.critical_width > 0 %}
+                <div class="urgency-segment critical" style="width: {{ progress.critical_width }}%;" title="Critical: {{ progress.critical_resolved }}/{{ progress.critical_total }}">
+                    <div class="urgency-fill" style="width: {{ (progress.critical_resolved / progress.critical_total * 100) if progress.critical_total > 0 else 0 }}%;"></div>
+                </div>
+                {% endif %}
+                {% if progress.review_width > 0 %}
+                <div class="urgency-segment review" style="width: {{ progress.review_width }}%;" title="Review: {{ progress.review_resolved }}/{{ progress.review_total }}">
+                    <div class="urgency-fill" style="width: {{ (progress.review_resolved / progress.review_total * 100) if progress.review_total > 0 else 0 }}%;"></div>
+                </div>
+                {% endif %}
+                {% if progress.verify_width > 0 %}
+                <div class="urgency-segment verify" style="width: {{ progress.verify_width }}%;" title="Verify: {{ progress.verify_resolved }}/{{ progress.verify_total }}">
+                    <div class="urgency-fill" style="width: {{ (progress.verify_resolved / progress.verify_total * 100) if progress.verify_total > 0 else 0 }}%;"></div>
+                </div>
+                {% endif %}
             </div>
-            <div class="progress-text">{{ completed }}/{{ total }} categories complete</div>
+            <div class="progress-text">{{ progress.resolved }}/{{ progress.total }} rows resolved ({{ progress.percent }}%)</div>
+            <div class="urgency-legend">
+                <span class="legend-item"><span class="legend-dot critical"></span>Critical</span>
+                <span class="legend-item"><span class="legend-dot review"></span>Review</span>
+                <span class="legend-item"><span class="legend-dot verify"></span>Verify</span>
+            </div>
         </div>
 
         <!-- Categories List -->
@@ -1026,6 +1042,9 @@ async function saveInlineEdit(newValue) {
             row.classList.add('edited');
 
             currentEditingCell = null;
+
+            // Update progress bar (edit might affect action state)
+            updateProgressBar();
         } else {
             alert(`Error: ${result.error}`);
             cancelInlineEdit();
@@ -1140,6 +1159,52 @@ function showNotification(message, type = 'info') {
         notification.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => notification.remove(), 300);
     }, 3000);
+}
+
+async function updateProgressBar() {
+    try {
+        const response = await fetch('/api/get_progress');
+        const progress = await response.json();
+
+        // Update progress text
+        const progressText = document.querySelector('.progress-section .progress-text');
+        if (progressText) {
+            progressText.textContent = `${progress.resolved}/${progress.total} rows resolved (${progress.percent}%)`;
+        }
+
+        // Update each urgency segment
+        const urgencyBar = document.querySelector('.urgency-bar');
+        if (urgencyBar) {
+            // Rebuild the urgency bar with updated data
+            urgencyBar.innerHTML = '';
+
+            if (progress.critical_width > 0) {
+                const criticalPct = progress.critical_total > 0 ? (progress.critical_resolved / progress.critical_total * 100) : 0;
+                urgencyBar.innerHTML += `
+                    <div class="urgency-segment critical" style="width: ${progress.critical_width}%;" title="Critical: ${progress.critical_resolved}/${progress.critical_total}">
+                        <div class="urgency-fill" style="width: ${criticalPct}%;"></div>
+                    </div>`;
+            }
+
+            if (progress.review_width > 0) {
+                const reviewPct = progress.review_total > 0 ? (progress.review_resolved / progress.review_total * 100) : 0;
+                urgencyBar.innerHTML += `
+                    <div class="urgency-segment review" style="width: ${progress.review_width}%;" title="Review: ${progress.review_resolved}/${progress.review_total}">
+                        <div class="urgency-fill" style="width: ${reviewPct}%;"></div>
+                    </div>`;
+            }
+
+            if (progress.verify_width > 0) {
+                const verifyPct = progress.verify_total > 0 ? (progress.verify_resolved / progress.verify_total * 100) : 0;
+                urgencyBar.innerHTML += `
+                    <div class="urgency-segment verify" style="width: ${progress.verify_width}%;" title="Verify: ${progress.verify_resolved}/${progress.verify_total}">
+                        <div class="urgency-fill" style="width: ${verifyPct}%;"></div>
+                    </div>`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to update progress bar:', error);
+    }
 }
 
 // Add keyboard shortcuts for undo/redo
