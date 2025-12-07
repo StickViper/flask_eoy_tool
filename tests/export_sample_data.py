@@ -29,7 +29,7 @@ def main():
     try:
         # Load real data
         print("Loading data from Google Sheets...")
-        wl_rows, no_rows, invalid_rows, _ = load_data(year=2025)
+        wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet = load_data(year=2025)
         print(f"Loaded {len(wl_rows)} WL rows, {len(no_rows)} NO rows")
         print()
 
