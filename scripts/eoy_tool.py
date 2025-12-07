@@ -14,6 +14,8 @@ from rapidfuzz import fuzz
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 import json
+import csv
+import io
 import os
 import re
 from datetime import datetime
@@ -118,6 +120,28 @@ class NewOrderRow:
         }
 
 @dataclass
+class InvalidRow:
+    """Single row from Invalid/Inactive List"""
+    row_num: int
+    practice: str
+    phone: str
+    address: str
+    city: str
+    state: str
+    reason: str  # Why they're invalid
+
+    def to_dict(self):
+        return {
+            'row_num': self.row_num,
+            'practice': self.practice,
+            'phone': self.phone,
+            'address': self.address,
+            'city': self.city,
+            'state': self.state,
+            'reason': self.reason
+        }
+
+@dataclass
 class ReviewCategory:
     """Group of issues for review"""
     id: str
@@ -149,6 +173,7 @@ class AppState:
     def __init__(self):
         self.wl_rows: List[ProviderRow] = []
         self.no_rows: List[NewOrderRow] = []
+        self.invalid_rows: List[InvalidRow] = []  # Invalid/Inactive List providers
         self.categories: List[ReviewCategory] = []
         self.invalid_reasons: set = set()
         self.year: int = 2025
@@ -162,6 +187,7 @@ class AppState:
         return {
             'wl_rows': [row.to_dict() for row in self.wl_rows],
             'no_rows': [row.to_dict() for row in self.no_rows],
+            'invalid_rows': [row.to_dict() for row in self.invalid_rows],
             'categories': [cat.to_dict() for cat in self.categories],
             'invalid_reasons': list(self.invalid_reasons),
             'year': self.year,
@@ -275,11 +301,38 @@ def load_data(year: int = 2025):
             qty_2025=row[7] if len(row) > 7 else ""
         ))
 
-    # Get common invalid reasons
+    # Parse Invalid/Inactive List rows and extract reasons
+    # Assumed structure: Practice, Phone, Address, City, State, [Zip], Reason
+    invalid_rows = []
     invalid_reasons = set()
-    for row in invalid_data[1:]:
-        if len(row) > 6 and row[6]:
-            invalid_reasons.add(row[6])
+    for i, row in enumerate(invalid_data[1:], start=2):  # Start at row 2 (after header)
+        if len(row) >= 5:  # Need at least practice through state
+            practice = row[0] if len(row) > 0 else ""
+            phone = row[1] if len(row) > 1 else ""
+            address = row[2] if len(row) > 2 else ""
+            city = row[3] if len(row) > 3 else ""
+            state_val = row[4] if len(row) > 4 else ""
+            # Reason might be in column 5, 6, or beyond
+            reason = ""
+            for j in range(5, min(len(row), 10)):
+                if row[j] and len(row[j]) > 5:  # Looks like a reason, not zip
+                    reason = row[j]
+                    break
+
+            if practice or address:  # Only add if has some identifying info
+                invalid_rows.append(InvalidRow(
+                    row_num=i,
+                    practice=practice,
+                    phone=phone,
+                    address=address,
+                    city=city,
+                    state=state_val,
+                    reason=reason
+                ))
+                if reason:
+                    invalid_reasons.add(reason)
+
+    print(f"  Loaded {len(invalid_rows)} Invalid/Inactive rows")
 
     # Load STATS worksheet for validation
     stats_sheet = sh.worksheet('STATS')
@@ -313,7 +366,7 @@ def load_data(year: int = 2025):
         print(f"  [OK] All status values are recognized")
 
     print(f"\n[Phase 1] Complete!")
-    return wl_rows, no_rows, invalid_reasons, stats_sheet
+    return wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet
 
 def validate_stats_color_counts(wl_rows, stats_sheet, year=2025, assume_yes=False):
     """
@@ -481,7 +534,9 @@ def normalize_phone(phone):
     """Normalize phone for matching"""
     if not phone:
         return ""
-    digits = re.sub(r'[^\d]', '', phone)
+    # Remove extension first (ext, x, Ext., etc.)
+    phone_clean = re.sub(r'\s*(ext\.?|x|extension)\s*\d+$', '', phone, flags=re.IGNORECASE)
+    digits = re.sub(r'[^\d]', '', phone_clean)
     return digits[-10:] if len(digits) >= 10 else digits
 
 def validate_yellow_to_no(wl_rows, no_rows):
@@ -687,7 +742,7 @@ def validate_status_issues(wl_rows):
 
         # Fuschia without vm note
         if color in ['#ff00ff', '#ff00fe', '#fe00ff']:
-            if 'vm' not in row.notes.lower():
+            if not row.notes or 'vm' not in row.notes.lower():
                 row.issues.append({
                     'category': 'fuschia_vm',
                     'severity': 'review',
@@ -697,7 +752,7 @@ def validate_status_issues(wl_rows):
 
         # Green with "sent"
         elif color in ['#00ff00', '#00ff01', '#00fe00']:
-            if 'sent' in row.notes.lower():
+            if row.notes and 'sent' in row.notes.lower():
                 row.issues.append({
                     'category': 'green_sent',
                     'severity': 'auto_fix',
@@ -716,19 +771,20 @@ def validate_status_issues(wl_rows):
 
         # Not interested with invalid keywords
         if row.status == 'Not interested' or row.status == 'Not Interested':
-            invalid_keywords = [
-                'closed', 'disconnected', 'wrong number', 'moved',
-                'no longer', 'out of business', 'permanently closed',
-                'number out of service', 'not doing ob', 'not an ob'
-            ]
-            notes_lower = row.notes.lower()
-            if any(kw in notes_lower for kw in invalid_keywords):
-                row.issues.append({
-                    'category': 'not_interested_invalid',
-                    'severity': 'review',
-                    'message': "'Not interested' but notes suggest invalid provider"
-                })
-                counts['not_interested_invalid'] += 1
+            if row.notes:
+                invalid_keywords = [
+                    'closed', 'disconnected', 'wrong number', 'moved',
+                    'no longer', 'out of business', 'permanently closed',
+                    'number out of service', 'not doing ob', 'not an ob'
+                ]
+                notes_lower = row.notes.lower()
+                if any(kw in notes_lower for kw in invalid_keywords):
+                    row.issues.append({
+                        'category': 'not_interested_invalid',
+                        'severity': 'review',
+                        'message': "'Not interested' but notes suggest invalid provider"
+                    })
+                    counts['not_interested_invalid'] += 1
 
     for cat, count in counts.items():
         print(f"    {cat}: {count} rows")
@@ -745,7 +801,7 @@ def auto_fix_not_interested(wl_rows):
         changes = []
 
         # Fix missing note
-        if 'not interested' not in row.notes.lower():
+        if not row.notes or 'not interested' not in row.notes.lower():
             if row.notes:
                 row.notes += '; not interested'
             else:
@@ -758,7 +814,7 @@ def auto_fix_not_interested(wl_rows):
             changes.append('set_qty_0')
 
         # Remove "sent" or ":sent"
-        if 'sent' in row.notes.lower():
+        if row.notes and 'sent' in row.notes.lower():
             row.notes = re.sub(r':?sent', '', row.notes, flags=re.IGNORECASE).strip()
             row.notes = re.sub(r'\s*;\s*;', ';', row.notes)
             row.notes = row.notes.strip('; ')
@@ -917,6 +973,16 @@ def categorize_issues(wl_rows, no_rows):
             primary_action=None,
             secondary_actions=["move_to_invalid", "keep_as_is"]
         ),
+        ReviewCategory(
+            id="manual_review",
+            name="Manual Review",
+            description="Complex cases requiring engineer judgment",
+            row_nums=[],
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit", "delete", "change_status", "move_to_invalid",
+                             "merge", "add_vm_note", "mark_reviewed", "keep_as_is"]
+        ),
     ]
 
     # Populate categories from WL rows
@@ -950,14 +1016,14 @@ def run_validations(year=2025):
     print(f"\n[Phase 2] Running validations...")
 
     # Load data
-    wl_rows, no_rows, invalid_reasons, stats_sheet = load_data(year)
+    wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet = load_data(year)
 
     # IMPORTANT: Validate Status-derived colors against STATS
     # This ensures Status column matches actual cell colors
     # If mismatch, user is warned to fix manually before proceeding
     if not validate_stats_color_counts(wl_rows, stats_sheet, year):
         # User chose to exit due to Status/color mismatch
-        return None, None, None, None
+        return None, None, None, None, None
 
     # Validation pipeline
     validate_yellow_to_no(wl_rows, no_rows)
@@ -970,7 +1036,7 @@ def run_validations(year=2025):
 
     print(f"\n[Phase 2] Complete!")
 
-    return wl_rows, no_rows, categories, invalid_reasons
+    return wl_rows, no_rows, invalid_rows, categories, invalid_reasons
 
 # ============================================================================
 # UNDO/REDO SYSTEM
@@ -1022,6 +1088,79 @@ def save_progress():
     print(f"Progress saved to {filename}")
     return filename
 
+
+def calculate_progress() -> Dict:
+    """
+    Calculate progress counts by urgency level.
+    Returns dict with counts for critical, review, verify, and resolved.
+    """
+    # Define urgency levels
+    CRITICAL = {'exact_dupes', 'yellow_low', 'orphan_no', 'red_invalid'}
+    REVIEW = {'networks', 'fuzzy_dupes', 'yellow_80', 'green_sent', 'not_interested_invalid'}
+    VERIFY = {'yellow_95', 'fuschia_vm', 'manual_review'}
+
+    counts = {
+        'critical_total': 0,
+        'critical_resolved': 0,
+        'review_total': 0,
+        'review_resolved': 0,
+        'verify_total': 0,
+        'verify_resolved': 0,
+    }
+
+    # Track which rows we've already counted (for multi-category rows)
+    # Use highest urgency for each row
+    row_urgency = {}  # row_num -> urgency level
+
+    for cat in state.categories:
+        if cat.id in CRITICAL:
+            urgency = 'critical'
+            priority = 3
+        elif cat.id in REVIEW:
+            urgency = 'review'
+            priority = 2
+        elif cat.id in VERIFY:
+            urgency = 'verify'
+            priority = 1
+        else:
+            continue  # Unknown category
+
+        for row_num in cat.row_nums:
+            # Only count in highest urgency category
+            current = row_urgency.get(row_num)
+            if current is None or priority > current[1]:
+                row_urgency[row_num] = (urgency, priority)
+
+    # Now count by urgency
+    for row_num, (urgency, _) in row_urgency.items():
+        counts[f'{urgency}_total'] += 1
+
+        # Check if resolved (has action taken)
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.action:
+            counts[f'{urgency}_resolved'] += 1
+
+    # Calculate totals and percentages
+    total = counts['critical_total'] + counts['review_total'] + counts['verify_total']
+    resolved = counts['critical_resolved'] + counts['review_resolved'] + counts['verify_resolved']
+
+    counts['total'] = total
+    counts['resolved'] = resolved
+    counts['percent'] = round((resolved / total * 100) if total > 0 else 0, 1)
+
+    # Calculate segment widths for the progress bar
+    if total > 0:
+        counts['critical_width'] = round(counts['critical_total'] / total * 100, 1)
+        counts['review_width'] = round(counts['review_total'] / total * 100, 1)
+        counts['verify_width'] = round(counts['verify_total'] / total * 100, 1)
+    else:
+        counts['critical_width'] = 0
+        counts['review_width'] = 0
+        counts['verify_width'] = 0
+
+    return counts
+
+
 # ============================================================================
 # FLASK ROUTES
 # ============================================================================
@@ -1039,7 +1178,7 @@ def load():
         state.year = year
 
         # Run validations
-        state.wl_rows, state.no_rows, state.categories, state.invalid_reasons = run_validations(year)
+        state.wl_rows, state.no_rows, state.invalid_rows, state.categories, state.invalid_reasons = run_validations(year)
         state.loaded = True
         state.current_category_id = state.categories[0].id if state.categories else None
 
@@ -1081,7 +1220,9 @@ def category(category_id):
     return render_template('category.html',
                          category=cat,
                          rows=rows,
-                         categories=state.categories)
+                         categories=state.categories,
+                         progress=calculate_progress(),
+                         state=state)
 
 @app.route('/api/save_progress', methods=['POST'])
 def api_save_progress():
@@ -1092,6 +1233,246 @@ def api_save_progress():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/get_progress')
+def api_get_progress():
+    """Get current progress by urgency level"""
+    return jsonify(calculate_progress())
+
+
+def get_action_taken(row) -> str:
+    """
+    Derive action taken label for a row based on its action and field_edits.
+    Returns standard action labels for export.
+    """
+    if not row.action and not row.field_edits:
+        return ''
+
+    action = row.action or ''
+
+    # Map actions to standard labels
+    action_map = {
+        'deleted': 'DELETED',
+        'accepted': 'VERIFIED',
+        'verified': 'VERIFIED',
+        'marked_reviewed': 'VERIFIED',
+        'matched': 'VERIFIED',
+        'merged_into': 'MERGED',
+        'network_confirmed': 'NETWORK_CONFIRMED',
+        'moved_to_invalid': 'MOVED_TO_INVALID',
+        'converted': 'CONVERTED',
+    }
+
+    # Check for action match
+    for key, label in action_map.items():
+        if key in action.lower():
+            return label
+
+    # If has field edits but no specific action
+    if row.field_edits:
+        return 'EDITED'
+
+    # Has some action but not mapped
+    if action:
+        return 'MODIFIED'
+
+    return ''
+
+
+@app.route('/api/export')
+def api_export():
+    """
+    Export all rows as CSV.
+    Query params:
+    - mode: 'download' (file) or 'clipboard' (json with CSV text)
+    - include_deleted: 'true' or 'false' (default true)
+    """
+    from flask import Response
+
+    mode = request.args.get('mode', 'clipboard')
+    include_deleted = request.args.get('include_deleted', 'true').lower() == 'true'
+
+    # Filter rows
+    rows = state.wl_rows
+    if not include_deleted:
+        rows = [r for r in rows if 'deleted' not in (r.action or '').lower()]
+
+    # Sort by row_num
+    rows = sorted(rows, key=lambda r: r.row_num)
+
+    # Build CSV
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+
+    for row in rows:
+        # Clean notes (replace newlines with space)
+        notes = (row.notes or '').replace('\n', ' ').replace('\r', ' ')
+
+        # Get action taken
+        action_taken = get_action_taken(row)
+
+        # Write row: practice, phone, address, city, state, zip, qty_2023, qty_2024, qty_2025, status, notes, action_taken
+        writer.writerow([
+            row.practice,
+            row.phone,
+            row.address,
+            row.city,
+            row.state,
+            row.zip,
+            row.qty_2023,
+            row.qty_2024,
+            row.qty_2025,
+            row.status,
+            notes,
+            action_taken
+        ])
+
+    csv_text = output.getvalue()
+
+    if mode == 'download':
+        # Return as downloadable file
+        filename = f'eoy_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        return Response(
+            csv_text,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+    else:
+        # Return as JSON for clipboard copy
+        return jsonify({
+            'success': True,
+            'csv': csv_text,
+            'row_count': len(rows)
+        })
+
+
+def restore_state(action: Dict, direction: str = 'undo') -> bool:
+    """
+    Restore state based on action type.
+    direction: 'undo' restores before_state, 'redo' restores after_state
+    Returns True if restoration was successful.
+    """
+    action_type = action.get('action_type')
+    before_state = action.get('before_state', {})
+    after_state = action.get('after_state', {})
+
+    # Choose which state to restore
+    target_state = before_state if direction == 'undo' else after_state
+
+    try:
+        if action_type == 'edit_field':
+            # Single field edit
+            row_num = target_state.get('row_num') if direction == 'undo' else after_state.get('row_num')
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+            if row:
+                if direction == 'undo':
+                    field = target_state.get('field')
+                    old_value = target_state.get('old_value', '')
+                    setattr(row, field, old_value)
+                    if field == 'status':
+                        row.bg_color = status_to_color(old_value)
+                else:
+                    field = after_state.get('field')
+                    new_value = after_state.get('new_value', '')
+                    setattr(row, field, new_value)
+                    if field == 'status':
+                        row.bg_color = status_to_color(new_value)
+            return True
+
+        elif action_type in ['delete', 'delete_rows']:
+            # Row deletion - restore or re-delete
+            rows_data = before_state.get('rows', [])
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                if row:
+                    if direction == 'undo':
+                        # Restore deleted row
+                        row.action = row_data.get('fields', {}).get('action', None)
+                    else:
+                        # Re-delete
+                        row.action = 'deleted'
+            return True
+
+        elif action_type == 'mark_reviewed':
+            rows_data = before_state.get('rows', [])
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                if row:
+                    if direction == 'undo':
+                        # Restore original action
+                        row.action = row_data.get('fields', {}).get('action', None)
+                    else:
+                        row.action = 'reviewed_no_change'
+            return True
+
+        elif action_type == 'send_to_manual_review':
+            rows_data = before_state.get('rows', [])
+            manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+
+                if direction == 'undo':
+                    # Remove from manual review
+                    if manual_review_cat and row_num in manual_review_cat.row_nums:
+                        manual_review_cat.row_nums.remove(row_num)
+                    # Remove manual_review issue
+                    if row:
+                        row.issues = [i for i in row.issues if i.get('category') != 'manual_review']
+                else:
+                    # Re-add to manual review
+                    if manual_review_cat and row_num not in manual_review_cat.row_nums:
+                        manual_review_cat.row_nums.append(row_num)
+            return True
+
+        elif action_type == 'confirm_orphan_match':
+            orphan_row_num = before_state.get('orphan_row_num')
+            no_row = next((r for r in state.no_rows if r.row_num == orphan_row_num), None)
+            orphan_cat = next((c for c in state.categories if c.id == 'orphan_no'), None)
+
+            if no_row:
+                if direction == 'undo':
+                    # Restore orphan status
+                    no_row.is_orphan = True
+                    if orphan_cat and orphan_row_num not in orphan_cat.row_nums:
+                        orphan_cat.row_nums.append(orphan_row_num)
+                else:
+                    no_row.is_orphan = False
+                    if orphan_cat and orphan_row_num in orphan_cat.row_nums:
+                        orphan_cat.row_nums.remove(orphan_row_num)
+            return True
+
+        elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action',
+                              'change_status', 'change_to_white', 'remove_sent', 'mass_invalid',
+                              'merge_rows', 'confirm_network']:
+            # Bulk actions - restore all affected rows
+            rows_data = before_state.get('rows', [])
+            for row_data in rows_data:
+                row_num = row_data.get('row_num')
+                fields = row_data.get('fields', {})
+                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                if row:
+                    if direction == 'undo':
+                        for field, value in fields.items():
+                            if hasattr(row, field):
+                                setattr(row, field, value)
+                        # Clear field_edits that were set by the action
+                        row.field_edits = {}
+                    # For redo, would need to re-apply the action
+            return True
+
+        else:
+            # Unknown action type - log but don't fail
+            print(f"[Undo/Redo] Unknown action type: {action_type}")
+            return True
+
+    except Exception as e:
+        print(f"[Undo/Redo] Error restoring state: {e}")
+        return False
+
 @app.route('/api/undo', methods=['POST'])
 def api_undo():
     """API endpoint to undo last action"""
@@ -1099,13 +1480,15 @@ def api_undo():
         return jsonify({'success': False, 'error': 'Nothing to undo'}), 400
 
     action = state.undo_stack.pop()
-    state.redo_stack.append(action)
 
     # Apply undo (restore before_state)
-    # TODO: Implement state restoration logic
+    success = restore_state(action, 'undo')
+
+    if success:
+        state.redo_stack.append(action)
 
     return jsonify({
-        'success': True,
+        'success': success,
         'action': action['description'],
         'can_undo': len(state.undo_stack) > 0,
         'can_redo': len(state.redo_stack) > 0
@@ -1118,13 +1501,15 @@ def api_redo():
         return jsonify({'success': False, 'error': 'Nothing to redo'}), 400
 
     action = state.redo_stack.pop()
-    state.undo_stack.append(action)
 
     # Apply redo (restore after_state)
-    # TODO: Implement state restoration logic
+    success = restore_state(action, 'redo')
+
+    if success:
+        state.undo_stack.append(action)
 
     return jsonify({
-        'success': True,
+        'success': success,
         'action': action['description'],
         'can_undo': len(state.undo_stack) > 0,
         'can_redo': len(state.redo_stack) > 0
@@ -1144,6 +1529,10 @@ def api_delete_note_chunk():
 
     # Save before state for undo
     before_notes = row.notes
+
+    # Check if notes exist
+    if not row.notes:
+        return jsonify({'success': False, 'error': 'No notes to delete from'}), 400
 
     # Delete chunk
     chunks = [c.strip() for c in row.notes.split(';') if c.strip()]
@@ -1244,38 +1633,6 @@ def api_accept_all_matches():
 
     return jsonify({'success': True, 'count': count})
 
-@app.route('/api/confirm_network', methods=['POST'])
-def api_confirm_network():
-    """Confirm network and add notation to notes"""
-    data = request.get_json()
-    category_id = data.get('category_id')
-    network_name = data.get('network_name', '').strip()
-
-    if not network_name:
-        return jsonify({'success': False, 'error': 'Network name required'}), 400
-
-    # Find category
-    category = next((c for c in state.categories if c.id == category_id), None)
-    if not category:
-        return jsonify({'success': False, 'error': 'Category not found'}), 404
-
-    # Add network notation to all rows
-    count = 0
-    network_notation = f"{network_name.lower().replace(' ', '')} network (~{len(category.row_nums)})"
-
-    for row_num in category.row_nums:
-        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
-        if row:
-            # Remove old network notations
-            notes = re.sub(r'\b\w+ network \(~\d+\)', '', row.notes, flags=re.IGNORECASE)
-            notes = re.sub(r'\s*;\s*;', ';', notes).strip(';').strip()
-
-            # Add new notation
-            row.notes = f"{network_notation}; {notes}" if notes else network_notation
-            count += 1
-
-    return jsonify({'success': True, 'count': count})
-
 @app.route('/api/convert_to_not_interested', methods=['POST'])
 def api_convert_to_not_interested():
     """Convert green 'sent' rows to Not Interested"""
@@ -1297,8 +1654,8 @@ def api_convert_to_not_interested():
             row.bg_color = "#ffffff"
 
             # Remove 'sent' from notes, add 'not interested'
-            notes = re.sub(r':?sent', '', row.notes, flags=re.IGNORECASE).strip()
-            if 'not interested' not in notes.lower():
+            notes = re.sub(r':?sent', '', row.notes or '', flags=re.IGNORECASE).strip()
+            if not notes or 'not interested' not in notes.lower():
                 row.notes = f"{notes}; not interested" if notes else "not interested"
             else:
                 row.notes = notes
@@ -1454,15 +1811,27 @@ def api_change_status():
     target_rows = row_nums if row_nums else category.row_nums
 
     count = 0
+    before_states = []
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'status': row.status, 'bg_color': row.bg_color, 'action': row.action}
+            })
             # Update status
             row.field_edits['status'] = new_status
             # Derive color from status
             row.field_edits['bg_color'] = status_to_color(new_status)
             row.action = 'edit'
             count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'change_status',
+            f'Changed status to "{new_status}" on {count} row(s)',
+            {'rows': before_states, 'new_status': new_status}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1478,9 +1847,17 @@ def api_change_to_white():
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
     count = 0
+    before_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {
+                    'status': row.status, 'bg_color': row.bg_color,
+                    'qty_2025': row.qty_2025, 'notes': row.notes, 'action': row.action
+                }
+            })
             row.field_edits['status'] = 'Not interested'
             row.field_edits['bg_color'] = '#ffffff'
             row.field_edits['qty_2025'] = '0'
@@ -1497,6 +1874,13 @@ def api_change_to_white():
             row.action = 'edit'
             count += 1
 
+    if before_states:
+        add_to_undo_stack(
+            'change_to_white',
+            f'Changed {count} row(s) to Not Interested',
+            {'rows': before_states}
+        )
+
     return jsonify({'success': True, 'count': count})
 
 @app.route('/api/remove_sent', methods=['POST'])
@@ -1510,8 +1894,8 @@ def api_remove_sent():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    import re
     count = 0
+    before_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row and row.notes:
@@ -1524,9 +1908,20 @@ def api_remove_sent():
             new_notes = re.sub(r'\s+', ' ', new_notes).strip()
 
             if new_notes != row.notes:
+                before_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': row.notes, 'action': row.action}
+                })
                 row.field_edits['notes'] = new_notes
                 row.action = 'edit'
                 count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'remove_sent',
+            f'Removed "sent" from {count} row(s)',
+            {'rows': before_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1543,14 +1938,582 @@ def api_mass_invalid():
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
     count = 0
+    before_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'action': row.action}
+            })
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
             count += 1
 
+    if before_states:
+        add_to_undo_stack(
+            'mass_invalid',
+            f'Marked {count} row(s) as invalid',
+            {'rows': before_states, 'reason': reason}
+        )
+
     return jsonify({'success': True, 'count': count})
+
+@app.route('/api/get_duplicate_group', methods=['POST'])
+def api_get_duplicate_group():
+    """Get all rows in a duplicate group for merge UI"""
+    data = request.get_json()
+    group_id = data.get('group_id')
+    row_num = data.get('row_num')
+
+    # Find group_id from row_num if not provided
+    if not group_id and row_num:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            group_id = row.duplicate_group_id
+
+    if not group_id:
+        return jsonify({'success': False, 'error': 'No duplicate group specified'}), 400
+
+    # Get all rows in this group
+    group_rows = [r for r in state.wl_rows if r.duplicate_group_id == group_id]
+
+    if len(group_rows) < 2:
+        return jsonify({'success': False, 'error': 'Not enough rows in group'}), 400
+
+    return jsonify({
+        'success': True,
+        'group_id': group_id,
+        'rows': [r.to_dict() for r in group_rows]
+    })
+
+@app.route('/api/merge_rows', methods=['POST'])
+def api_merge_rows():
+    """
+    Merge duplicate rows into a survivor.
+    - survivor_row_num: Row that will keep existing
+    - other_row_nums: Rows to merge into survivor then delete
+    - merge_fields: Optional dict of field -> row_num to take value from
+    """
+    data = request.get_json()
+    survivor_row_num = data.get('survivor_row_num')
+    other_row_nums = data.get('other_row_nums', [])
+    merge_fields = data.get('merge_fields', {})  # field -> row_num
+
+    if not survivor_row_num:
+        return jsonify({'success': False, 'error': 'No survivor row specified'}), 400
+
+    if not other_row_nums:
+        return jsonify({'success': False, 'error': 'No rows to merge'}), 400
+
+    # Find survivor row
+    survivor = next((r for r in state.wl_rows if r.row_num == survivor_row_num), None)
+    if not survivor:
+        return jsonify({'success': False, 'error': 'Survivor row not found'}), 404
+
+    # Find other rows
+    others = [r for r in state.wl_rows if r.row_num in other_row_nums]
+    if not others:
+        return jsonify({'success': False, 'error': 'No other rows found'}), 404
+
+    # Store before states for undo
+    before_states = [{
+        'row_num': survivor.row_num,
+        'fields': {
+            'practice': survivor.practice, 'phone': survivor.phone,
+            'address': survivor.address, 'city': survivor.city,
+            'state': survivor.state, 'zip': survivor.zip,
+            'notes': survivor.notes, 'action': survivor.action
+        }
+    }]
+    for other in others:
+        before_states.append({
+            'row_num': other.row_num,
+            'fields': {'action': other.action}
+        })
+
+    # Apply field merges from specific rows
+    for field, source_row_num in merge_fields.items():
+        source = next((r for r in state.wl_rows if r.row_num == source_row_num), None)
+        if source and hasattr(survivor, field):
+            value = getattr(source, field, '')
+            setattr(survivor, field, value)
+            survivor.field_edits[field] = value
+
+    # Merge notes from all rows (combine unique chunks)
+    all_notes = set()
+    if survivor.notes:
+        all_notes.update(c.strip() for c in survivor.notes.split(';') if c.strip())
+    for other in others:
+        if other.notes:
+            all_notes.update(c.strip() for c in other.notes.split(';') if c.strip())
+
+    if all_notes:
+        merged_notes = '; '.join(sorted(all_notes))
+        survivor.notes = merged_notes
+        survivor.field_edits['notes'] = merged_notes
+
+    survivor.action = 'merged_survivor'
+
+    # Mark others as deleted
+    for other in others:
+        other.action = 'merged_deleted'
+
+    add_to_undo_stack(
+        'merge_rows',
+        f'Merged {len(others) + 1} rows (survivor: #{survivor_row_num})',
+        {'rows': before_states, 'survivor_row_num': survivor_row_num, 'other_row_nums': other_row_nums}
+    )
+
+    return jsonify({
+        'success': True,
+        'survivor_row_num': survivor_row_num,
+        'deleted_count': len(others)
+    })
+
+@app.route('/api/get_network_group', methods=['POST'])
+def api_get_network_group():
+    """Get all rows in a network for confirm_network UI"""
+    data = request.get_json()
+    row_num = data.get('row_num')
+
+    if not row_num:
+        return jsonify({'success': False, 'error': 'No row number provided'}), 400
+
+    # Find the row and its network_name
+    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+    if not row or not row.network_name:
+        return jsonify({'success': False, 'error': 'Row is not part of a network'}), 400
+
+    network_name = row.network_name
+
+    # Get all rows with the same network_name
+    network_rows = [r for r in state.wl_rows if r.network_name == network_name]
+
+    # Auto-derive a better network name from common words
+    suggested_name = derive_network_name(network_rows)
+
+    return jsonify({
+        'success': True,
+        'network_name': network_name,
+        'suggested_name': suggested_name,
+        'rows': [r.to_dict() for r in network_rows]
+    })
+
+def derive_network_name(rows):
+    """
+    Derive a readable network name from common practice name words.
+    E.g., "Downtown Medical", "Uptown Medical" -> "Medical"
+    """
+    if not rows:
+        return "Unknown Network"
+
+    # Get words from all practice names, excluding common suffixes
+    exclude_words = {'the', 'of', 'and', 'at', 'in', 'for', 'a', 'an',
+                     'north', 'south', 'east', 'west', 'downtown', 'uptown',
+                     'medical', 'clinic', 'center', 'office', 'health',
+                     'healthcare', 'care', 'group', 'associates', 'llc', 'pc', 'md'}
+
+    word_lists = []
+    for r in rows:
+        words = set(w.lower() for w in re.split(r'\W+', r.practice) if len(w) > 2)
+        word_lists.append(words)
+
+    # Find common words across all practices
+    if word_lists:
+        common = word_lists[0].copy()
+        for wl in word_lists[1:]:
+            common &= wl
+
+        # Remove excluded words
+        meaningful = common - exclude_words
+
+        if meaningful:
+            # Return the longest meaningful word, capitalized
+            best_word = max(meaningful, key=len)
+            return best_word.title() + " Network"
+
+    # Fallback: use first practice name
+    first_name = rows[0].practice.split()[0] if rows[0].practice else "Unknown"
+    return first_name + " Network"
+
+@app.route('/api/confirm_network', methods=['POST'])
+def api_confirm_network():
+    """
+    Confirm rows as a network.
+    - network_name: The name for this network
+    - row_nums: Rows to include in the network
+    - add_note: Optional note to add to all rows
+    """
+    data = request.get_json()
+    network_name = data.get('network_name', 'Confirmed Network')
+    row_nums = data.get('row_nums', [])
+    add_note = data.get('add_note', '')
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No rows specified'}), 400
+
+    count = 0
+    before_states = []
+
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {
+                    'network_name': row.network_name,
+                    'notes': row.notes,
+                    'action': row.action
+                }
+            })
+
+            # Update network name
+            row.network_name = network_name
+
+            # Add note if provided
+            if add_note:
+                current_notes = row.notes or ""
+                if add_note.lower() not in current_notes.lower():
+                    if current_notes and not current_notes.endswith(';'):
+                        current_notes += '; '
+                    elif current_notes:
+                        current_notes += ' '
+                    row.notes = current_notes + add_note
+                    row.field_edits['notes'] = row.notes
+
+            row.action = 'network_confirmed'
+            count += 1
+
+    # Remove from networks category since confirmed
+    networks_cat = next((c for c in state.categories if c.id == 'networks'), None)
+    if networks_cat:
+        for row_num in row_nums:
+            if row_num in networks_cat.row_nums:
+                networks_cat.row_nums.remove(row_num)
+
+    if before_states:
+        add_to_undo_stack(
+            'confirm_network',
+            f'Confirmed {count} row(s) as "{network_name}"',
+            {'rows': before_states, 'network_name': network_name}
+        )
+
+    return jsonify({
+        'success': True,
+        'count': count,
+        'network_name': network_name
+    })
+
+@app.route('/api/send_to_manual_review', methods=['POST'])
+def api_send_to_manual_review():
+    """Send row(s) to Manual Review category for closer inspection"""
+    data = request.get_json()
+    row_nums = data.get('row_nums', [])
+    reason = data.get('reason', 'Needs manual review')
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No row numbers provided'}), 400
+
+    # Find or create manual_review category
+    manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+    if not manual_review_cat:
+        # Create it if it doesn't exist (e.g., was filtered out as empty)
+        manual_review_cat = ReviewCategory(
+            id="manual_review",
+            name="Manual Review",
+            description="Complex cases requiring engineer judgment",
+            row_nums=[],
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit", "delete", "change_status", "move_to_invalid",
+                             "merge", "add_vm_note", "mark_reviewed", "keep_as_is"]
+        )
+        state.categories.append(manual_review_cat)
+
+    count = 0
+    before_states = []
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row_num not in manual_review_cat.row_nums:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'practice': row.practice, 'status': row.status, 'notes': row.notes}
+            })
+            manual_review_cat.row_nums.append(row_num)
+            # Add issue to row
+            row.issues.append({
+                'category': 'manual_review',
+                'severity': 'review',
+                'message': reason
+            })
+            count += 1
+
+    manual_review_cat.row_nums.sort()
+
+    if before_states:
+        add_to_undo_stack(
+            'send_to_manual_review',
+            f'Sent {count} row(s) to Manual Review',
+            {'rows': before_states, 'reason': reason}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/mark_reviewed', methods=['POST'])
+def api_mark_reviewed():
+    """Mark row as reviewed (no changes needed) for progress tracking"""
+    data = request.get_json()
+    row_nums = data.get('row_nums', [])
+
+    if not row_nums:
+        return jsonify({'success': False, 'error': 'No row numbers provided'}), 400
+
+    count = 0
+    before_states = []
+    for row_num in row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row:
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'action': row.action}
+            })
+            row.action = 'reviewed_no_change'
+            count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'mark_reviewed',
+            f'Marked {count} row(s) as reviewed',
+            {'rows': before_states}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/edit_field', methods=['POST'])
+def api_edit_field():
+    """
+    Edit a single field of a row.
+    Used for inline editing (double-click to edit).
+    """
+    data = request.get_json()
+    row_num = data.get('row_num')
+    field = data.get('field')
+    value = data.get('value', '')
+
+    if not row_num or not field:
+        return jsonify({'success': False, 'error': 'Missing row_num or field'}), 400
+
+    # Find the row
+    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+    if not row:
+        return jsonify({'success': False, 'error': 'Row not found'}), 404
+
+    # Editable fields
+    editable_fields = ['practice', 'phone', 'address', 'city', 'state', 'zip', 'status', 'notes', 'qty_2025']
+
+    if field not in editable_fields:
+        return jsonify({'success': False, 'error': f'Field {field} is not editable'}), 400
+
+    # Store before state for undo
+    old_value = getattr(row, field, '')
+    before_state = {
+        'row_num': row_num,
+        'field': field,
+        'old_value': old_value
+    }
+
+    # Update the field
+    setattr(row, field, value)
+
+    # If status changed, update bg_color
+    if field == 'status':
+        row.bg_color = status_to_color(value)
+
+    # Track field edit
+    row.field_edits[field] = value
+    row.action = 'edited'
+
+    add_to_undo_stack(
+        'edit_field',
+        f'Changed {field} on row #{row_num}',
+        before_state,
+        {'row_num': row_num, 'field': field, 'new_value': value}
+    )
+
+    return jsonify({
+        'success': True,
+        'row_num': row_num,
+        'field': field,
+        'value': value,
+        'bg_color': row.bg_color if field == 'status' else None
+    })
+
+@app.route('/api/match_orphan_to_invalid', methods=['POST'])
+def api_match_orphan_to_invalid():
+    """
+    Match an orphan New Order row against the Invalid/Inactive List.
+    Returns match info if found (≥80% confidence) or suggests manual review.
+    """
+    data = request.get_json()
+    row_num = data.get('row_num')
+
+    if not row_num:
+        return jsonify({'success': False, 'error': 'No row number provided'}), 400
+
+    # Find the orphan NO row
+    no_row = next((r for r in state.no_rows if r.row_num == row_num and r.is_orphan), None)
+    if not no_row:
+        return jsonify({'success': False, 'error': 'Orphan row not found'}), 404
+
+    # Fuzzy match against Invalid/Inactive List
+    best_match = None
+    best_score = 0.0
+
+    for inv_row in state.invalid_rows:
+        # Skip if different state
+        if inv_row.state and no_row.state and inv_row.state.lower() != no_row.state.lower():
+            continue
+
+        # Calculate weighted match score (70% name, 30% address)
+        name_score = fuzz.token_set_ratio(
+            normalize_name(no_row.practice),
+            normalize_name(inv_row.practice)
+        ) / 100.0
+
+        address_score = fuzz.token_set_ratio(
+            normalize_address(no_row.address + ' ' + no_row.city),
+            normalize_address(inv_row.address + ' ' + inv_row.city)
+        ) / 100.0
+
+        combined_score = (name_score * 0.7) + (address_score * 0.3)
+
+        if combined_score > best_score:
+            best_score = combined_score
+            best_match = inv_row
+
+    result = {
+        'orphan_row': no_row.to_dict(),
+        'match_found': best_score >= 0.80,
+        'match_confidence': round(best_score * 100, 1)
+    }
+
+    if best_match and best_score >= 0.80:
+        result['matched_invalid'] = best_match.to_dict()
+        result['recommendation'] = 'confirm_match'
+        result['message'] = f"Matches invalid provider: {best_match.practice}. Reason: {best_match.reason or 'Not specified'}"
+    else:
+        result['recommendation'] = 'manual_review'
+        result['message'] = "No match found in Invalid/Inactive List. Send to Manual Review."
+
+    return jsonify({'success': True, **result})
+
+@app.route('/api/process_orphan_batch', methods=['POST'])
+def api_process_orphan_batch():
+    """
+    Process all orphan NO rows at once, matching against Invalid List.
+    Returns categorized results for bulk handling.
+    """
+    # Get all orphan rows
+    orphan_rows = [r for r in state.no_rows if r.is_orphan]
+
+    results = {
+        'matched': [],      # Found in Invalid List (≥80% match)
+        'unmatched': [],    # No match - need manual review
+        'total': len(orphan_rows)
+    }
+
+    for no_row in orphan_rows:
+        best_match = None
+        best_score = 0.0
+
+        for inv_row in state.invalid_rows:
+            # Skip if different state
+            if inv_row.state and no_row.state and inv_row.state.lower() != no_row.state.lower():
+                continue
+
+            # Calculate weighted match score
+            name_score = fuzz.token_set_ratio(
+                normalize_name(no_row.practice),
+                normalize_name(inv_row.practice)
+            ) / 100.0
+
+            address_score = fuzz.token_set_ratio(
+                normalize_address(no_row.address + ' ' + no_row.city),
+                normalize_address(inv_row.address + ' ' + inv_row.city)
+            ) / 100.0
+
+            combined_score = (name_score * 0.7) + (address_score * 0.3)
+
+            if combined_score > best_score:
+                best_score = combined_score
+                best_match = inv_row
+
+        if best_match and best_score >= 0.80:
+            results['matched'].append({
+                'orphan': no_row.to_dict(),
+                'invalid_match': best_match.to_dict(),
+                'confidence': round(best_score * 100, 1)
+            })
+        else:
+            results['unmatched'].append({
+                'orphan': no_row.to_dict(),
+                'best_score': round(best_score * 100, 1) if best_score > 0 else 0
+            })
+
+    return jsonify({'success': True, **results})
+
+@app.route('/api/confirm_orphan_match', methods=['POST'])
+def api_confirm_orphan_match():
+    """
+    Confirm that an orphan NO row matches an Invalid List entry.
+    Marks the orphan as resolved (explained by invalid provider).
+    """
+    data = request.get_json()
+    orphan_row_num = data.get('orphan_row_num')
+    invalid_row_num = data.get('invalid_row_num')
+    action = data.get('action', 'confirm')  # 'confirm' or 'reject'
+
+    if not orphan_row_num:
+        return jsonify({'success': False, 'error': 'No orphan row number provided'}), 400
+
+    # Find the orphan
+    no_row = next((r for r in state.no_rows if r.row_num == orphan_row_num), None)
+    if not no_row:
+        return jsonify({'success': False, 'error': 'Orphan row not found'}), 404
+
+    if action == 'confirm':
+        # Mark orphan as resolved (matched to invalid)
+        no_row.is_orphan = False  # No longer orphan - explained
+        inv_row = next((r for r in state.invalid_rows if r.row_num == invalid_row_num), None)
+        reason = inv_row.reason if inv_row else 'Matched to Invalid List'
+
+        # Remove from orphan_no category
+        orphan_cat = next((c for c in state.categories if c.id == 'orphan_no'), None)
+        if orphan_cat and orphan_row_num in orphan_cat.row_nums:
+            orphan_cat.row_nums.remove(orphan_row_num)
+
+        add_to_undo_stack(
+            'confirm_orphan_match',
+            f'Confirmed orphan #{orphan_row_num} matches invalid provider',
+            {'orphan_row_num': orphan_row_num, 'invalid_row_num': invalid_row_num}
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Confirmed match. Reason: {reason}'
+        })
+    else:
+        # Reject match - send to manual review
+        manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+        if manual_review_cat and orphan_row_num not in manual_review_cat.row_nums:
+            manual_review_cat.row_nums.append(orphan_row_num)
+            manual_review_cat.row_nums.sort()
+
+        return jsonify({
+            'success': True,
+            'message': 'Sent to Manual Review for further investigation'
+        })
 
 # ============================================================================
 # MAIN ENTRY POINT

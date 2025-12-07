@@ -1,10 +1,10 @@
 # EOY Cleanup Tool - Documentation
 
-**Last Updated:** 2025-12-01
+**Last Updated:** 2025-12-07
 
 **Purpose:** Web application for cleaning up OBGYN Working List data at end of year
 
-**Status:** Active development - Flask web app implementation (read-only mode functional, write phase pending)
+**Status:** ✅ Fully functional - All 9 implementation priorities complete (see PLAN.md)
 
 ---
 
@@ -100,19 +100,25 @@ categorize_issues()          # Organize into review categories
 
 ### 3. Categorization
 
-Issues grouped into 11 categories:
+Issues grouped into 12 categories by urgency:
 
+**🔴 CRITICAL (Data integrity, must fix):**
 1. **Duplicates** - Exact matches (same name, address, phone)
-2. **Networks** - Same phone, different locations
-3. **Possible Dupes** - Similar but not identical
-4. **Orders (Exact Match)** - Yellow ≥95% confidence
-5. **Orders (Good Match)** - Yellow 80-94% confidence
-6. **Orders (Not Found)** - Yellow <80% confidence
-7. **Unmatched Orders** - NO rows without yellow WL match
+2. **Orders (Not Found)** - Yellow <80% confidence
+3. **Unmatched Orders** - NO rows without yellow WL match
+4. **Potentially Invalid** - Red status
+
+**🟡 REVIEW (Needs judgment call):**
+5. **Networks** - Same phone, different locations
+6. **Possible Dupes** - Similar but not identical
+7. **Orders (Good Match)** - Yellow 80-94% confidence
 8. **Email Sent** - Green with "sent" in notes
-9. **Voicemails** - Fuschia status
-10. **Potentially Invalid** - Red status
-11. **Not Int (Invalid?)** - White "not interested" but notes suggest invalid
+9. **Not Int (Invalid?)** - White "not interested" but notes suggest invalid
+
+**🟢 VERIFY (Low priority, just confirm):**
+10. **Orders (Exact Match)** - Yellow ≥95% confidence
+11. **Voicemails** - Fuschia status
+12. **Manual Review** - Catch-all for complex edge cases
 
 ### 4. Review Interface
 
@@ -329,24 +335,25 @@ Open `scripts/htmlcov/index.html` to view detailed coverage
 
 ## Known Issues & Limitations
 
-### Not Yet Implemented
+### Architecture Decision: Local-First Workflow
 
-1. **Writing changes to Google Sheets**
-   - Currently in-memory only
-   - Need to implement batch update logic
-   - Need shadow worksheet creation
+The tool uses a **load → work locally → export** workflow rather than real-time Google Sheets writes:
+- Load data from Sheets at session start
+- All edits happen in local JSON state
+- Export CSV for manual paste back to Sheets
 
-2. **Undo/Redo**
-   - Stack exists, but restore logic not implemented
-   - Need to apply saved state back to rows
+This avoids API rate limits and provides faster UX.
 
-3. **Edit Modal**
-   - Inline editing exists
-   - Full modal for complex edits not built
+### Implemented Features
 
-4. **Bulk Actions**
-   - Some bulk actions not fully implemented
-   - Need to wire up backend handlers
+All core features are now complete:
+
+1. **Undo/Redo** - Full action history with Ctrl+Z/Ctrl+Y
+2. **Inline Editing** - Double-click any cell to edit
+3. **Merge Duplicates** - Side-by-side comparison modal
+4. **Network Confirmation** - Auto-suggest names, bulk confirm
+5. **Export** - CSV download or clipboard copy
+6. **Urgency Progress Bar** - Visual tracking by severity
 
 ### Potential Issues
 
@@ -430,18 +437,13 @@ Server starts at http://127.0.0.1:5000
 
 ## Future Enhancements
 
-### High Priority
-1. Implement Google Sheets writing (batch updates)
-2. Create shadow worksheets (_CLEANUP)
-3. Implement undo/redo restore logic
-4. Add all bulk action handlers
-
 ### Nice to Have
 1. Keyboard navigation (arrow keys between rows)
-2. Export to CSV for offline review
-3. Diff view (before/after changes)
-4. Confidence score tuning (adjust thresholds)
-5. Custom fuzzy match weights (name vs address)
+2. Diff view (before/after changes)
+3. Confidence score tuning (adjust thresholds)
+4. Custom fuzzy match weights (name vs address)
+5. Auto-save interval configuration
+6. Session restore prompt on page reload
 
 ---
 
