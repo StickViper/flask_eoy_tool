@@ -121,12 +121,12 @@ Now run tests: cd scripts && python -m pytest ../tests/ -v
 - Network notation (~# format)
 
 ### Phase 3: Categorization & Undo/Redo (38 tests)
-- `tests/test_categorization.py` - 11 review categories
+- `tests/test_categorization.py` - 12 review categories
 - `tests/test_undo_redo.py` - State management
 
 **Coverage:**
-- All 11 categories: exact_dupes, networks, fuzzy_dupes, yellow_95, yellow_80,
-  yellow_low, orphan_no, green_sent, fuschia_vm, red_invalid, not_interested_invalid
+- All 12 categories: exact_dupes, networks, fuzzy_dupes, yellow_95, yellow_80,
+  yellow_low, orphan_no, green_sent, fuschia_vm, red_invalid, not_interested_invalid, manual_review
 - Category population and filtering
 - Row number sorting
 - Undo stack: 50-action limit, sequential IDs, timestamps

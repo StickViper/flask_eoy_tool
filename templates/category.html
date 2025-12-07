@@ -657,8 +657,16 @@ function deleteNoteChunk() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ row_num: rowNum, chunk_index: chunkIndex })
-        }).then(() => {
-            location.reload();
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                response.json().then(data => {
+                    showNotification(data.error || 'Failed to delete chunk', 'error');
+                });
+            }
+        }).catch(error => {
+            showNotification(`Error: ${error}`, 'error');
         });
     }
 }

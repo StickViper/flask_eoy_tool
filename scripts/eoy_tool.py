@@ -740,7 +740,7 @@ def validate_status_issues(wl_rows):
 
         # Fuschia without vm note
         if color in ['#ff00ff', '#ff00fe', '#fe00ff']:
-            if 'vm' not in row.notes.lower():
+            if not row.notes or 'vm' not in row.notes.lower():
                 row.issues.append({
                     'category': 'fuschia_vm',
                     'severity': 'review',
@@ -750,7 +750,7 @@ def validate_status_issues(wl_rows):
 
         # Green with "sent"
         elif color in ['#00ff00', '#00ff01', '#00fe00']:
-            if 'sent' in row.notes.lower():
+            if row.notes and 'sent' in row.notes.lower():
                 row.issues.append({
                     'category': 'green_sent',
                     'severity': 'auto_fix',
@@ -769,19 +769,20 @@ def validate_status_issues(wl_rows):
 
         # Not interested with invalid keywords
         if row.status == 'Not interested' or row.status == 'Not Interested':
-            invalid_keywords = [
-                'closed', 'disconnected', 'wrong number', 'moved',
-                'no longer', 'out of business', 'permanently closed',
-                'number out of service', 'not doing ob', 'not an ob'
-            ]
-            notes_lower = row.notes.lower()
-            if any(kw in notes_lower for kw in invalid_keywords):
-                row.issues.append({
-                    'category': 'not_interested_invalid',
-                    'severity': 'review',
-                    'message': "'Not interested' but notes suggest invalid provider"
-                })
-                counts['not_interested_invalid'] += 1
+            if row.notes:
+                invalid_keywords = [
+                    'closed', 'disconnected', 'wrong number', 'moved',
+                    'no longer', 'out of business', 'permanently closed',
+                    'number out of service', 'not doing ob', 'not an ob'
+                ]
+                notes_lower = row.notes.lower()
+                if any(kw in notes_lower for kw in invalid_keywords):
+                    row.issues.append({
+                        'category': 'not_interested_invalid',
+                        'severity': 'review',
+                        'message': "'Not interested' but notes suggest invalid provider"
+                    })
+                    counts['not_interested_invalid'] += 1
 
     for cat, count in counts.items():
         print(f"    {cat}: {count} rows")
@@ -798,7 +799,7 @@ def auto_fix_not_interested(wl_rows):
         changes = []
 
         # Fix missing note
-        if 'not interested' not in row.notes.lower():
+        if not row.notes or 'not interested' not in row.notes.lower():
             if row.notes:
                 row.notes += '; not interested'
             else:
@@ -811,7 +812,7 @@ def auto_fix_not_interested(wl_rows):
             changes.append('set_qty_0')
 
         # Remove "sent" or ":sent"
-        if 'sent' in row.notes.lower():
+        if row.notes and 'sent' in row.notes.lower():
             row.notes = re.sub(r':?sent', '', row.notes, flags=re.IGNORECASE).strip()
             row.notes = re.sub(r'\s*;\s*;', ';', row.notes)
             row.notes = row.notes.strip('; ')
@@ -1218,7 +1219,8 @@ def category(category_id):
                          category=cat,
                          rows=rows,
                          categories=state.categories,
-                         progress=calculate_progress())
+                         progress=calculate_progress(),
+                         state=state)
 
 @app.route('/api/save_progress', methods=['POST'])
 def api_save_progress():
@@ -1526,6 +1528,10 @@ def api_delete_note_chunk():
     # Save before state for undo
     before_notes = row.notes
 
+    # Check if notes exist
+    if not row.notes:
+        return jsonify({'success': False, 'error': 'No notes to delete from'}), 400
+
     # Delete chunk
     chunks = [c.strip() for c in row.notes.split(';') if c.strip()]
     if 0 <= chunk_index < len(chunks):
@@ -1646,8 +1652,8 @@ def api_convert_to_not_interested():
             row.bg_color = "#ffffff"
 
             # Remove 'sent' from notes, add 'not interested'
-            notes = re.sub(r':?sent', '', row.notes, flags=re.IGNORECASE).strip()
-            if 'not interested' not in notes.lower():
+            notes = re.sub(r':?sent', '', row.notes or '', flags=re.IGNORECASE).strip()
+            if not notes or 'not interested' not in notes.lower():
                 row.notes = f"{notes}; not interested" if notes else "not interested"
             else:
                 row.notes = notes
