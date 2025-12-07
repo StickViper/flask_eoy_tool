@@ -534,7 +534,9 @@ def normalize_phone(phone):
     """Normalize phone for matching"""
     if not phone:
         return ""
-    digits = re.sub(r'[^\d]', '', phone)
+    # Remove extension first (ext, x, Ext., etc.)
+    phone_clean = re.sub(r'\s*(ext\.?|x|extension)\s*\d+$', '', phone, flags=re.IGNORECASE)
+    digits = re.sub(r'[^\d]', '', phone_clean)
     return digits[-10:] if len(digits) >= 10 else digits
 
 def validate_yellow_to_no(wl_rows, no_rows):
