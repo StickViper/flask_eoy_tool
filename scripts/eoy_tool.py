@@ -1521,8 +1521,8 @@ def api_redo():
 def api_delete_note_chunk():
     """API endpoint to delete a note chunk"""
     data = request.get_json()
-    row_num = data.get('row_num')
-    chunk_index = data.get('chunk_index')
+    row_num = int(data.get('row_num')) if data.get('row_num') is not None else None
+    chunk_index = int(data.get('chunk_index')) if data.get('chunk_index') is not None else None
 
     # Find row
     row = next((r for r in state.wl_rows if r.row_num == row_num), None)
@@ -1559,7 +1559,7 @@ def api_delete_note_chunk():
 def api_delete_rows():
     """API endpoint to delete selected rows"""
     data = request.get_json()
-    row_nums = data.get('row_nums', [])
+    row_nums = [int(n) for n in data.get('row_nums', [])]
 
     if not row_nums:
         return jsonify({'success': False, 'error': 'No rows specified'}), 400
@@ -1755,7 +1755,7 @@ def api_add_vm_note():
     """Parse and increment voicemail counter in notes"""
     data = request.get_json()
     category_id = data.get('category_id')
-    row_nums = data.get('row_nums', [])  # Specific rows if provided
+    row_nums = [int(n) for n in data.get('row_nums', [])]  # Specific rows if provided
 
     # Find category
     category = next((c for c in state.categories if c.id == category_id), None)
@@ -1798,7 +1798,7 @@ def api_change_status():
     """Change status and derive bg_color"""
     data = request.get_json()
     category_id = data.get('category_id')
-    row_nums = data.get('row_nums', [])
+    row_nums = [int(n) for n in data.get('row_nums', [])]
     new_status = data.get('status')
 
     if not new_status:
@@ -1965,8 +1965,8 @@ def api_mass_invalid():
 def api_get_duplicate_group():
     """Get all rows in a duplicate group for merge UI"""
     data = request.get_json()
-    group_id = data.get('group_id')
-    row_num = data.get('row_num')
+    group_id = int(data.get('group_id')) if data.get('group_id') is not None else None
+    row_num = int(data.get('row_num')) if data.get('row_num') is not None else None
 
     # Find group_id from row_num if not provided
     if not group_id and row_num:
@@ -1998,9 +1998,9 @@ def api_merge_rows():
     - merge_fields: Optional dict of field -> row_num to take value from
     """
     data = request.get_json()
-    survivor_row_num = data.get('survivor_row_num')
-    other_row_nums = data.get('other_row_nums', [])
-    merge_fields = data.get('merge_fields', {})  # field -> row_num
+    survivor_row_num = int(data.get('survivor_row_num')) if data.get('survivor_row_num') is not None else None
+    other_row_nums = [int(n) for n in data.get('other_row_nums', [])]
+    merge_fields = {k: int(v) for k, v in data.get('merge_fields', {}).items()}  # field -> row_num
 
     if not survivor_row_num:
         return jsonify({'success': False, 'error': 'No survivor row specified'}), 400
@@ -2077,7 +2077,7 @@ def api_merge_rows():
 def api_get_network_group():
     """Get all rows in a network for confirm_network UI"""
     data = request.get_json()
-    row_num = data.get('row_num')
+    row_num = int(data.get('row_num')) if data.get('row_num') is not None else None
 
     if not row_num:
         return jsonify({'success': False, 'error': 'No row number provided'}), 400
@@ -2149,7 +2149,7 @@ def api_confirm_network():
     """
     data = request.get_json()
     network_name = data.get('network_name', 'Confirmed Network')
-    row_nums = data.get('row_nums', [])
+    row_nums = [int(n) for n in data.get('row_nums', [])]
     add_note = data.get('add_note', '')
 
     if not row_nums:
@@ -2211,7 +2211,7 @@ def api_confirm_network():
 def api_send_to_manual_review():
     """Send row(s) to Manual Review category for closer inspection"""
     data = request.get_json()
-    row_nums = data.get('row_nums', [])
+    row_nums = [int(n) for n in data.get('row_nums', [])]
     reason = data.get('reason', 'Needs manual review')
 
     if not row_nums:
@@ -2266,7 +2266,7 @@ def api_send_to_manual_review():
 def api_mark_reviewed():
     """Mark row as reviewed (no changes needed) for progress tracking"""
     data = request.get_json()
-    row_nums = data.get('row_nums', [])
+    row_nums = [int(n) for n in data.get('row_nums', [])]
 
     if not row_nums:
         return jsonify({'success': False, 'error': 'No row numbers provided'}), 400
@@ -2299,7 +2299,7 @@ def api_edit_field():
     Used for inline editing (double-click to edit).
     """
     data = request.get_json()
-    row_num = data.get('row_num')
+    row_num = int(data.get('row_num')) if data.get('row_num') is not None else None
     field = data.get('field')
     value = data.get('value', '')
 
@@ -2358,7 +2358,7 @@ def api_match_orphan_to_invalid():
     Returns match info if found (≥80% confidence) or suggests manual review.
     """
     data = request.get_json()
-    row_num = data.get('row_num')
+    row_num = int(data.get('row_num')) if data.get('row_num') is not None else None
 
     if not row_num:
         return jsonify({'success': False, 'error': 'No row number provided'}), 400
@@ -2472,8 +2472,8 @@ def api_confirm_orphan_match():
     Marks the orphan as resolved (explained by invalid provider).
     """
     data = request.get_json()
-    orphan_row_num = data.get('orphan_row_num')
-    invalid_row_num = data.get('invalid_row_num')
+    orphan_row_num = int(data.get('orphan_row_num')) if data.get('orphan_row_num') is not None else None
+    invalid_row_num = int(data.get('invalid_row_num')) if data.get('invalid_row_num') is not None else None
     action = data.get('action', 'confirm')  # 'confirm' or 'reject'
 
     if not orphan_row_num:

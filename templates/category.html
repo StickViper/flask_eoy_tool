@@ -210,7 +210,7 @@
                                 {% if chunk.strip() %}
                                 <span class="note-chunk"
                                       data-chunk-index="{{ loop.index0 }}"
-                                      oncontextmenu="showNoteChunkMenu(event, {{ row.row_num }}, {{ loop.index0 }}, '{{ chunk.strip() | replace("'", "\\'") }}'); return false;">
+                                      oncontextmenu="showNoteChunkMenu(event, {{ row.row_num }}, {{ loop.index0 }}, {{ chunk.strip() | tojson }}); return false;">
                                     {{ chunk.strip() }}
                                 </span>
                                 {% endif %}
