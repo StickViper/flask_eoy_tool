@@ -131,7 +131,7 @@ def main():
     try:
         # Load real data (will hit Google Sheets API)
         print("Loading data from Google Sheets (this may take a moment)...")
-        wl_rows, no_rows, invalid_reasons, stats_sheet = load_data(year=2025)
+        wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet = load_data(year=2025)
 
         print(f"\n✅ Loaded {len(wl_rows)} Working List rows")
         print(f"✅ Loaded {len(no_rows)} New Orders rows")
