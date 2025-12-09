@@ -671,6 +671,50 @@ function deleteNoteChunk() {
     }
 }
 
+// Edit note chunk (prompt for new value)
+function editNoteChunk() {
+    if (!currentNoteChunkContext) return;
+
+    const { rowNum, chunkIndex, chunkText } = currentNoteChunkContext;
+
+    const newValue = prompt(`Edit note chunk:`, chunkText);
+    if (newValue === null) return; // User cancelled
+
+    // Get the current row's full notes
+    const rowElement = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+    if (!rowElement) return;
+
+    const notesCell = rowElement.querySelector('.notes-cell');
+    const chunks = Array.from(notesCell.querySelectorAll('.note-chunk')).map(c => c.textContent.trim());
+
+    // Update the specific chunk
+    if (chunkIndex < chunks.length) {
+        chunks[chunkIndex] = newValue.trim();
+    }
+
+    // Join and save the full notes
+    const newNotes = chunks.filter(c => c).join('; ');
+
+    fetch('/api/edit_field', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            row_num: parseInt(rowNum),
+            field: 'notes',
+            value: newNotes
+        })
+    }).then(response => response.json())
+      .then(result => {
+          if (result.success) {
+              location.reload();
+          } else {
+              showNotification(result.error || 'Failed to edit chunk', 'error');
+          }
+      }).catch(error => {
+          showNotification(`Error: ${error}`, 'error');
+      });
+}
+
 // Save progress
 async function saveProgress() {
     const statusEl = document.getElementById('saveStatus');
@@ -724,10 +768,11 @@ function googleSearchSelected() {
         const rowElement = document.querySelector(`tr[data-row-num="${rowNum}"]`);
         if (rowElement) {
             const cells = rowElement.querySelectorAll('td');
-            const practice = cells[2]?.textContent || '';  // Col 2: Practice
-            const address = cells[4]?.textContent || '';   // Col 4: Address
-            const city = cells[5]?.textContent || '';      // Col 5: City
-            const state = cells[6]?.textContent || '';     // Col 6: State
+            // Columns: 0=checkbox, 1=expand, 2=rownum, 3=practice, 4=phone, 5=address, 6=city, 7=state
+            const practice = cells[3]?.textContent || '';
+            const address = cells[5]?.textContent || '';
+            const city = cells[6]?.textContent || '';
+            const state = cells[7]?.textContent || '';
 
             rowsData.push({ practice, address, city, state });
         }
@@ -1677,15 +1722,16 @@ let sortDirection = {};  // Track sort direction per column
 function sortTable(columnIndex) {
     const table = document.getElementById('dataTable');
     const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
+    // Only sort data rows, skip detail rows (which have colspan)
+    const dataRows = Array.from(tbody.querySelectorAll('tr.data-row'));
 
     // Toggle sort direction
     const key = `col_${columnIndex}`;
     sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
     const ascending = sortDirection[key] === 'asc';
 
-    // Sort rows
-    rows.sort((a, b) => {
+    // Sort data rows only
+    dataRows.sort((a, b) => {
         const aCell = a.cells[columnIndex]?.textContent.trim() || '';
         const bCell = b.cells[columnIndex]?.textContent.trim() || '';
 
@@ -1703,8 +1749,16 @@ function sortTable(columnIndex) {
             bCell.localeCompare(aCell);
     });
 
-    // Re-append sorted rows
-    rows.forEach(row => tbody.appendChild(row));
+    // Re-append sorted data rows, each followed by its detail row
+    dataRows.forEach(dataRow => {
+        tbody.appendChild(dataRow);
+        // Also move the associated detail row right after
+        const rowNum = dataRow.dataset.rowNum;
+        const detailRow = document.getElementById(`detail-${rowNum}`);
+        if (detailRow) {
+            tbody.appendChild(detailRow);
+        }
+    });
 }
 
 // =====================================
