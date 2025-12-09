@@ -92,6 +92,13 @@ class TestPhoneEdgeCases:
         assert normalize_phone("555-123-4567 Ext. 300") == "5551234567"
         assert normalize_phone("555-123-4567 extension 400") == "5551234567"
 
+    def test_phone_with_nonbreaking_space(self):
+        """Phones with non-breaking space (\\xa0) should normalize correctly"""
+        # Real data case: phone number followed by non-breaking space
+        assert normalize_phone("(424) 203-0488\xa0") == "4242030488"
+        assert normalize_phone("\xa0(555) 123-4567") == "5551234567"
+        assert normalize_phone("555\xa0123\xa04567") == "5551234567"
+
     def test_phone_empty_values(self):
         """Empty phone values"""
         assert normalize_phone("") == ""

@@ -55,7 +55,10 @@ def main():
         by_color = {'yellow': [], 'fuschia': [], 'green': [], 'red': [], 'white': []}
         for row in wl_rows:
             c = row.bg_color.lower()
-            if c.startswith('#ffff'):
+            # Check white/no-color first (before yellow check due to #ffffff.startswith('#ffff') = True)
+            if c in ('#ffffff', '#fff', '') or c.startswith('#ffffffffffff'):
+                by_color['white'].append(row)
+            elif c.startswith('#ffff'):
                 by_color['yellow'].append(row)
             elif c.startswith('#ff00'):
                 by_color['fuschia'].append(row)

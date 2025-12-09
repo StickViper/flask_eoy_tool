@@ -534,6 +534,8 @@ def normalize_phone(phone):
     """Normalize phone for matching"""
     if not phone:
         return ""
+    # Remove non-breaking spaces and other unicode whitespace
+    phone = phone.replace('\xa0', ' ').strip()
     # Remove extension first (ext, x, Ext., etc.)
     phone_clean = re.sub(r'\s*(ext\.?|x|extension)\s*\d+$', '', phone, flags=re.IGNORECASE)
     digits = re.sub(r'[^\d]', '', phone_clean)
