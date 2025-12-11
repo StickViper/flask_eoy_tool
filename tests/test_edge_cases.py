@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from eoy_tool import (
     status_to_color, normalize_name, normalize_address, normalize_phone,
-    ProviderRow, NewOrderRow
+    ProviderRow, NewOrderRow, safe_int, safe_int_list
 )
 
 
@@ -91,6 +91,13 @@ class TestPhoneEdgeCases:
         assert normalize_phone("555-123-4567 x200") == "5551234567"
         assert normalize_phone("555-123-4567 Ext. 300") == "5551234567"
         assert normalize_phone("555-123-4567 extension 400") == "5551234567"
+
+    def test_phone_with_nonbreaking_space(self):
+        """Phones with non-breaking space (\\xa0) should normalize correctly"""
+        # Real data case: phone number followed by non-breaking space
+        assert normalize_phone("(424) 203-0488\xa0") == "4242030488"
+        assert normalize_phone("\xa0(555) 123-4567") == "5551234567"
+        assert normalize_phone("555\xa0123\xa04567") == "5551234567"
 
     def test_phone_empty_values(self):
         """Empty phone values"""
@@ -387,3 +394,70 @@ class TestSpecialCharacterHandling:
             status="", notes="", bg_color="#ffffff"
         )
         assert '#' in row.address
+
+
+# =============================================================================
+# SAFE INT CONVERSION TESTS
+# =============================================================================
+
+class TestSafeIntConversion:
+    """Test safe_int handles all JSON edge cases from API requests"""
+
+    def test_safe_int_normal_int(self):
+        """Normal integer value"""
+        assert safe_int(123) == 123
+        assert safe_int(0) == 0
+
+    def test_safe_int_string_number(self):
+        """String representation of number (common from JSON)"""
+        assert safe_int("123") == 123
+        assert safe_int("0") == 0
+
+    def test_safe_int_none(self):
+        """None value returns None"""
+        assert safe_int(None) is None
+
+    def test_safe_int_empty_string(self):
+        """Empty string returns None (not ValueError)"""
+        assert safe_int("") is None
+        assert safe_int("  ") is None  # Whitespace only
+
+    def test_safe_int_invalid_string(self):
+        """Invalid string returns None (not ValueError)"""
+        assert safe_int("abc") is None
+        assert safe_int("12.34") is None  # Float string
+
+    def test_safe_int_allow_zero_false(self):
+        """When allow_zero=False, 0 returns None (for row_num validation)"""
+        assert safe_int(0, allow_zero=False) is None
+        assert safe_int("0", allow_zero=False) is None
+        assert safe_int(1, allow_zero=False) == 1
+
+
+class TestSafeIntListConversion:
+    """Test safe_int_list handles all JSON array edge cases"""
+
+    def test_safe_int_list_normal(self):
+        """Normal list of integers"""
+        assert safe_int_list([1, 2, 3]) == [1, 2, 3]
+
+    def test_safe_int_list_string_numbers(self):
+        """List of string numbers (common from JSON)"""
+        assert safe_int_list(["1", "2", "3"]) == [1, 2, 3]
+
+    def test_safe_int_list_mixed(self):
+        """Mixed valid and invalid values - invalid filtered out"""
+        assert safe_int_list([1, "2", None, "", "abc", 3]) == [1, 2, 3]
+
+    def test_safe_int_list_empty(self):
+        """Empty list returns empty list"""
+        assert safe_int_list([]) == []
+
+    def test_safe_int_list_none(self):
+        """None returns empty list"""
+        assert safe_int_list(None) == []
+
+    def test_safe_int_list_filters_zero(self):
+        """Zeros are filtered (row_nums start at 2)"""
+        assert safe_int_list([0, 1, 2]) == [1, 2]
+        assert safe_int_list(["0", "1", "2"]) == [1, 2]

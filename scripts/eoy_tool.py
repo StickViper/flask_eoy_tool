@@ -152,6 +152,11 @@ class ReviewCategory:
     primary_action: Optional[str] = None
     secondary_actions: List[str] = field(default_factory=list)
 
+    @property
+    def row_count(self) -> int:
+        """Number of rows in this category"""
+        return len(self.row_nums)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -198,6 +203,36 @@ class AppState:
 
 # Global state instance
 state = AppState()
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def safe_int(value, allow_zero=True):
+    """Safely convert value to int, handling None and empty string.
+
+    Args:
+        value: The value to convert (could be int, str, None, or '')
+        allow_zero: If False, treat 0 as invalid (useful for row_num which starts at 2)
+
+    Returns:
+        int or None if invalid
+    """
+    if value is None or value == '':
+        return None
+    try:
+        result = int(value)
+        if not allow_zero and result == 0:
+            return None
+        return result
+    except (ValueError, TypeError):
+        return None
+
+def safe_int_list(values):
+    """Safely convert a list of values to ints, filtering out invalid entries."""
+    if not values:
+        return []
+    return [safe_int(v, allow_zero=False) for v in values if safe_int(v, allow_zero=False) is not None]
 
 # ============================================================================
 # PHASE 1: DATA LOADING
@@ -534,6 +569,8 @@ def normalize_phone(phone):
     """Normalize phone for matching"""
     if not phone:
         return ""
+    # Remove non-breaking spaces and other unicode whitespace
+    phone = phone.replace('\xa0', ' ').strip()
     # Remove extension first (ext, x, Ext., etc.)
     phone_clean = re.sub(r'\s*(ext\.?|x|extension)\s*\d+$', '', phone, flags=re.IGNORECASE)
     digits = re.sub(r'[^\d]', '', phone_clean)
@@ -1065,8 +1102,12 @@ def add_to_undo_stack(action_type: str, description: str, before_state: Any, aft
 
 def save_undo_log():
     """Save undo stack to JSON file"""
+    import os
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"eoy_undo_log_{timestamp}.json"
+    # Save to data/undo-logs folder
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'undo-logs')
+    os.makedirs(log_dir, exist_ok=True)
+    filename = os.path.join(log_dir, f"eoy_undo_log_{timestamp}.json")
 
     with open(filename, 'w') as f:
         json.dump({
@@ -1244,31 +1285,47 @@ def get_action_taken(row) -> str:
     """
     Derive action taken label for a row based on its action and field_edits.
     Returns standard action labels for export.
+
+    Priority order (highest to lowest):
+    1. DELETED - row will be removed
+    2. MERGED - row absorbed into another
+    3. MOVED_TO_INVALID - moved to invalid list
+    4. CONVERTED - status changed (e.g., to not interested)
+    5. NETWORK_CONFIRMED - marked as network
+    6. VERIFIED - confirmed/accepted
+    7. EDITED - fields modified (lowest priority)
     """
     if not row.action and not row.field_edits:
         return ''
 
-    action = row.action or ''
+    action = (row.action or '').lower()
 
-    # Map actions to standard labels
-    action_map = {
-        'deleted': 'DELETED',
-        'accepted': 'VERIFIED',
-        'verified': 'VERIFIED',
-        'marked_reviewed': 'VERIFIED',
-        'matched': 'VERIFIED',
-        'merged_into': 'MERGED',
-        'network_confirmed': 'NETWORK_CONFIRMED',
-        'moved_to_invalid': 'MOVED_TO_INVALID',
-        'converted': 'CONVERTED',
-    }
+    # Check in priority order - most impactful changes first
+    # 1. Deletion (highest priority)
+    if 'deleted' in action:
+        return 'DELETED'
 
-    # Check for action match
-    for key, label in action_map.items():
-        if key in action.lower():
-            return label
+    # 2. Merged into another row
+    if 'merged_into' in action or 'merged' in action:
+        return 'MERGED'
 
-    # If has field edits but no specific action
+    # 3. Moved to invalid list
+    if 'moved_to_invalid' in action or 'invalid' in action:
+        return 'MOVED_TO_INVALID'
+
+    # 4. Status conversion
+    if 'converted' in action:
+        return 'CONVERTED'
+
+    # 5. Network confirmed
+    if 'network_confirmed' in action or 'network' in action:
+        return 'NETWORK_CONFIRMED'
+
+    # 6. Verified/accepted/reviewed
+    if any(x in action for x in ['accepted', 'verified', 'marked_reviewed', 'matched', 'reviewed']):
+        return 'VERIFIED'
+
+    # 7. Field edits only (lowest priority)
     if row.field_edits:
         return 'EDITED'
 
@@ -1519,8 +1576,8 @@ def api_redo():
 def api_delete_note_chunk():
     """API endpoint to delete a note chunk"""
     data = request.get_json()
-    row_num = data.get('row_num')
-    chunk_index = data.get('chunk_index')
+    row_num = safe_int(data.get('row_num'), allow_zero=False)
+    chunk_index = safe_int(data.get('chunk_index'), allow_zero=True)
 
     # Find row
     row = next((r for r in state.wl_rows if r.row_num == row_num), None)
@@ -1557,7 +1614,7 @@ def api_delete_note_chunk():
 def api_delete_rows():
     """API endpoint to delete selected rows"""
     data = request.get_json()
-    row_nums = data.get('row_nums', [])
+    row_nums = safe_int_list(data.get('row_nums', []))
 
     if not row_nums:
         return jsonify({'success': False, 'error': 'No rows specified'}), 400
@@ -1753,7 +1810,7 @@ def api_add_vm_note():
     """Parse and increment voicemail counter in notes"""
     data = request.get_json()
     category_id = data.get('category_id')
-    row_nums = data.get('row_nums', [])  # Specific rows if provided
+    row_nums = safe_int_list(data.get('row_nums', []))  # Specific rows if provided
 
     # Find category
     category = next((c for c in state.categories if c.id == category_id), None)
@@ -1796,7 +1853,7 @@ def api_change_status():
     """Change status and derive bg_color"""
     data = request.get_json()
     category_id = data.get('category_id')
-    row_nums = data.get('row_nums', [])
+    row_nums = safe_int_list(data.get('row_nums', []))
     new_status = data.get('status')
 
     if not new_status:
@@ -1963,8 +2020,8 @@ def api_mass_invalid():
 def api_get_duplicate_group():
     """Get all rows in a duplicate group for merge UI"""
     data = request.get_json()
-    group_id = data.get('group_id')
-    row_num = data.get('row_num')
+    group_id = safe_int(data.get('group_id'), allow_zero=False)
+    row_num = safe_int(data.get('row_num'), allow_zero=False)
 
     # Find group_id from row_num if not provided
     if not group_id and row_num:
@@ -1996,9 +2053,9 @@ def api_merge_rows():
     - merge_fields: Optional dict of field -> row_num to take value from
     """
     data = request.get_json()
-    survivor_row_num = data.get('survivor_row_num')
-    other_row_nums = data.get('other_row_nums', [])
-    merge_fields = data.get('merge_fields', {})  # field -> row_num
+    survivor_row_num = safe_int(data.get('survivor_row_num'), allow_zero=False)
+    other_row_nums = safe_int_list(data.get('other_row_nums', []))
+    merge_fields = {k: safe_int(v, allow_zero=False) for k, v in data.get('merge_fields', {}).items() if safe_int(v, allow_zero=False) is not None}
 
     if not survivor_row_num:
         return jsonify({'success': False, 'error': 'No survivor row specified'}), 400
@@ -2075,7 +2132,7 @@ def api_merge_rows():
 def api_get_network_group():
     """Get all rows in a network for confirm_network UI"""
     data = request.get_json()
-    row_num = data.get('row_num')
+    row_num = safe_int(data.get('row_num'), allow_zero=False)
 
     if not row_num:
         return jsonify({'success': False, 'error': 'No row number provided'}), 400
@@ -2147,7 +2204,7 @@ def api_confirm_network():
     """
     data = request.get_json()
     network_name = data.get('network_name', 'Confirmed Network')
-    row_nums = data.get('row_nums', [])
+    row_nums = safe_int_list(data.get('row_nums', []))
     add_note = data.get('add_note', '')
 
     if not row_nums:
@@ -2209,7 +2266,7 @@ def api_confirm_network():
 def api_send_to_manual_review():
     """Send row(s) to Manual Review category for closer inspection"""
     data = request.get_json()
-    row_nums = data.get('row_nums', [])
+    row_nums = safe_int_list(data.get('row_nums', []))
     reason = data.get('reason', 'Needs manual review')
 
     if not row_nums:
@@ -2264,7 +2321,7 @@ def api_send_to_manual_review():
 def api_mark_reviewed():
     """Mark row as reviewed (no changes needed) for progress tracking"""
     data = request.get_json()
-    row_nums = data.get('row_nums', [])
+    row_nums = safe_int_list(data.get('row_nums', []))
 
     if not row_nums:
         return jsonify({'success': False, 'error': 'No row numbers provided'}), 400
@@ -2297,7 +2354,7 @@ def api_edit_field():
     Used for inline editing (double-click to edit).
     """
     data = request.get_json()
-    row_num = data.get('row_num')
+    row_num = safe_int(data.get('row_num'), allow_zero=False)
     field = data.get('field')
     value = data.get('value', '')
 
@@ -2356,7 +2413,7 @@ def api_match_orphan_to_invalid():
     Returns match info if found (≥80% confidence) or suggests manual review.
     """
     data = request.get_json()
-    row_num = data.get('row_num')
+    row_num = safe_int(data.get('row_num'), allow_zero=False)
 
     if not row_num:
         return jsonify({'success': False, 'error': 'No row number provided'}), 400
@@ -2470,8 +2527,8 @@ def api_confirm_orphan_match():
     Marks the orphan as resolved (explained by invalid provider).
     """
     data = request.get_json()
-    orphan_row_num = data.get('orphan_row_num')
-    invalid_row_num = data.get('invalid_row_num')
+    orphan_row_num = safe_int(data.get('orphan_row_num'), allow_zero=False)
+    invalid_row_num = safe_int(data.get('invalid_row_num'), allow_zero=False)
     action = data.get('action', 'confirm')  # 'confirm' or 'reject'
 
     if not orphan_row_num:

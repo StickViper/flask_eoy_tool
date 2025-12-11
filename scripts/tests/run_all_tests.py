@@ -65,7 +65,7 @@ def test_data_loading():
     print("="*80)
 
     try:
-        wl_rows, no_rows, invalid_reasons, stats_sheet = load_data(2025)
+        wl_rows, no_rows, invalid_rows, invalid_reasons, stats_sheet = load_data(2025)
 
         print(f"  [PASS] Loaded {len(wl_rows)} Working List rows")
         print(f"  [PASS] Loaded {len(no_rows)} New Orders rows")
