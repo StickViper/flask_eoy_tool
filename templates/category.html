@@ -194,7 +194,19 @@
                             {% endif %}
                         </td>
                         <td class="col-row-num">{{ row.row_num }}</td>
-                        <td class="col-practice">{{ row.practice }}</td>
+                        <td class="col-practice">
+                            {{ row.practice }}
+                            {# Inline reason tags - show why this row is here #}
+                            {% if row.duplicate_group_id %}
+                            <span class="reason-tag dup" title="Part of duplicate group #{{ row.duplicate_group_id }}">DUP#{{ row.duplicate_group_id }}</span>
+                            {% endif %}
+                            {% if row.match_confidence > 0 %}
+                            <span class="reason-tag match {% if row.match_confidence >= 0.95 %}high{% elif row.match_confidence >= 0.80 %}med{% else %}low{% endif %}" title="{{ (row.match_confidence * 100) | round(1) }}% match to NO row #{{ row.matched_no_row }}">{{ (row.match_confidence * 100) | round(0) }}%</span>
+                            {% endif %}
+                            {% if row.network_name %}
+                            <span class="reason-tag network" title="Network: {{ row.network_name }}">~{{ row.network_name[:8] }}</span>
+                            {% endif %}
+                        </td>
                         <td class="col-phone">{{ row.phone }}</td>
                         <td>{{ row.address }}</td>
                         <td>{{ row.city }}</td>
@@ -483,21 +495,29 @@ function handleRowClick(event, rowElement) {
     const checkbox = rowElement.querySelector('.row-checkbox');
 
     if (event.shiftKey && lastSelectedRow) {
-        // Shift-click: select range from last SELECTED row (not last clicked)
+        // Shift-click: toggle range from last SELECTED row (like Google Sheets)
+        // If clicked row is selected, deselect the range; otherwise select it
         const allRows = Array.from(document.querySelectorAll('.data-row'));
         const startIdx = allRows.findIndex(r => r.dataset.rowNum === lastSelectedRow);
         const endIdx = allRows.findIndex(r => r.dataset.rowNum === rowNum);
 
         const [min, max] = [Math.min(startIdx, endIdx), Math.max(startIdx, endIdx)];
+        const shouldDeselect = selectedRows.has(rowNum);
 
         for (let i = min; i <= max; i++) {
             const row = allRows[i];
             const rowCheckbox = row.querySelector('.row-checkbox');
-            row.classList.add('selected');
-            rowCheckbox.checked = true;
-            selectedRows.add(row.dataset.rowNum);
+            if (shouldDeselect) {
+                row.classList.remove('selected');
+                rowCheckbox.checked = false;
+                selectedRows.delete(row.dataset.rowNum);
+            } else {
+                row.classList.add('selected');
+                rowCheckbox.checked = true;
+                selectedRows.add(row.dataset.rowNum);
+            }
         }
-        lastSelectedRow = rowNum;
+        lastSelectedRow = shouldDeselect ? null : rowNum;
     } else if (event.ctrlKey || event.metaKey) {
         // Ctrl-click: toggle single row
         if (selectedRows.has(rowNum)) {

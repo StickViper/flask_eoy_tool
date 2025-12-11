@@ -152,6 +152,11 @@ class ReviewCategory:
     primary_action: Optional[str] = None
     secondary_actions: List[str] = field(default_factory=list)
 
+    @property
+    def row_count(self) -> int:
+        """Number of rows in this category"""
+        return len(self.row_nums)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -1097,8 +1102,12 @@ def add_to_undo_stack(action_type: str, description: str, before_state: Any, aft
 
 def save_undo_log():
     """Save undo stack to JSON file"""
+    import os
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"eoy_undo_log_{timestamp}.json"
+    # Save to data/undo-logs folder
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'undo-logs')
+    os.makedirs(log_dir, exist_ok=True)
+    filename = os.path.join(log_dir, f"eoy_undo_log_{timestamp}.json")
 
     with open(filename, 'w') as f:
         json.dump({
@@ -1276,31 +1285,47 @@ def get_action_taken(row) -> str:
     """
     Derive action taken label for a row based on its action and field_edits.
     Returns standard action labels for export.
+
+    Priority order (highest to lowest):
+    1. DELETED - row will be removed
+    2. MERGED - row absorbed into another
+    3. MOVED_TO_INVALID - moved to invalid list
+    4. CONVERTED - status changed (e.g., to not interested)
+    5. NETWORK_CONFIRMED - marked as network
+    6. VERIFIED - confirmed/accepted
+    7. EDITED - fields modified (lowest priority)
     """
     if not row.action and not row.field_edits:
         return ''
 
-    action = row.action or ''
+    action = (row.action or '').lower()
 
-    # Map actions to standard labels
-    action_map = {
-        'deleted': 'DELETED',
-        'accepted': 'VERIFIED',
-        'verified': 'VERIFIED',
-        'marked_reviewed': 'VERIFIED',
-        'matched': 'VERIFIED',
-        'merged_into': 'MERGED',
-        'network_confirmed': 'NETWORK_CONFIRMED',
-        'moved_to_invalid': 'MOVED_TO_INVALID',
-        'converted': 'CONVERTED',
-    }
+    # Check in priority order - most impactful changes first
+    # 1. Deletion (highest priority)
+    if 'deleted' in action:
+        return 'DELETED'
 
-    # Check for action match
-    for key, label in action_map.items():
-        if key in action.lower():
-            return label
+    # 2. Merged into another row
+    if 'merged_into' in action or 'merged' in action:
+        return 'MERGED'
 
-    # If has field edits but no specific action
+    # 3. Moved to invalid list
+    if 'moved_to_invalid' in action or 'invalid' in action:
+        return 'MOVED_TO_INVALID'
+
+    # 4. Status conversion
+    if 'converted' in action:
+        return 'CONVERTED'
+
+    # 5. Network confirmed
+    if 'network_confirmed' in action or 'network' in action:
+        return 'NETWORK_CONFIRMED'
+
+    # 6. Verified/accepted/reviewed
+    if any(x in action for x in ['accepted', 'verified', 'marked_reviewed', 'matched', 'reviewed']):
+        return 'VERIFIED'
+
+    # 7. Field edits only (lowest priority)
     if row.field_edits:
         return 'EDITED'
 
