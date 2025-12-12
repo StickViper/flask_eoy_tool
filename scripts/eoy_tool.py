@@ -22,9 +22,7 @@ from datetime import datetime
 from collections import defaultdict
 import webbrowser
 import threading
-
 import sys
-import os
 import argparse
 
 # Configure Flask to look for templates/static in parent directory
@@ -209,7 +207,7 @@ state = AppState()
 # ============================================================================
 
 def safe_int(value, allow_zero=True):
-    """Safely convert value to int, handling None and empty string.
+    """Safely convert value to int, handling None, empty string, and whitespace.
 
     Args:
         value: The value to convert (could be int, str, None, or '')
@@ -218,8 +216,13 @@ def safe_int(value, allow_zero=True):
     Returns:
         int or None if invalid
     """
-    if value is None or value == '':
+    if value is None:
         return None
+    # Handle strings: strip whitespace and check for empty
+    if isinstance(value, str):
+        value = value.strip()
+        if value == '':
+            return None
     try:
         result = int(value)
         if not allow_zero and result == 0:
@@ -1504,21 +1507,33 @@ def restore_state(action: Dict, direction: str = 'undo') -> bool:
 
         elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action',
                               'change_status', 'change_to_white', 'remove_sent', 'mass_invalid',
-                              'merge_rows', 'confirm_network']:
+                              'merge_rows', 'confirm_network', 'delete_rows']:
             # Bulk actions - restore all affected rows
-            rows_data = before_state.get('rows', [])
-            for row_data in rows_data:
-                row_num = row_data.get('row_num')
-                fields = row_data.get('fields', {})
-                row = next((r for r in state.wl_rows if r.row_num == row_num), None)
-                if row:
-                    if direction == 'undo':
+            if direction == 'undo':
+                rows_data = before_state.get('rows', [])
+                for row_data in rows_data:
+                    row_num = row_data.get('row_num')
+                    fields = row_data.get('fields', {})
+                    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                    if row:
                         for field, value in fields.items():
                             if hasattr(row, field):
                                 setattr(row, field, value)
                         # Clear field_edits that were set by the action
                         row.field_edits = {}
-                    # For redo, would need to re-apply the action
+            else:
+                # Redo: apply after_state values
+                rows_data = after_state.get('rows', [])
+                for row_data in rows_data:
+                    row_num = row_data.get('row_num')
+                    fields = row_data.get('fields', {})
+                    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                    if row:
+                        for field, value in fields.items():
+                            if hasattr(row, field):
+                                setattr(row, field, value)
+                        # Update field_edits to reflect the change
+                        row.field_edits.update(fields)
             return True
 
         else:
@@ -1619,20 +1634,27 @@ def api_delete_rows():
     if not row_nums:
         return jsonify({'success': False, 'error': 'No rows specified'}), 400
 
-    # Mark rows for deletion
+    # Store before states for undo
+    before_states = []
     deleted_count = 0
+
     for row_num in row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
-            row.action = 'delete'
+            # Store full state for proper undo restoration
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'action': row.action}
+            })
+            row.action = 'deleted'
             deleted_count += 1
 
-    # Add to undo stack
+    # Add to undo stack with proper before_state structure
     add_to_undo_stack(
         action_type='delete_rows',
         description=f"Deleted {deleted_count} rows",
-        before_state={'row_nums': row_nums},
-        after_state={'row_nums': row_nums}
+        before_state={'rows': before_states},
+        after_state={'rows': [{'row_num': r['row_num'], 'fields': {'action': 'deleted'}} for r in before_states]}
     )
 
     return jsonify({'success': True, 'count': deleted_count})
