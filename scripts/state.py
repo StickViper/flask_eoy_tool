@@ -4,8 +4,12 @@ Application state management for EOY Cleanup Tool
 Contains the AppState class and global state instance.
 """
 
-from typing import List, Optional, Dict
-from models import ProviderRow, NewOrderRow, InvalidRow, ReviewCategory
+from __future__ import annotations
+from typing import List, Optional, Dict, TYPE_CHECKING
+
+# Import types only for type checking (not at runtime) to avoid import issues
+if TYPE_CHECKING:
+    from models import ProviderRow, NewOrderRow, InvalidRow, ReviewCategory
 
 
 class AppState:
