@@ -525,42 +525,42 @@ def categorize_issues(wl_rows, no_rows):
             primary_action=None,
             secondary_actions=["confirm_network", "merge", "edit", "review_individual"]
         ),
-        # Note cleanup categories
+        # Note cleanup categories (manual review - no batch action)
         ReviewCategory(
             id="notes_remove",
             name="Notes: Remove",
             description="Notes with content to remove (vm, call back, office closed, etc.)",
             row_nums=[],
-            allow_batch=True,
-            primary_action="clear_note_pattern",
-            secondary_actions=["edit", "skip"]
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit"]
         ),
         ReviewCategory(
             id="notes_transform",
             name="Notes: Transform",
             description="Notes to transform (e.g., 'same network' → 'network(~N)')",
             row_nums=[],
-            allow_batch=True,
-            primary_action="transform_note",
-            secondary_actions=["edit", "skip"]
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit"]
         ),
         ReviewCategory(
             id="notes_archive_ni",
             name="Notes: NI Reason",
             description="Not Interested with reason to archive",
             row_nums=[],
-            allow_batch=True,
-            primary_action="archive_ni_reason",
-            secondary_actions=["edit", "skip"]
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit"]
         ),
         ReviewCategory(
             id="notes_fix_semicolons",
             name="Notes: Fix Semicolons",
             description="Notes missing semicolons between entries",
             row_nums=[],
-            allow_batch=True,
-            primary_action="apply_semicolons",
-            secondary_actions=["edit", "skip"]
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["edit"]
         ),
         ReviewCategory(
             id="yellow_95",

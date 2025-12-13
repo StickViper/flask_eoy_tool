@@ -14,22 +14,6 @@ let currentEditingCell = null;
 let sortDirection = {};
 let isActionInProgress = false;  // Prevent double-clicks
 
-// Helper to prevent concurrent actions
-function withActionLock(asyncFn) {
-    return async function(...args) {
-        if (isActionInProgress) {
-            showNotification('Action in progress, please wait...', 'warning');
-            return;
-        }
-        isActionInProgress = true;
-        try {
-            return await asyncFn.apply(this, args);
-        } finally {
-            isActionInProgress = false;
-        }
-    };
-}
-
 // Merge/Network modal state
 let mergeGroupRows = [];
 let selectedSurvivor = null;
@@ -1027,6 +1011,28 @@ async function moveAllToInvalid() {
         const result = await response.json();
         if (result.success) {
             showNotification(`Moved ${result.count} rows to Invalid List`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function markNotFound() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Mark all ${allRows.length} rows as "not found in new orders"?`)) return;
+
+    try {
+        const response = await fetch('/api/mark_not_found', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Marked ${result.count} rows as not found`, 'info');
             location.reload();
         } else {
             showNotification(`Error: ${result.error}`, 'error');

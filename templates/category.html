@@ -149,6 +149,10 @@
                 <button class="btn btn-danger btn-sm" onclick="moveAllToInvalid()">
                     Move All to Invalid
                 </button>
+                {% elif category.primary_action == 'mark_not_found' %}
+                <button class="btn btn-primary btn-sm" onclick="markNotFound()">
+                    Mark All "Not Found"
+                </button>
                 {% endif %}
             {% endif %}
         </div>
@@ -194,13 +198,13 @@
                             {{ row.practice }}
                             {# Inline reason tags - show why this row is here #}
                             {% if row.duplicate_group_id %}
-                            <span class="reason-tag dup" title="Part of duplicate group #{{ row.duplicate_group_id }}">DUP#{{ row.duplicate_group_id }}</span>
+                            <span class="reason-tag dup" title="Click to merge duplicates" style="cursor: pointer;" onclick="event.stopPropagation(); openMergeModal({{ row.row_num }})">DUP#{{ row.duplicate_group_id }}</span>
                             {% endif %}
                             {% if row.match_confidence > 0 %}
                             <span class="reason-tag match {% if row.match_confidence >= 0.95 %}high{% elif row.match_confidence >= 0.80 %}med{% else %}low{% endif %}" title="{{ (row.match_confidence * 100) | round(1) }}% match to NO row #{{ row.matched_no_row }}">{{ (row.match_confidence * 100) | round(0) }}%</span>
                             {% endif %}
                             {% if row.network_name %}
-                            <span class="reason-tag network" title="Network: {{ row.network_name }}">~{{ row.network_name[:8] }}</span>
+                            <span class="reason-tag network" title="Click to edit network" style="cursor: pointer;" onclick="event.stopPropagation(); openNetworkModal({{ row.row_num }})">~{{ row.network_name[:8] }}</span>
                             {% endif %}
                         </td>
                         <td class="col-phone">{{ row.phone }}</td>
