@@ -375,3 +375,80 @@ class TestSeverityCategories:
         """Fuzzy duplicates should be 'review' severity (need human judgment)"""
         expected_severity = "review"
         assert expected_severity == "review"
+
+
+class TestAddressClusters:
+    """Test address-based clustering for different phones at same address"""
+
+    def _make_row(self, row_num, practice, phone, address, state, status="Successful Order", bg_color="#ffff00"):
+        """Helper to create test rows with all required fields"""
+        return ProviderRow(
+            row_num=row_num, practice=practice, phone=phone, address=address,
+            city="Anytown", state=state, zip="12345",
+            qty_2023="10", qty_2024="15", qty_2025="20",
+            notes="", status=status, bg_color=bg_color
+        )
+
+    def test_address_cluster_different_phones_same_address(self):
+        """Rows with same street number/state but different phones should cluster"""
+        from validation import detect_address_clusters, detect_duplicates
+
+        # Create 4 rows: different names, different phones, same street address
+        rows = [
+            self._make_row(1, "Dr. Smith Family Care", "555-111-1111",
+                          "100 Main St Suite 101", "CA"),
+            self._make_row(2, "Johnson Medical", "555-222-2222",
+                          "100 Main Street Ste 200", "CA"),
+            self._make_row(3, "Anytown Women's Clinic", "555-333-3333",
+                          "100 Main St", "CA"),
+            self._make_row(4, "Pediatric Associates", "555-444-4444",
+                          "100 Main Ave", "CA", status="Potentially Invalid", bg_color="#ff0000"),
+        ]
+
+        # Run both detection phases (duplicates first, then address clusters)
+        detect_duplicates(rows)
+        detect_address_clusters(rows)
+
+        # All 4 should be flagged as address_cluster (same street number "100" + state "CA")
+        address_cluster_issues = []
+        for row in rows:
+            for issue in row.issues:
+                if issue.get('category') == 'address_cluster':
+                    address_cluster_issues.append((row.row_num, issue))
+
+        assert len(address_cluster_issues) == 4, "All 4 rows should be in address cluster"
+
+    def test_address_cluster_not_triggered_same_phone(self):
+        """Same phone = already caught by phone grouping, don't double flag"""
+        from validation import detect_address_clusters, detect_duplicates
+
+        # Two rows: same phone, same address
+        rows = [
+            self._make_row(1, "Dr. Smith", "555-111-1111", "100 Main St", "CA"),
+            self._make_row(2, "Dr. Smith MD", "555-111-1111", "100 Main St Suite 200", "CA"),
+        ]
+
+        detect_duplicates(rows)  # Will flag as exact/fuzzy duplicates
+        detect_address_clusters(rows)  # Should skip (same phone)
+
+        # Should NOT have address_cluster issues (same phone = already caught)
+        for row in rows:
+            for issue in row.issues:
+                assert issue.get('category') != 'address_cluster', \
+                    "Should not double-flag when same phone"
+
+    def test_address_cluster_different_states_not_grouped(self):
+        """Different states should not be grouped even with same street number"""
+        from validation import detect_address_clusters
+
+        rows = [
+            self._make_row(1, "Dr. Smith", "555-111-1111", "100 Main St", "CA"),
+            self._make_row(2, "Dr. Jones", "555-222-2222", "100 Main St", "NY"),
+        ]
+
+        detect_address_clusters(rows)
+
+        # Should NOT cluster (different states)
+        for row in rows:
+            for issue in row.issues:
+                assert issue.get('category') != 'address_cluster'

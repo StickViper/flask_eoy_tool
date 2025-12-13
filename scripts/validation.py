@@ -207,6 +207,71 @@ def detect_duplicates(wl_rows):
     print(f"  Found {exact_dupes} exact duplicates, {networks} network locations, {fuzzy_dupes} fuzzy duplicates")
 
 
+def extract_street_number(address):
+    """Extract street number from address for grouping."""
+    if not address:
+        return None
+    # Match leading digits (street number)
+    match = re.match(r'^\s*(\d+)', address)
+    return match.group(1) if match else None
+
+
+def detect_address_clusters(wl_rows):
+    """Detect rows sharing same address but different phones/names.
+
+    This catches scenarios like:
+    - 4 rows with 4 different names and phones
+    - But 3 share street number + state
+    - Possible same building, multi-location practice, or data issues
+    """
+    print(f"[Phase 2.3b] Detecting address-based clusters...")
+
+    # Group by (street_number, state) - catches same building
+    addr_groups = defaultdict(list)
+    for row in wl_rows:
+        street_num = extract_street_number(row.address)
+        state = (row.state or '').strip().upper()
+        if street_num and state:
+            key = (street_num, state)
+            addr_groups[key].append(row)
+
+    cluster_count = 0
+    for key, rows in addr_groups.items():
+        if len(rows) < 2:
+            continue
+
+        # Skip if ALL already flagged as duplicates/networks (by phone grouping)
+        all_already_flagged = all(
+            any(issue.get('category') in ['exact_dupes', 'networks', 'fuzzy_dupes']
+                for issue in row.issues)
+            for row in rows
+        )
+        if all_already_flagged:
+            continue
+
+        # Check if they have DIFFERENT phones (phone grouping would miss these)
+        phones = set(normalize_phone(r.phone) for r in rows if r.phone)
+        if len(phones) <= 1:
+            continue  # Same phone - already caught by phone grouping
+
+        # This is an address cluster with different phones
+        street_num, state = key
+        for row in rows:
+            # Don't double-flag if already caught
+            existing_cats = [issue.get('category') for issue in row.issues]
+            if 'address_cluster' not in existing_cats:
+                row.issues.append({
+                    'category': 'address_cluster',
+                    'severity': 'review',
+                    'message': f"Same address ({street_num}... {state}), different phones ({len(rows)} rows)",
+                    'cluster_size': len(rows),
+                    'address_key': f"{street_num}, {state}"
+                })
+                cluster_count += 1
+
+    print(f"  Found {cluster_count} rows in address clusters (different phones)")
+
+
 def validate_status_issues(wl_rows):
     """Check status-related issues"""
     print(f"[Phase 2.4] Validating status issues...")
@@ -381,6 +446,15 @@ def categorize_issues(wl_rows, no_rows):
             secondary_actions=["merge", "delete", "edit"]
         ),
         ReviewCategory(
+            id="address_cluster",
+            name="Same Address",
+            description="Different phones/names at same street address",
+            row_nums=[],
+            allow_batch=False,
+            primary_action=None,
+            secondary_actions=["confirm_network", "merge", "edit", "review_individual"]
+        ),
+        ReviewCategory(
             id="yellow_95",
             name="Orders (Exact Match)",
             description="High-confidence matches to New Orders",
@@ -509,6 +583,7 @@ def run_validations(wl_rows, no_rows, invalid_rows, invalid_reasons):
     validate_yellow_to_no(wl_rows, no_rows)
     validate_no_to_wl(wl_rows, no_rows)
     detect_duplicates(wl_rows)
+    detect_address_clusters(wl_rows)  # Catches different phones at same address
     validate_status_issues(wl_rows)
     # DISABLED: auto_fix_not_interested(wl_rows)  # No auto-fixing per user request
     # DISABLED: detect_non_standard_notes(wl_rows)  # Not a real category

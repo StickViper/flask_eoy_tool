@@ -1,7 +1,7 @@
 """
 Test categorization logic for issue review
 
-Tests the 11 review categories and their population from validated rows.
+Tests the 12 review categories and their population from validated rows.
 Critical for organizing 300+ issues into manageable review buckets.
 """
 
@@ -14,8 +14,8 @@ from validation import categorize_issues
 class TestCategoryDefinitions:
     """Test category definitions and properties"""
 
-    def test_all_11_categories_defined(self):
-        """Should define exactly 11 review categories"""
+    def test_all_12_categories_defined(self):
+        """Should define exactly 12 review categories"""
         wl_rows = []
         no_rows = []
 
