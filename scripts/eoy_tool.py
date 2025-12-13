@@ -25,6 +25,7 @@ from collections import defaultdict
 import webbrowser
 import threading
 import argparse
+from rapidfuzz import fuzz
 
 # Import from modular components
 from models import ProviderRow, NewOrderRow, InvalidRow, ReviewCategory
@@ -687,6 +688,8 @@ def api_mark_not_found():
 
     # Mark as not found
     count = 0
+    before_states = []
+
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
@@ -696,6 +699,12 @@ def api_mark_not_found():
 
             # Only add if not already present
             if note_to_add not in existing_notes.lower():
+                # Save before state
+                before_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': row.notes, 'action': row.action}
+                })
+
                 if existing_notes and not existing_notes.endswith(';'):
                     existing_notes += '; '
                 elif existing_notes:
@@ -705,6 +714,14 @@ def api_mark_not_found():
                 row.field_edits['notes'] = new_notes  # Track change
                 row.action = 'edit'
                 count += 1
+
+    if count > 0:
+        add_to_undo_stack(
+            action_type='batch_action',
+            description=f"Marked {count} rows as 'not found'",
+            before_state={'rows': before_states},
+            after_state={'rows': [{'row_num': s['row_num'], 'fields': {'notes': next((r for r in state.wl_rows if r.row_num == s['row_num']), None).notes, 'action': 'edit'}} for s in before_states]}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -723,11 +740,18 @@ def api_add_vm_note():
     # Use provided row_nums or all in category
     target_rows = row_nums if row_nums else category.row_nums
 
-    import re
     count = 0
+    before_states = []
+
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Save before state
+            before_states.append({
+                'row_num': row_num,
+                'fields': {'notes': row.notes, 'action': row.action}
+            })
+
             notes = row.notes if row.notes else ""
 
             # Parse existing vm count: "vm x2" or "vm x3"
@@ -749,6 +773,14 @@ def api_add_vm_note():
             row.field_edits['notes'] = new_notes  # Track change
             row.action = 'edit'
             count += 1
+
+    if count > 0:
+        add_to_undo_stack(
+            action_type='batch_action',
+            description=f"Added VM notes to {count} rows",
+            before_state={'rows': before_states},
+            after_state={'rows': [{'row_num': s['row_num'], 'fields': {'notes': next((r for r in state.wl_rows if r.row_num == s['row_num']), None).notes, 'action': 'edit'}} for s in before_states]}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -1148,6 +1180,7 @@ def api_confirm_network():
 
             # Update network name
             row.network_name = network_name
+            row.field_edits['network_name'] = network_name
 
             # Add note if provided
             if add_note:
