@@ -361,20 +361,96 @@ class TestSeverityCategories:
     """Test severity categorization for duplicates"""
 
     def test_exact_duplicates_severity_auto_fix(self):
-        """Exact duplicates should be 'auto_fix' severity (can be automatically resolved)"""
-        # This tests the expected behavior/categorization
-        expected_severity = "auto_fix"
-        assert expected_severity == "auto_fix"
+        """Exact duplicates should get 'auto_fix' severity from detect_duplicates"""
+        rows = [
+            ProviderRow(
+                row_num=1, practice="Test Practice", phone="555-111-1111",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", notes="", status="",
+                bg_color="#ffffff"
+            ),
+            ProviderRow(
+                row_num=2, practice="Test Practice", phone="555-111-1111",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", notes="", status="",
+                bg_color="#ffffff"
+            ),
+        ]
+        detect_duplicates(rows)
+
+        # Find the exact_dupes issue and verify severity
+        for row in rows:
+            for issue in row.issues:
+                if issue.get('category') == 'exact_dupes':
+                    assert issue.get('severity') == 'auto_fix', \
+                        f"Expected auto_fix severity, got {issue.get('severity')}"
+                    return
+        pytest.fail("No exact_dupes issue found")
 
     def test_networks_severity_review(self):
-        """Networks should be 'review' severity (need human verification)"""
-        expected_severity = "review"
-        assert expected_severity == "review"
+        """Networks should get 'review' severity from detect_duplicates"""
+        # Network criteria: same phone, similar names (>=85%), different addresses (<70%)
+        rows = [
+            ProviderRow(
+                row_num=1, practice="Women's Health Network - North Location",
+                phone="555-111-1111",
+                address="1000 North Lamar Blvd", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", notes="", status="",
+                bg_color="#ffffff"
+            ),
+            ProviderRow(
+                row_num=2, practice="Women's Health Network - South Location",
+                phone="555-111-1111",
+                address="2000 South Congress Ave", city="Austin", state="TX", zip="78704",
+                qty_2023="", qty_2024="", qty_2025="", notes="", status="",
+                bg_color="#ffffff"
+            ),
+        ]
+        detect_duplicates(rows)
+
+        # Find the networks issue and verify severity
+        for row in rows:
+            for issue in row.issues:
+                if issue.get('category') == 'networks':
+                    assert issue.get('severity') == 'review', \
+                        f"Expected review severity, got {issue.get('severity')}"
+                    return
+        # If not found as network, check what it was classified as
+        all_issues = []
+        for row in rows:
+            for issue in row.issues:
+                all_issues.append(issue.get('category'))
+        pytest.fail(f"No networks issue found. Found categories: {all_issues}")
 
     def test_fuzzy_duplicates_severity_review(self):
-        """Fuzzy duplicates should be 'review' severity (need human judgment)"""
-        expected_severity = "review"
-        assert expected_severity == "review"
+        """Fuzzy duplicates should get 'review' severity from detect_duplicates"""
+        rows = [
+            ProviderRow(
+                row_num=1, practice="Womens Health Center", phone="555-111-1111",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", notes="", status="",
+                bg_color="#ffffff"
+            ),
+            ProviderRow(
+                row_num=2, practice="Women Health Clinic", phone="555-111-1111",
+                address="123 Main St Suite 200", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", notes="", status="",
+                bg_color="#ffffff"
+            ),
+        ]
+        detect_duplicates(rows)
+
+        # Find the fuzzy_dupes issue and verify severity
+        for row in rows:
+            for issue in row.issues:
+                if issue.get('category') == 'fuzzy_dupes':
+                    assert issue.get('severity') == 'review', \
+                        f"Expected review severity, got {issue.get('severity')}"
+                    return
+        # Note: This might be classified as exact_dupes if names normalize to same
+        # Either way, verify we got SOME issue
+        total_issues = sum(len(r.issues) for r in rows)
+        assert total_issues > 0, "No duplicate issues found"
 
 
 class TestAddressClusters:

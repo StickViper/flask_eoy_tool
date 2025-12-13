@@ -437,3 +437,189 @@ class TestUndoRedoWithRealData:
         assert action['before_state']['practice'] == "Women's Health Specialists"
         assert action['before_state']['phone'] == '555-123-4567'
         assert action['after_state']['status'] == 'Not interested'
+
+
+class TestRestoreState:
+    """Test the actual state restoration logic"""
+
+    def test_restore_state_edit_field_undo(self):
+        """Undo should restore field to before_state value"""
+        from undo_redo import restore_state
+
+        # Create a test state with a row
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=45, practice="Test Practice", phone="555-123-4567",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="50",
+                status="Not interested",  # Current state
+                notes="changed", bg_color="#ffffff"
+            )
+        ]
+
+        action = {
+            'action_type': 'edit_field',
+            'before_state': {
+                'row_num': 45,
+                'field': 'status',
+                'old_value': 'Successful Order'  # What to restore to
+            },
+            'after_state': {
+                'row_num': 45,
+                'field': 'status',
+                'new_value': 'Not interested'
+            }
+        }
+
+        # Perform undo
+        success = restore_state(test_state, action, 'undo')
+        assert success is True
+
+        # Verify the row was actually updated
+        row = test_state.wl_rows[0]
+        assert row.status == 'Successful Order', f"Expected 'Successful Order', got '{row.status}'"
+
+    def test_restore_state_edit_field_redo(self):
+        """Redo should restore field to after_state value"""
+        from undo_redo import restore_state
+
+        # Create a test state with a row
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=45, practice="Test Practice", phone="555-123-4567",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="50",
+                status="Successful Order",  # Before state (after undo)
+                notes="original", bg_color="#ffff00"
+            )
+        ]
+
+        action = {
+            'action_type': 'edit_field',
+            'before_state': {
+                'row_num': 45,
+                'field': 'status',
+                'old_value': 'Successful Order'
+            },
+            'after_state': {
+                'row_num': 45,
+                'field': 'status',
+                'new_value': 'Not interested'  # What to restore to on redo
+            }
+        }
+
+        # Perform redo
+        success = restore_state(test_state, action, 'redo')
+        assert success is True
+
+        # Verify the row was actually updated
+        row = test_state.wl_rows[0]
+        assert row.status == 'Not interested', f"Expected 'Not interested', got '{row.status}'"
+
+    def test_restore_state_bulk_action_undo(self):
+        """Undo of bulk action should restore all affected rows"""
+        from undo_redo import restore_state
+
+        # Create a test state with multiple rows
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=1, practice="Practice 1", phone="555-111-1111",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="",
+                status="Not interested", notes="", bg_color="#ffffff"
+            ),
+            ProviderRow(
+                row_num=2, practice="Practice 2", phone="555-222-2222",
+                address="456 Oak Ave", city="Austin", state="TX", zip="78702",
+                qty_2023="", qty_2024="", qty_2025="",
+                status="Not interested", notes="", bg_color="#ffffff"
+            ),
+        ]
+        # Set current action state
+        test_state.wl_rows[0].action = 'accepted'
+        test_state.wl_rows[1].action = 'accepted'
+
+        action = {
+            'action_type': 'accept_all',
+            'before_state': {
+                'rows': [
+                    {'row_num': 1, 'fields': {'action': None}},
+                    {'row_num': 2, 'fields': {'action': None}}
+                ]
+            },
+            'after_state': {
+                'rows': [
+                    {'row_num': 1, 'fields': {'action': 'accepted'}},
+                    {'row_num': 2, 'fields': {'action': 'accepted'}}
+                ]
+            }
+        }
+
+        # Perform undo
+        success = restore_state(test_state, action, 'undo')
+        assert success is True
+
+        # Verify both rows were restored
+        assert test_state.wl_rows[0].action is None, f"Row 1 action should be None, got {test_state.wl_rows[0].action}"
+        assert test_state.wl_rows[1].action is None, f"Row 2 action should be None, got {test_state.wl_rows[1].action}"
+
+    def test_restore_state_updates_bg_color_on_status_change(self):
+        """Changing status should also update bg_color"""
+        from undo_redo import restore_state
+
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=45, practice="Test Practice", phone="555-123-4567",
+                address="123 Main St", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="",
+                status="Not interested", notes="", bg_color="#ffffff"
+            )
+        ]
+
+        action = {
+            'action_type': 'edit_field',
+            'before_state': {
+                'row_num': 45,
+                'field': 'status',
+                'old_value': 'Successful Order'
+            },
+            'after_state': {
+                'row_num': 45,
+                'field': 'status',
+                'new_value': 'Not interested'
+            }
+        }
+
+        # Undo to restore "Successful Order" status
+        success = restore_state(test_state, action, 'undo')
+        assert success is True
+
+        row = test_state.wl_rows[0]
+        assert row.status == 'Successful Order'
+        # bg_color should also be updated to yellow
+        assert row.bg_color == '#ffff00', f"Expected yellow (#ffff00), got {row.bg_color}"
+
+    def test_restore_state_row_not_found(self):
+        """restore_state should handle missing rows gracefully"""
+        from undo_redo import restore_state
+
+        test_state = AppState()
+        test_state.wl_rows = []  # Empty - row won't be found
+
+        action = {
+            'action_type': 'edit_field',
+            'before_state': {
+                'row_num': 999,  # Doesn't exist
+                'field': 'status',
+                'old_value': 'Successful Order'
+            },
+            'after_state': {}
+        }
+
+        # Should not crash, just return True (graceful handling)
+        success = restore_state(test_state, action, 'undo')
+        assert success is True  # Doesn't crash
