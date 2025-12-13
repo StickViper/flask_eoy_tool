@@ -819,13 +819,6 @@ async function confirmMerge() {
     }
 }
 
-function mergeFromMenu() {
-    document.getElementById('rowContextMenu').style.display = 'none';
-    if (selectedRows.size > 0) {
-        openMergeModal(parseInt(Array.from(selectedRows)[0]));
-    }
-}
-
 // =============================================================================
 // NETWORK MODAL
 // =============================================================================
@@ -928,13 +921,6 @@ async function confirmNetworkAction() {
         }
     } catch (error) {
         showNotification(`Error: ${error}`, 'error');
-    }
-}
-
-function confirmNetworkFromMenu() {
-    document.getElementById('rowContextMenu').style.display = 'none';
-    if (selectedRows.size > 0) {
-        openNetworkModal(parseInt(Array.from(selectedRows)[0]));
     }
 }
 
