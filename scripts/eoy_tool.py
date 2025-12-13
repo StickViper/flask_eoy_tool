@@ -421,7 +421,6 @@ def api_keep_first_delete_rest():
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
     # Group rows by duplicate_group_id
-    from collections import defaultdict
     groups = defaultdict(list)
 
     for row_num in category.row_nums:
@@ -429,15 +428,34 @@ def api_keep_first_delete_rest():
         if row and row.duplicate_group_id:
             groups[row.duplicate_group_id].append(row)
 
-    # Keep first, delete rest
+    # Keep first, delete rest - collect before states
+    before_states = []
+    after_states = []
     deleted_count = 0
+
     for group_id, rows in groups.items():
         if len(rows) > 1:
             # Keep first (lowest row number)
             rows.sort(key=lambda r: r.row_num)
             for row in rows[1:]:  # Delete rest
-                row.action = 'delete'
+                before_states.append({
+                    'row_num': row.row_num,
+                    'fields': {'action': row.action}
+                })
+                row.action = 'deleted'
+                after_states.append({
+                    'row_num': row.row_num,
+                    'fields': {'action': 'deleted'}
+                })
                 deleted_count += 1
+
+    if deleted_count > 0:
+        add_to_undo_stack(
+            action_type='keep_first_delete_rest',
+            description=f"Kept first of {len(groups)} duplicate groups, deleted {deleted_count} rows",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': deleted_count})
 
@@ -452,13 +470,32 @@ def api_accept_all_matches():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    # Mark all rows as accepted
+    # Mark all rows as accepted - collect before states
+    before_states = []
+    after_states = []
     count = 0
+
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row.row_num,
+                'fields': {'action': row.action}
+            })
             row.action = 'accepted'
+            after_states.append({
+                'row_num': row.row_num,
+                'fields': {'action': 'accepted'}
+            })
             count += 1
+
+    if count > 0:
+        add_to_undo_stack(
+            action_type='accept_all',
+            description=f"Accepted {count} matches in {category.name}",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -473,11 +510,27 @@ def api_convert_to_not_interested():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    # Convert all rows
+    # Convert all rows - collect before states
+    before_states = []
+    after_states = []
     count = 0
+
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            # Store before state
+            before_states.append({
+                'row_num': row.row_num,
+                'fields': {
+                    'status': row.status,
+                    'qty_2025': row.qty_2025,
+                    'bg_color': row.bg_color,
+                    'notes': row.notes,
+                    'action': row.action
+                }
+            })
+
+            # Apply changes
             row.status = "Not Interested"
             row.qty_2025 = "0"
             row.bg_color = "#ffffff"
@@ -491,8 +544,28 @@ def api_convert_to_not_interested():
 
             # Clean up extra semicolons
             row.notes = re.sub(r'\s*;\s*;', ';', row.notes).strip(';').strip()
+            row.action = 'converted_to_not_interested'
 
+            # Store after state
+            after_states.append({
+                'row_num': row.row_num,
+                'fields': {
+                    'status': row.status,
+                    'qty_2025': row.qty_2025,
+                    'bg_color': row.bg_color,
+                    'notes': row.notes,
+                    'action': row.action
+                }
+            })
             count += 1
+
+    if count > 0:
+        add_to_undo_stack(
+            action_type='change_to_white',
+            description=f"Converted {count} rows to Not Interested",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -508,14 +581,39 @@ def api_move_to_invalid():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    # Mark all rows for move to invalid
+    # Mark all rows for move to invalid - collect before states
+    before_states = []
+    after_states = []
     count = 0
+
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
+            before_states.append({
+                'row_num': row.row_num,
+                'fields': {
+                    'action': row.action,
+                    'field_edits': dict(row.field_edits)
+                }
+            })
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
+            after_states.append({
+                'row_num': row.row_num,
+                'fields': {
+                    'action': 'move_to_invalid',
+                    'field_edits': dict(row.field_edits)
+                }
+            })
             count += 1
+
+    if count > 0:
+        add_to_undo_stack(
+            action_type='mass_invalid',
+            description=f"Marked {count} rows for move to Invalid ({reason})",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 
@@ -530,18 +628,46 @@ def api_fix_qty_mismatches():
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    # Fix qty mismatches
+    # Fix qty mismatches - collect before states
+    before_states = []
+    after_states = []
     count = 0
+
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row and row.matched_no_row:
             # Find matching NO row
             no_row = next((n for n in state.no_rows if n.row_num == row.matched_no_row), None)
-            if no_row:
+            if no_row and row.qty_2025 != no_row.qty_2025:
+                # Store before state
+                before_states.append({
+                    'row_num': row.row_num,
+                    'fields': {
+                        'qty_2025': row.qty_2025,
+                        'action': row.action
+                    }
+                })
                 # Update qty to match NO row
+                row.qty_2025 = no_row.qty_2025
                 row.field_edits['qty_2025'] = no_row.qty_2025
-                row.action = 'edit'
+                row.action = 'qty_fixed'
+                # Store after state
+                after_states.append({
+                    'row_num': row.row_num,
+                    'fields': {
+                        'qty_2025': row.qty_2025,
+                        'action': 'qty_fixed'
+                    }
+                })
                 count += 1
+
+    if count > 0:
+        add_to_undo_stack(
+            action_type='batch_action',
+            description=f"Fixed {count} QTY mismatches",
+            before_state={'rows': before_states},
+            after_state={'rows': after_states}
+        )
 
     return jsonify({'success': True, 'count': count})
 

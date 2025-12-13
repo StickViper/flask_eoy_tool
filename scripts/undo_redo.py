@@ -76,8 +76,10 @@ def calculate_progress(state: AppState) -> Dict:
     """
     # Define urgency levels
     CRITICAL = {'exact_dupes', 'yellow_low', 'orphan_no', 'red_invalid'}
-    REVIEW = {'networks', 'fuzzy_dupes', 'yellow_80', 'green_sent', 'not_interested_invalid'}
-    VERIFY = {'yellow_95', 'fuschia_vm', 'manual_review'}
+    REVIEW = {'networks', 'fuzzy_dupes', 'yellow_80', 'green_sent', 'not_interested_invalid',
+              'address_cluster', 'notes_archive_ni'}  # Address clusters and NI reasons need review
+    VERIFY = {'yellow_95', 'fuschia_vm', 'manual_review',
+              'notes_remove', 'notes_transform', 'notes_fix_semicolons'}  # Auto-fix note patterns
 
     counts = {
         'critical_total': 0,

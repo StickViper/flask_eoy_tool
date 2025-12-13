@@ -655,10 +655,11 @@ def categorize_issues(wl_rows, no_rows):
                         cat.row_nums.append(row.row_num)
 
     # Add orphan NO rows (stored separately)
-    orphan_cat = next(c for c in categories if c.id == "orphan_no")
-    for no_row in no_rows:
-        if no_row.is_orphan:
-            orphan_cat.row_nums.append(no_row.row_num)
+    orphan_cat = next((c for c in categories if c.id == "orphan_no"), None)
+    if orphan_cat:
+        for no_row in no_rows:
+            if no_row.is_orphan:
+                orphan_cat.row_nums.append(no_row.row_num)
 
     # Filter out empty categories
     categories = [c for c in categories if len(c.row_nums) > 0]

@@ -69,7 +69,7 @@ def load_data(year: int = 2025):
     # Parse New Orders
     no_rows = []
     for i, row in enumerate(no_data[1:], 2):
-        if len(row) < 7 or not row[2]:  # Skip if no practice name
+        if len(row) < 8 or not row[2]:  # Skip if no practice name or missing cols
             continue
         no_rows.append(NewOrderRow(
             row_num=i,
