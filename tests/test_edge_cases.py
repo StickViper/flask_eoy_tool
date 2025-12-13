@@ -12,10 +12,8 @@ from pathlib import Path
 # Add scripts/ to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import (
-    status_to_color, normalize_name, normalize_address, normalize_phone,
-    ProviderRow, NewOrderRow, safe_int, safe_int_list
-)
+from models import ProviderRow, NewOrderRow
+from helpers import status_to_color, normalize_name, normalize_address, normalize_phone, safe_int, safe_int_list
 
 
 # =============================================================================

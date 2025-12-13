@@ -148,7 +148,7 @@ class TestActualImplementation:
 
     def test_actual_function_all_bugs_fixed(self):
         """Verify actual status_to_color has none of the bugs above"""
-        from eoy_tool import status_to_color
+        from helpers import status_to_color
 
         # Should NOT have these bugs:
 

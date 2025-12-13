@@ -6,11 +6,10 @@ Critical for correctly matching 300+ yellow rows to ~60 new orders.
 """
 
 import pytest
-from eoy_tool import (
-    normalize_name, normalize_address, normalize_phone,
-    ProviderRow, NewOrderRow
-)
 from rapidfuzz import fuzz
+
+from models import ProviderRow, NewOrderRow
+from helpers import normalize_name, normalize_address, normalize_phone
 
 
 class TestNormalization:

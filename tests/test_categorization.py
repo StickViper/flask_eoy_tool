@@ -6,10 +6,9 @@ Critical for organizing 300+ issues into manageable review buckets.
 """
 
 import pytest
-from eoy_tool import (
-    ProviderRow, NewOrderRow, ReviewCategory,
-    categorize_issues
-)
+
+from models import ProviderRow, NewOrderRow, ReviewCategory
+from validation import categorize_issues
 
 
 class TestCategoryDefinitions:
@@ -300,7 +299,7 @@ class TestCategoryIntegrationWithFixtures:
     def test_categorize_fixture_data(self, sample_wl_rows, sample_no_rows):
         """Test categorization with full fixture dataset"""
         # Run duplicate detection first to populate issues
-        from eoy_tool import detect_duplicates
+        from validation import detect_duplicates
         detect_duplicates(sample_wl_rows)
 
         # Categorize

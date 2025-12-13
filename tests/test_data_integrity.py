@@ -11,11 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import (
-    ProviderRow, NewOrderRow, ReviewCategory,
-    normalize_phone, normalize_name, normalize_address,
-    status_to_color
-)
+from models import ProviderRow, NewOrderRow, ReviewCategory
+from helpers import normalize_phone, normalize_name, normalize_address, status_to_color
 
 
 # =============================================================================

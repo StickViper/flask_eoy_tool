@@ -10,7 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import derive_network_name, ProviderRow
+from models import ProviderRow
+from eoy_tool import derive_network_name  # Route helper function
 
 
 def make_row(practice, phone="555-123-4567", address="123 Main St"):

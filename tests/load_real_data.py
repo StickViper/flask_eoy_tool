@@ -18,7 +18,8 @@ from datetime import datetime
 # Add scripts/ to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import load_data, ProviderRow, NewOrderRow
+from models import ProviderRow, NewOrderRow
+from loading import load_data
 
 
 def sample_data_for_tests(wl_rows, no_rows, sample_size=100):

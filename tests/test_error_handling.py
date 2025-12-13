@@ -11,7 +11,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import app, state, ProviderRow, safe_int, safe_int_list
+from eoy_tool import app  # Flask app
+from state import state
+from models import ProviderRow
+from helpers import safe_int, safe_int_list
 
 
 @pytest.fixture

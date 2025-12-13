@@ -10,12 +10,12 @@ Networks use (~#) notation format in working list.
 """
 
 import pytest
-from eoy_tool import (
-    normalize_name, normalize_address, normalize_phone,
-    ProviderRow, detect_duplicates
-)
 from rapidfuzz import fuzz
 import re
+
+from models import ProviderRow
+from helpers import normalize_name, normalize_address, normalize_phone
+from validation import detect_duplicates
 
 
 class TestExactDuplicates:

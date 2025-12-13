@@ -17,13 +17,12 @@ import sys
 import json
 from pathlib import Path
 
-# Add scripts/ to path so we can import eoy_tool
+# Add scripts/ to path so we can import modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import (
-    ProviderRow, NewOrderRow, status_to_color,
-    normalize_name, normalize_address, normalize_phone
-)
+# Import from modular components
+from models import ProviderRow, NewOrderRow
+from helpers import status_to_color, normalize_name, normalize_address, normalize_phone
 
 
 # =============================================================================

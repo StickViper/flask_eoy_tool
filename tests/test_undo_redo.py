@@ -6,12 +6,12 @@ Critical for allowing users to safely experiment and roll back changes.
 """
 
 import pytest
-from eoy_tool import (
-    AppState, ProviderRow,
-    add_to_undo_stack,
-    state  # Import global state
-)
 from datetime import datetime
+
+# Import from modules
+from models import ProviderRow
+from state import AppState, state
+from eoy_tool import add_to_undo_stack  # Uses wrapper that passes state
 
 
 class TestUndoStackBasics:
