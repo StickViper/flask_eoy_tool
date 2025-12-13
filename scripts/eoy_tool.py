@@ -351,6 +351,7 @@ def api_delete_note_chunk():
 
     # Save before state for undo
     before_notes = row.notes
+    before_action = row.action
 
     # Check if notes exist
     if not row.notes:
@@ -362,13 +363,15 @@ def api_delete_note_chunk():
         chunk_text = chunks[chunk_index]
         del chunks[chunk_index]
         row.notes = '; '.join(chunks)
+        row.field_edits['notes'] = row.notes
+        row.action = 'edited'
 
         # Add to undo stack
         add_to_undo_stack(
             action_type='delete_note_chunk',
             description=f"Deleted note chunk '{chunk_text}' from row {row_num}",
-            before_state={'row_num': row_num, 'notes': before_notes},
-            after_state={'row_num': row_num, 'notes': row.notes}
+            before_state={'row_num': row_num, 'notes': before_notes, 'action': before_action},
+            after_state={'row_num': row_num, 'notes': row.notes, 'action': 'edited'}
         )
 
         return jsonify({'success': True})
@@ -1109,13 +1112,21 @@ def api_confirm_network():
     """
     Confirm rows as a network.
     - network_name: The name for this network
-    - row_nums: Rows to include in the network
+    - row_nums: Rows to include in the network (or use category_id)
+    - category_id: Alternative to row_nums - get all rows from category
     - add_note: Optional note to add to all rows
     """
     data = request.get_json()
     network_name = data.get('network_name', 'Confirmed Network')
     row_nums = safe_int_list(data.get('row_nums', []))
+    category_id = data.get('category_id')
     add_note = data.get('add_note', '')
+
+    # If category_id provided, get row_nums from category
+    if not row_nums and category_id:
+        category = next((c for c in state.categories if c.id == category_id), None)
+        if category:
+            row_nums = category.row_nums
 
     if not row_nums:
         return jsonify({'success': False, 'error': 'No rows specified'}), 400

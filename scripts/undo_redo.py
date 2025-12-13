@@ -176,6 +176,21 @@ def restore_state(state: AppState, action: Dict, direction: str = 'undo') -> boo
                         row.bg_color = status_to_color(new_value)
             return True
 
+        elif action_type == 'delete_note_chunk':
+            # Note chunk deletion
+            row_num = target_state.get('row_num')
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+            if row:
+                if direction == 'undo':
+                    row.notes = before_state_data.get('notes', '')
+                    row.action = before_state_data.get('action')
+                    row.field_edits['notes'] = row.notes
+                else:
+                    row.notes = after_state_data.get('notes', '')
+                    row.action = after_state_data.get('action', 'edited')
+                    row.field_edits['notes'] = row.notes
+            return True
+
         elif action_type in ['delete', 'delete_rows']:
             # Row deletion - restore or re-delete
             rows_data = before_state_data.get('rows', [])
