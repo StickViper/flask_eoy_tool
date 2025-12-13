@@ -1,8 +1,15 @@
 """
 Test categorization logic for issue review
 
-Tests the 12 review categories and their population from validated rows.
+Tests the 16 review categories and their population from validated rows.
 Critical for organizing 300+ issues into manageable review buckets.
+
+Categories:
+- Duplicates (3): exact_dupes, networks, fuzzy_dupes
+- Clustering (1): address_cluster
+- Notes (4): notes_remove, notes_transform, notes_archive_ni, notes_fix_semicolons
+- Orders (4): yellow_95, yellow_80, yellow_low, orphan_no
+- Status (4): green_sent, fuschia_vm, red_invalid, not_interested_invalid
 """
 
 import pytest
@@ -14,8 +21,8 @@ from validation import categorize_issues
 class TestCategoryDefinitions:
     """Test category definitions and properties"""
 
-    def test_all_12_categories_defined(self):
-        """Should define exactly 12 review categories"""
+    def test_all_16_categories_defined(self):
+        """Should define exactly 16 review categories"""
         wl_rows = []
         no_rows = []
 

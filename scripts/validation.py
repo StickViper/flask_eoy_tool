@@ -10,6 +10,7 @@ from rapidfuzz import fuzz
 
 from models import ReviewCategory
 from helpers import normalize_name, normalize_address, normalize_phone
+from note_patterns import detect_patterns_in_note, split_notes, suggest_semicolon_insertion
 
 
 def validate_yellow_to_no(wl_rows, no_rows):
@@ -413,6 +414,76 @@ def detect_non_standard_notes(wl_rows):
     print(f"  Found {count} rows with non-standard notes")
 
 
+def detect_common_notes(wl_rows):
+    """Detect rows with common note patterns that can be batch-processed.
+
+    Categories:
+    - notes_remove: Notes that should be cleared (vm, call back, etc.)
+    - notes_transform: Notes to transform (same network -> network(~N))
+    - notes_archive_ni: Not Interested notes to archive with reason
+    - notes_fix_semicolons: Notes missing semicolons between entries
+    """
+    print(f"[Phase 2.6b] Detecting common note patterns...")
+
+    counts = defaultdict(int)
+
+    for row in wl_rows:
+        if not row.notes:
+            continue
+
+        # Check for patterns
+        matches = detect_patterns_in_note(row.notes)
+        if not matches:
+            continue
+
+        # Group by action type
+        for pattern, match in matches:
+            if pattern.action == 'remove':
+                row.issues.append({
+                    'category': 'notes_remove',
+                    'severity': 'auto_fix',
+                    'message': f"Note contains '{pattern.description}' - suggest removal",
+                    'pattern_id': pattern.id,
+                    'matched_text': match.group(0)
+                })
+                counts['remove'] += 1
+
+            elif pattern.action == 'transform':
+                row.issues.append({
+                    'category': 'notes_transform',
+                    'severity': 'auto_fix',
+                    'message': f"Note can be transformed: {pattern.description}",
+                    'pattern_id': pattern.id,
+                    'matched_text': match.group(0)
+                })
+                counts['transform'] += 1
+
+            elif pattern.action == 'archive_ni':
+                row.issues.append({
+                    'category': 'notes_archive_ni',
+                    'severity': 'review',
+                    'message': f"Archive NI reason: {pattern.description}",
+                    'pattern_id': pattern.id,
+                    'matched_text': match.group(0)
+                })
+                counts['archive_ni'] += 1
+
+        # Check for missing semicolons
+        suggested = suggest_semicolon_insertion(row.notes)
+        if suggested:
+            row.issues.append({
+                'category': 'notes_fix_semicolons',
+                'severity': 'review',
+                'message': "Notes may need semicolons",
+                'suggested': suggested,
+                'original': row.notes
+            })
+            counts['fix_semicolons'] += 1
+
+    print(f"  Found: {counts['remove']} to remove, {counts['transform']} to transform, "
+          f"{counts['archive_ni']} NI to archive, {counts['fix_semicolons']} need semicolons")
+
+
 def categorize_issues(wl_rows, no_rows):
     """Organize issues into review categories"""
     print(f"[Phase 2.7] Categorizing issues...")
@@ -453,6 +524,43 @@ def categorize_issues(wl_rows, no_rows):
             allow_batch=False,
             primary_action=None,
             secondary_actions=["confirm_network", "merge", "edit", "review_individual"]
+        ),
+        # Note cleanup categories
+        ReviewCategory(
+            id="notes_remove",
+            name="Notes: Remove",
+            description="Notes with content to remove (vm, call back, office closed, etc.)",
+            row_nums=[],
+            allow_batch=True,
+            primary_action="clear_note_pattern",
+            secondary_actions=["edit", "skip"]
+        ),
+        ReviewCategory(
+            id="notes_transform",
+            name="Notes: Transform",
+            description="Notes to transform (e.g., 'same network' → 'network(~N)')",
+            row_nums=[],
+            allow_batch=True,
+            primary_action="transform_note",
+            secondary_actions=["edit", "skip"]
+        ),
+        ReviewCategory(
+            id="notes_archive_ni",
+            name="Notes: NI Reason",
+            description="Not Interested with reason to archive",
+            row_nums=[],
+            allow_batch=True,
+            primary_action="archive_ni_reason",
+            secondary_actions=["edit", "skip"]
+        ),
+        ReviewCategory(
+            id="notes_fix_semicolons",
+            name="Notes: Fix Semicolons",
+            description="Notes missing semicolons between entries",
+            row_nums=[],
+            allow_batch=True,
+            primary_action="apply_semicolons",
+            secondary_actions=["edit", "skip"]
         ),
         ReviewCategory(
             id="yellow_95",
@@ -585,6 +693,7 @@ def run_validations(wl_rows, no_rows, invalid_rows, invalid_reasons):
     detect_duplicates(wl_rows)
     detect_address_clusters(wl_rows)  # Catches different phones at same address
     validate_status_issues(wl_rows)
+    detect_common_notes(wl_rows)  # Detect batch-processable note patterns
     # DISABLED: auto_fix_not_interested(wl_rows)  # No auto-fixing per user request
     # DISABLED: detect_non_standard_notes(wl_rows)  # Not a real category
     categories = categorize_issues(wl_rows, no_rows)
