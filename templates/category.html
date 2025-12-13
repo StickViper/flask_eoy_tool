@@ -120,10 +120,6 @@
                 Select All
             </button>
 
-            <button class="btn btn-ghost btn-sm" onclick="clearSelection()">
-                Clear Selection
-            </button>
-
             <button class="btn btn-ghost btn-sm" onclick="expandAllDetails()">
                 ▼ Expand All
             </button>
@@ -300,9 +296,9 @@
         </div>
 
         <!-- Info footer -->
-        <div style="margin-top: 2rem; padding: 1.5rem; background: var(--color-surface-raised); border-radius: 8px; border-left: 4px solid var(--color-accent); font-size: 0.875rem; color: var(--color-text-secondary);">
-            <strong>Keyboard Shortcuts:</strong>
-            Ctrl+A (select all) • Ctrl+D (deselect) • Ctrl+S (save) • Ctrl+F (search) • Ctrl+Z (undo) • Space (toggle selection) • Shift+Click (range select) • Ctrl+Click (toggle)
+        <div style="margin-top: 2rem; padding: 1rem 1.5rem; background: var(--color-surface-raised); border-radius: 8px; border-left: 4px solid var(--color-accent); font-size: 0.8125rem; color: var(--color-text-secondary);">
+            <strong>Tips:</strong>
+            Ctrl+Z/Y undo/redo • Ctrl+S save • Ctrl+F search • Double-click to edit cell • Shift+Click range select • Right-click for menu
         </div>
     </main>
 </div>
@@ -313,50 +309,38 @@
         <span id="selectionCount">0</span> selected
     </div>
     <div class="selection-actions">
-        <button class="btn btn-sm" onclick="editSelected()">
-            ✎ Edit Selected
-        </button>
         <button class="btn btn-sm" onclick="googleSearchSelected()">
-            🔍 Google Search
-        </button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSelected()">
-            Delete Selected
+            🔍 Google
         </button>
         <button class="btn btn-sm" onclick="sendToManualReview()">
-            📋 Manual Review
+            📋 Review
         </button>
         <button class="btn btn-sm" onclick="markAsReviewed()">
-            ✓ Mark Reviewed
+            ✓ Done
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelected()">
+            Delete
         </button>
         <button class="btn btn-ghost btn-sm" onclick="clearSelection()">
-            Clear
+            ✕
         </button>
     </div>
 </div>
 
 <!-- Context Menu for Rows (right-click) -->
-<div id="rowContextMenu" style="display: none; position: fixed; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 0.5rem; min-width: 200px; z-index: 2000;">
-    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="editSelectedFromMenu()">
-        ✎ Edit Row
-    </button>
+<div id="rowContextMenu" style="display: none; position: fixed; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 0.5rem; min-width: 180px; z-index: 2000;">
     <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="googleSearchFromMenu()">
         🔍 Google Search
     </button>
     <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="sendToManualReview()">
-        📋 Send to Manual Review
+        📋 Send to Review
     </button>
     <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="markAsReviewed()">
-        ✓ Mark Reviewed
-    </button>
-    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="mergeFromMenu()">
-        ⊕ Merge Duplicates
-    </button>
-    <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: flex-start;" onclick="confirmNetworkFromMenu()">
-        🔗 Confirm Network
+        ✓ Mark Done
     </button>
     <hr style="margin: 0.25rem 0; border: none; border-top: 1px solid var(--border-color);">
     <button class="btn btn-ghost btn-sm btn-danger-text" style="width: 100%; justify-content: flex-start; color: var(--color-danger);" onclick="deleteSelectedFromMenu()">
-        Delete Row
+        Delete
     </button>
 </div>
 

@@ -311,10 +311,6 @@ async function saveProgress() {
 // ROW ACTIONS
 // =============================================================================
 
-function editSelected() {
-    showNotification('Edit functionality: ' + Array.from(selectedRows).join(', '), 'info');
-}
-
 function googleSearchSelected() {
     if (selectedRows.size === 0) {
         showNotification('No rows selected', 'warning');
@@ -436,11 +432,6 @@ async function markAsReviewed() {
 }
 
 // Context menu helpers
-function editSelectedFromMenu() {
-    document.getElementById('rowContextMenu').style.display = 'none';
-    editSelected();
-}
-
 function googleSearchFromMenu() {
     document.getElementById('rowContextMenu').style.display = 'none';
     googleSearchSelected();
