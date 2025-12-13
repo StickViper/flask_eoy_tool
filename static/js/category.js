@@ -12,6 +12,23 @@ let lastSelectedRow = null;
 let currentNoteChunkContext = null;
 let currentEditingCell = null;
 let sortDirection = {};
+let isActionInProgress = false;  // Prevent double-clicks
+
+// Helper to prevent concurrent actions
+function withActionLock(asyncFn) {
+    return async function(...args) {
+        if (isActionInProgress) {
+            showNotification('Action in progress, please wait...', 'warning');
+            return;
+        }
+        isActionInProgress = true;
+        try {
+            return await asyncFn.apply(this, args);
+        } finally {
+            isActionInProgress = false;
+        }
+    };
+}
 
 // Merge/Network modal state
 let mergeGroupRows = [];
@@ -601,6 +618,8 @@ function updateRowColor(row, bgColor) {
 // =============================================================================
 
 async function undo() {
+    if (isActionInProgress) return;
+    isActionInProgress = true;
     try {
         const response = await fetch('/api/undo', {
             method: 'POST',
@@ -616,10 +635,14 @@ async function undo() {
         }
     } catch (error) {
         showNotification(`Undo failed: ${error}`, 'error');
+    } finally {
+        isActionInProgress = false;
     }
 }
 
 async function redo() {
+    if (isActionInProgress) return;
+    isActionInProgress = true;
     try {
         const response = await fetch('/api/redo', {
             method: 'POST',
@@ -635,6 +658,8 @@ async function redo() {
         }
     } catch (error) {
         showNotification(`Redo failed: ${error}`, 'error');
+    } finally {
+        isActionInProgress = false;
     }
 }
 
