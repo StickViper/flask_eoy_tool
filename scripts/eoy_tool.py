@@ -697,7 +697,9 @@ def api_mark_not_found():
                     existing_notes += '; '
                 elif existing_notes:
                     existing_notes += ' '
-                row.field_edits['notes'] = existing_notes + note_to_add + ';'
+                new_notes = existing_notes + note_to_add + ';'
+                row.notes = new_notes  # Update actual field
+                row.field_edits['notes'] = new_notes  # Track change
                 row.action = 'edit'
                 count += 1
 
@@ -740,7 +742,8 @@ def api_add_vm_note():
                     notes += ' '
                 new_notes = notes + 'vm x2;'
 
-            row.field_edits['notes'] = new_notes
+            row.notes = new_notes  # Update actual field
+            row.field_edits['notes'] = new_notes  # Track change
             row.action = 'edit'
             count += 1
 
@@ -774,10 +777,12 @@ def api_change_status():
                 'row_num': row_num,
                 'fields': {'status': row.status, 'bg_color': row.bg_color, 'action': row.action}
             })
-            # Update status
+            # Update status - both actual field and tracking
+            new_color = status_to_color(new_status)
+            row.status = new_status
+            row.bg_color = new_color
             row.field_edits['status'] = new_status
-            # Derive color from status
-            row.field_edits['bg_color'] = status_to_color(new_status)
+            row.field_edits['bg_color'] = new_color
             row.action = 'edit'
             count += 1
 
@@ -813,6 +818,10 @@ def api_change_to_white():
                     'qty_2025': row.qty_2025, 'notes': row.notes, 'action': row.action
                 }
             })
+            # Update actual fields
+            row.status = 'Not interested'
+            row.bg_color = '#ffffff'
+            row.qty_2025 = '0'
             row.field_edits['status'] = 'Not interested'
             row.field_edits['bg_color'] = '#ffffff'
             row.field_edits['qty_2025'] = '0'
@@ -824,7 +833,9 @@ def api_change_to_white():
                     notes += '; '
                 elif notes:
                     notes += ' '
-                row.field_edits['notes'] = notes + 'not interested;'
+                new_notes = notes + 'not interested;'
+                row.notes = new_notes
+                row.field_edits['notes'] = new_notes
 
             row.action = 'edit'
             count += 1
@@ -867,7 +878,8 @@ def api_remove_sent():
                     'row_num': row_num,
                     'fields': {'notes': row.notes, 'action': row.action}
                 })
-                row.field_edits['notes'] = new_notes
+                row.notes = new_notes  # Update actual field
+                row.field_edits['notes'] = new_notes  # Track change
                 row.action = 'edit'
                 count += 1
 
