@@ -550,6 +550,12 @@ def api_convert_to_not_interested():
             row.notes = re.sub(r'\s*;\s*;', ';', row.notes).strip(';').strip()
             row.action = 'converted_to_not_interested'
 
+            # Sync to field_edits
+            row.field_edits['status'] = row.status
+            row.field_edits['qty_2025'] = row.qty_2025
+            row.field_edits['bg_color'] = row.bg_color
+            row.field_edits['notes'] = row.notes
+
             # Store after state
             after_states.append({
                 'row_num': row.row_num,
@@ -1198,16 +1204,18 @@ def api_confirm_network():
 
     # Remove from networks category since confirmed
     networks_cat = next((c for c in state.categories if c.id == 'networks'), None)
+    removed_from_networks = []
     if networks_cat:
         for row_num in row_nums:
             if row_num in networks_cat.row_nums:
                 networks_cat.row_nums.remove(row_num)
+                removed_from_networks.append(row_num)
 
     if before_states:
         add_to_undo_stack(
             'confirm_network',
             f'Confirmed {count} row(s) as "{network_name}"',
-            {'rows': before_states, 'network_name': network_name}
+            {'rows': before_states, 'network_name': network_name, 'removed_from_networks': removed_from_networks}
         )
 
     return jsonify({
@@ -1520,6 +1528,12 @@ def api_confirm_orphan_match():
         if manual_review_cat and orphan_row_num not in manual_review_cat.row_nums:
             manual_review_cat.row_nums.append(orphan_row_num)
             manual_review_cat.row_nums.sort()
+
+            add_to_undo_stack(
+                'reject_orphan_match',
+                f'Rejected orphan #{orphan_row_num}, sent to Manual Review',
+                {'orphan_row_num': orphan_row_num, 'from_category': 'orphan_no', 'to_category': 'manual_review'}
+            )
 
         return jsonify({
             'success': True,

@@ -256,9 +256,63 @@ def restore_state(state: AppState, action: Dict, direction: str = 'undo') -> boo
                         orphan_cat.row_nums.remove(orphan_row_num)
             return True
 
+        elif action_type == 'reject_orphan_match':
+            orphan_row_num = before_state_data.get('orphan_row_num')
+            manual_review_cat = next((c for c in state.categories if c.id == 'manual_review'), None)
+
+            if direction == 'undo':
+                # Remove from manual review (orphan stays in orphan_no)
+                if manual_review_cat and orphan_row_num in manual_review_cat.row_nums:
+                    manual_review_cat.row_nums.remove(orphan_row_num)
+            else:
+                # Re-add to manual review
+                if manual_review_cat and orphan_row_num not in manual_review_cat.row_nums:
+                    manual_review_cat.row_nums.append(orphan_row_num)
+                    manual_review_cat.row_nums.sort()
+            return True
+
+        elif action_type == 'confirm_network':
+            # Network confirmation - restore rows AND category membership
+            networks_cat = next((c for c in state.categories if c.id == 'networks'), None)
+            removed_from_networks = before_state_data.get('removed_from_networks', [])
+
+            if direction == 'undo':
+                rows_data = before_state_data.get('rows', [])
+                for row_data in rows_data:
+                    row_num = row_data.get('row_num')
+                    fields = row_data.get('fields', {})
+                    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                    if row:
+                        for field, value in fields.items():
+                            if hasattr(row, field):
+                                setattr(row, field, value)
+                        row.field_edits = {}
+                # Restore rows to networks category
+                if networks_cat:
+                    for row_num in removed_from_networks:
+                        if row_num not in networks_cat.row_nums:
+                            networks_cat.row_nums.append(row_num)
+                    networks_cat.row_nums.sort()
+            else:
+                # Redo: re-confirm network
+                rows_data = after_state_data.get('rows', []) if after_state_data else before_state_data.get('rows', [])
+                for row_data in rows_data:
+                    row_num = row_data.get('row_num')
+                    row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+                    if row:
+                        row.network_name = before_state_data.get('network_name', '')
+                        row.action = 'network_confirmed'
+                        row.field_edits['network_name'] = row.network_name
+                # Remove from networks category again
+                if networks_cat:
+                    for row_num in removed_from_networks:
+                        if row_num in networks_cat.row_nums:
+                            networks_cat.row_nums.remove(row_num)
+            return True
+
         elif action_type in ['keep_first_delete_rest', 'accept_all', 'batch_action',
                               'change_status', 'change_to_white', 'remove_sent', 'mass_invalid',
-                              'merge_rows', 'confirm_network', 'delete_rows']:
+                              'merge_rows', 'delete_rows']:
             # Bulk actions - restore all affected rows
             if direction == 'undo':
                 rows_data = before_state_data.get('rows', [])
