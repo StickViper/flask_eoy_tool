@@ -695,6 +695,7 @@ def api_mark_not_found():
     # Mark as not found
     count = 0
     before_states = []
+    after_states = []
 
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
@@ -719,6 +720,12 @@ def api_mark_not_found():
                 row.notes = new_notes  # Update actual field
                 row.field_edits['notes'] = new_notes  # Track change
                 row.action = 'edit'
+
+                # Save after state
+                after_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': row.notes, 'action': 'edit'}
+                })
                 count += 1
 
     if count > 0:
@@ -726,7 +733,7 @@ def api_mark_not_found():
             action_type='batch_action',
             description=f"Marked {count} rows as 'not found'",
             before_state={'rows': before_states},
-            after_state={'rows': [{'row_num': s['row_num'], 'fields': {'notes': next((r for r in state.wl_rows if r.row_num == s['row_num']), None).notes, 'action': 'edit'}} for s in before_states]}
+            after_state={'rows': after_states}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -748,6 +755,7 @@ def api_add_vm_note():
 
     count = 0
     before_states = []
+    after_states = []
 
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
@@ -778,6 +786,12 @@ def api_add_vm_note():
             row.notes = new_notes  # Update actual field
             row.field_edits['notes'] = new_notes  # Track change
             row.action = 'edit'
+
+            # Save after state
+            after_states.append({
+                'row_num': row_num,
+                'fields': {'notes': row.notes, 'action': 'edit'}
+            })
             count += 1
 
     if count > 0:
@@ -785,7 +799,7 @@ def api_add_vm_note():
             action_type='batch_action',
             description=f"Added VM notes to {count} rows",
             before_state={'rows': before_states},
-            after_state={'rows': [{'row_num': s['row_num'], 'fields': {'notes': next((r for r in state.wl_rows if r.row_num == s['row_num']), None).notes, 'action': 'edit'}} for s in before_states]}
+            after_state={'rows': after_states}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -849,6 +863,7 @@ def api_change_to_white():
 
     count = 0
     before_states = []
+    after_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
@@ -879,13 +894,22 @@ def api_change_to_white():
                 row.field_edits['notes'] = new_notes
 
             row.action = 'edit'
+
+            after_states.append({
+                'row_num': row_num,
+                'fields': {
+                    'status': row.status, 'bg_color': row.bg_color,
+                    'qty_2025': row.qty_2025, 'notes': row.notes, 'action': row.action
+                }
+            })
             count += 1
 
     if before_states:
         add_to_undo_stack(
             'change_to_white',
             f'Changed {count} row(s) to Not Interested',
-            {'rows': before_states}
+            {'rows': before_states},
+            {'rows': after_states}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -903,6 +927,7 @@ def api_remove_sent():
 
     count = 0
     before_states = []
+    after_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row and row.notes:
@@ -922,13 +947,18 @@ def api_remove_sent():
                 row.notes = new_notes  # Update actual field
                 row.field_edits['notes'] = new_notes  # Track change
                 row.action = 'edit'
+                after_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': row.notes, 'action': 'edit'}
+                })
                 count += 1
 
     if before_states:
         add_to_undo_stack(
             'remove_sent',
             f'Removed "sent" from {count} row(s)',
-            {'rows': before_states}
+            {'rows': before_states},
+            {'rows': after_states}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -947,6 +977,7 @@ def api_mass_invalid():
 
     count = 0
     before_states = []
+    after_states = []
     for row_num in category.row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
@@ -956,13 +987,18 @@ def api_mass_invalid():
             })
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
+            after_states.append({
+                'row_num': row_num,
+                'fields': {'action': 'move_to_invalid'}
+            })
             count += 1
 
     if before_states:
         add_to_undo_stack(
             'mass_invalid',
             f'Marked {count} row(s) as invalid',
-            {'rows': before_states, 'reason': reason}
+            {'rows': before_states, 'reason': reason},
+            {'rows': after_states, 'reason': reason}
         )
 
     return jsonify({'success': True, 'count': count})
