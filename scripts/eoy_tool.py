@@ -1288,6 +1288,7 @@ def api_send_to_manual_review():
 
     count = 0
     before_states = []
+    added_row_nums = []
     for row_num in row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row and row_num not in manual_review_cat.row_nums:
@@ -1296,6 +1297,7 @@ def api_send_to_manual_review():
                 'fields': {'practice': row.practice, 'status': row.status, 'notes': row.notes}
             })
             manual_review_cat.row_nums.append(row_num)
+            added_row_nums.append(row_num)
             # Add issue to row
             row.issues.append({
                 'category': 'manual_review',
@@ -1310,7 +1312,8 @@ def api_send_to_manual_review():
         add_to_undo_stack(
             'send_to_manual_review',
             f'Sent {count} row(s) to Manual Review',
-            {'rows': before_states, 'reason': reason}
+            {'rows': before_states, 'reason': reason, 'added_row_nums': added_row_nums},
+            {'rows': before_states, 'reason': reason, 'added_row_nums': added_row_nums}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -1326,6 +1329,7 @@ def api_mark_reviewed():
 
     count = 0
     before_states = []
+    after_states = []
     for row_num in row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
@@ -1334,13 +1338,18 @@ def api_mark_reviewed():
                 'fields': {'action': row.action}
             })
             row.action = 'reviewed_no_change'
+            after_states.append({
+                'row_num': row_num,
+                'fields': {'action': 'reviewed_no_change'}
+            })
             count += 1
 
     if before_states:
         add_to_undo_stack(
             'mark_reviewed',
             f'Marked {count} row(s) as reviewed',
-            {'rows': before_states}
+            {'rows': before_states},
+            {'rows': after_states}
         )
 
     return jsonify({'success': True, 'count': count})
