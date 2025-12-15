@@ -37,6 +37,7 @@ class AppState:
             'invalid_reasons': list(self.invalid_reasons),
             'year': self.year,
             'undo_stack': self.undo_stack[-50:],  # Keep last 50
+            'redo_stack': self.redo_stack[-50:],  # Keep last 50
             'current_category_id': self.current_category_id,
             'loaded': self.loaded
         }

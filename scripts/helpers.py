@@ -37,7 +37,12 @@ def safe_int_list(values):
     """Safely convert a list of values to ints, filtering out invalid entries."""
     if not values:
         return []
-    return [safe_int(v, allow_zero=False) for v in values if safe_int(v, allow_zero=False) is not None]
+    result = []
+    for v in values:
+        converted = safe_int(v, allow_zero=False)
+        if converted is not None:
+            result.append(converted)
+    return result
 
 
 def status_to_color(status: str) -> str:

@@ -70,10 +70,13 @@ def validate_yellow_to_no(wl_rows, no_rows):
             category = "yellow_low"
             severity = "critical"
 
-        # Check QTY match
+        # Check QTY match (strip whitespace for comparison)
         qty_mismatch = False
-        if best_match and best_match.qty_2025 != wl_row.qty_2025:
-            qty_mismatch = True
+        if best_match:
+            no_qty = (best_match.qty_2025 or '').strip()
+            wl_qty = (wl_row.qty_2025 or '').strip()
+            if no_qty != wl_qty:
+                qty_mismatch = True
 
         wl_row.issues.append({
             'category': category,
@@ -180,6 +183,9 @@ def detect_duplicates(wl_rows):
                 name = rows[0].practice
                 name = re.sub(r'\b(North|South|East|West|Downtown|Uptown|Medical|Clinic|Center|Office)\b', '', name, flags=re.IGNORECASE)
                 name = re.sub(r'[^a-z]', '', name.lower())
+                # Fallback if all keywords removed
+                if not name:
+                    name = re.sub(r'[^a-z]', '', rows[0].practice.lower())[:10] or 'network'
 
                 for row in rows:
                     row.network_name = name
