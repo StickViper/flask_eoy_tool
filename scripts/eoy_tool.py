@@ -1444,6 +1444,7 @@ def api_edit_field():
     # If status changed, update bg_color
     if field == 'status':
         row.bg_color = status_to_color(value)
+        row.field_edits['bg_color'] = row.bg_color
 
     # Track field edit
     row.field_edits[field] = value
