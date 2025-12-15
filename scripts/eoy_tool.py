@@ -1230,6 +1230,7 @@ def api_confirm_network():
 
     count = 0
     before_states = []
+    after_states = []
 
     for row_num in row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
@@ -1261,6 +1262,15 @@ def api_confirm_network():
             row.action = 'network_confirmed'
             count += 1
 
+            after_states.append({
+                'row_num': row_num,
+                'fields': {
+                    'network_name': row.network_name,
+                    'notes': row.notes,
+                    'action': row.action
+                }
+            })
+
     # Remove from networks category since confirmed
     networks_cat = next((c for c in state.categories if c.id == 'networks'), None)
     removed_from_networks = []
@@ -1274,7 +1284,8 @@ def api_confirm_network():
         add_to_undo_stack(
             'confirm_network',
             f'Confirmed {count} row(s) as "{network_name}"',
-            {'rows': before_states, 'network_name': network_name, 'removed_from_networks': removed_from_networks}
+            {'rows': before_states, 'network_name': network_name, 'removed_from_networks': removed_from_networks},
+            {'rows': after_states, 'network_name': network_name, 'removed_from_networks': removed_from_networks}
         )
 
     return jsonify({
@@ -1311,6 +1322,7 @@ def api_send_to_manual_review():
 
     count = 0
     before_states = []
+    after_states = []
     added_row_nums = []
     for row_num in row_nums:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
@@ -1328,6 +1340,10 @@ def api_send_to_manual_review():
                 'message': reason
             })
             count += 1
+            after_states.append({
+                'row_num': row_num,
+                'fields': {'practice': row.practice, 'status': row.status, 'notes': row.notes}
+            })
 
     manual_review_cat.row_nums.sort()
 
@@ -1336,7 +1352,7 @@ def api_send_to_manual_review():
             'send_to_manual_review',
             f'Sent {count} row(s) to Manual Review',
             {'rows': before_states, 'reason': reason, 'added_row_nums': added_row_nums},
-            {'rows': before_states, 'reason': reason, 'added_row_nums': added_row_nums}
+            {'rows': after_states, 'reason': reason, 'added_row_nums': added_row_nums}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -1570,6 +1586,9 @@ def api_confirm_orphan_match():
         return jsonify({'success': False, 'error': 'Orphan row not found'}), 404
 
     if action == 'confirm':
+        # Store before state
+        was_orphan = no_row.is_orphan
+
         # Mark orphan as resolved (matched to invalid)
         no_row.is_orphan = False  # No longer orphan - explained
         inv_row = next((r for r in state.invalid_rows if r.row_num == invalid_row_num), None)
@@ -1583,7 +1602,8 @@ def api_confirm_orphan_match():
         add_to_undo_stack(
             'confirm_orphan_match',
             f'Confirmed orphan #{orphan_row_num} matches invalid provider',
-            {'orphan_row_num': orphan_row_num, 'invalid_row_num': invalid_row_num}
+            {'orphan_row_num': orphan_row_num, 'invalid_row_num': invalid_row_num, 'was_orphan': was_orphan},
+            {'orphan_row_num': orphan_row_num, 'invalid_row_num': invalid_row_num, 'is_orphan': False}
         )
 
         return jsonify({
@@ -1600,7 +1620,8 @@ def api_confirm_orphan_match():
             add_to_undo_stack(
                 'reject_orphan_match',
                 f'Rejected orphan #{orphan_row_num}, sent to Manual Review',
-                {'orphan_row_num': orphan_row_num, 'from_category': 'orphan_no', 'to_category': 'manual_review'}
+                {'orphan_row_num': orphan_row_num, 'from_category': 'orphan_no', 'to_category': 'manual_review'},
+                {'orphan_row_num': orphan_row_num, 'in_manual_review': True}
             )
 
         return jsonify({
