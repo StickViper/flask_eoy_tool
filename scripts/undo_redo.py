@@ -325,8 +325,9 @@ def restore_state(state: AppState, action: Dict, direction: str = 'undo') -> boo
                         for field, value in fields.items():
                             if hasattr(row, field):
                                 setattr(row, field, value)
-                        # Clear field_edits that were set by the action
-                        row.field_edits = {}
+                        # Only clear field_edits if before_state didn't include them
+                        if 'field_edits' not in fields:
+                            row.field_edits = {}
             else:
                 # Redo: apply after_state values
                 rows_data = after_state_data.get('rows', [])

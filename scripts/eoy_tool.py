@@ -995,13 +995,19 @@ def api_mass_invalid():
         if row:
             before_states.append({
                 'row_num': row_num,
-                'fields': {'action': row.action}
+                'fields': {
+                    'action': row.action,
+                    'field_edits': dict(row.field_edits)
+                }
             })
             row.action = 'move_to_invalid'
             row.field_edits['invalid_reason'] = reason
             after_states.append({
                 'row_num': row_num,
-                'fields': {'action': 'move_to_invalid'}
+                'fields': {
+                    'action': 'move_to_invalid',
+                    'field_edits': dict(row.field_edits)
+                }
             })
             count += 1
 
