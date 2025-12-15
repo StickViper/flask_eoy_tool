@@ -253,6 +253,12 @@ def api_export():
     output = io.StringIO()
     writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
 
+    # Write header row
+    writer.writerow([
+        'Practice', 'Phone', 'Address', 'City', 'State', 'Zip',
+        'QTY 2023', 'QTY 2024', 'QTY 2025', 'Status', 'Notes', 'Action Taken'
+    ])
+
     for row in rows:
         # Clean notes (replace newlines with space)
         notes = (row.notes or '').replace('\n', ' ').replace('\r', ' ')
