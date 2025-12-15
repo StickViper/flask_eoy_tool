@@ -825,6 +825,7 @@ def api_change_status():
 
     count = 0
     before_states = []
+    after_states = []
     for row_num in target_rows:
         row = next((r for r in state.wl_rows if r.row_num == row_num), None)
         if row:
@@ -840,12 +841,17 @@ def api_change_status():
             row.field_edits['bg_color'] = new_color
             row.action = 'edit'
             count += 1
+            after_states.append({
+                'row_num': row_num,
+                'fields': {'status': new_status, 'bg_color': new_color, 'action': 'edit'}
+            })
 
     if before_states:
         add_to_undo_stack(
             'change_status',
             f'Changed status to "{new_status}" on {count} row(s)',
-            {'rows': before_states, 'new_status': new_status}
+            {'rows': before_states, 'new_status': new_status},
+            {'rows': after_states}
         )
 
     return jsonify({'success': True, 'count': count})
@@ -1103,10 +1109,27 @@ def api_merge_rows():
     for other in others:
         other.action = 'merged_deleted'
 
+    # Build after_states for redo
+    after_states = [{
+        'row_num': survivor.row_num,
+        'fields': {
+            'practice': survivor.practice, 'phone': survivor.phone,
+            'address': survivor.address, 'city': survivor.city,
+            'state': survivor.state, 'zip': survivor.zip,
+            'notes': survivor.notes, 'action': survivor.action
+        }
+    }]
+    for other in others:
+        after_states.append({
+            'row_num': other.row_num,
+            'fields': {'action': 'merged_deleted'}
+        })
+
     add_to_undo_stack(
         'merge_rows',
         f'Merged {len(others) + 1} rows (survivor: #{survivor_row_num})',
-        {'rows': before_states, 'survivor_row_num': survivor_row_num, 'other_row_nums': other_row_nums}
+        {'rows': before_states, 'survivor_row_num': survivor_row_num, 'other_row_nums': other_row_nums},
+        {'rows': after_states}
     )
 
     return jsonify({

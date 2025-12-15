@@ -300,7 +300,8 @@ def restore_state(state: AppState, action: Dict, direction: str = 'undo') -> boo
                     row_num = row_data.get('row_num')
                     row = next((r for r in state.wl_rows if r.row_num == row_num), None)
                     if row:
-                        row.network_name = before_state_data.get('network_name', '')
+                        # Use after_state for redo (the new network name)
+                        row.network_name = after_state_data.get('network_name', '') if after_state_data else before_state_data.get('network_name', '')
                         row.action = 'network_confirmed'
                         row.field_edits['network_name'] = row.network_name
                 # Remove from networks category again
