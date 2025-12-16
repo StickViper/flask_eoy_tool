@@ -178,6 +178,11 @@
                     Remove "sent"
                 </button>
                 {% endif %}
+                {% if 'move_to_invalid' in category.secondary_actions %}
+                <button class="btn btn-danger btn-sm" onclick="moveAllToInvalid()">
+                    → Invalid List
+                </button>
+                {% endif %}
             {% endif %}
         </div>
         {% endif %}
