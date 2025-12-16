@@ -1042,6 +1042,97 @@ async function markNotFound() {
     }
 }
 
+async function fixQtyMismatches() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Fix QTY mismatches for all ${allRows.length} rows?`)) return;
+
+    try {
+        const response = await fetch('/api/fix_qty_mismatches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Fixed ${result.count} QTY mismatches`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function changeToWhite() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Change all ${allRows.length} rows to "Not Interested" (white)?`)) return;
+
+    try {
+        const response = await fetch('/api/change_to_white', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Changed ${result.count} rows to Not Interested`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function massInvalid() {
+    const reason = prompt('Enter reason for marking as invalid:', 'INVALID - Network closed');
+    if (!reason) return;
+
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Mark all ${allRows.length} rows as invalid?`)) return;
+
+    try {
+        const response = await fetch('/api/mass_invalid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId(), reason: reason })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Marked ${result.count} rows as invalid`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function removeSent() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Remove "sent" from notes on all ${allRows.length} rows?`)) return;
+
+    try {
+        const response = await fetch('/api/remove_sent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Removed "sent" from ${result.count} rows`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
 function getCategoryId() {
     // Extract category ID from URL
     const path = window.location.pathname;

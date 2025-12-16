@@ -155,6 +155,30 @@
                 </button>
                 {% endif %}
             {% endif %}
+
+            {# Secondary action buttons #}
+            {% if category.secondary_actions %}
+                {% if 'fix_qty_mismatches' in category.secondary_actions %}
+                <button class="btn btn-secondary btn-sm" onclick="fixQtyMismatches()">
+                    Fix QTY Mismatches
+                </button>
+                {% endif %}
+                {% if 'change_to_white' in category.secondary_actions %}
+                <button class="btn btn-secondary btn-sm" onclick="changeToWhite()">
+                    → Not Interested
+                </button>
+                {% endif %}
+                {% if 'mass_invalid' in category.secondary_actions %}
+                <button class="btn btn-danger btn-sm" onclick="massInvalid()">
+                    Mark All Invalid
+                </button>
+                {% endif %}
+                {% if 'remove_sent' in category.secondary_actions %}
+                <button class="btn btn-secondary btn-sm" onclick="removeSent()">
+                    Remove "sent"
+                </button>
+                {% endif %}
+            {% endif %}
         </div>
         {% endif %}
 
