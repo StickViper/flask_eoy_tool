@@ -1133,6 +1133,52 @@ async function removeSent() {
     }
 }
 
+async function addVmNote() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Add/increment VM note on all ${allRows.length} rows?`)) return;
+
+    try {
+        const response = await fetch('/api/add_vm_note', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Added VM notes to ${result.count} rows`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function markAllReviewed() {
+    const allRows = document.querySelectorAll('.data-row');
+    const rowNums = Array.from(allRows).map(r => parseInt(r.dataset.rowNum));
+
+    if (!confirm(`Mark all ${allRows.length} rows as reviewed (no changes needed)?`)) return;
+
+    try {
+        const response = await fetch('/api/mark_reviewed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row_nums: rowNums })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Marked ${result.count} rows as reviewed`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
 function getCategoryId() {
     // Extract category ID from URL
     const path = window.location.pathname;

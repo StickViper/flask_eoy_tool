@@ -183,6 +183,16 @@
                     → Invalid List
                 </button>
                 {% endif %}
+                {% if 'add_vm_note' in category.secondary_actions %}
+                <button class="btn btn-secondary btn-sm" onclick="addVmNote()">
+                    Add VM Note
+                </button>
+                {% endif %}
+                {% if 'mark_reviewed' in category.secondary_actions or 'keep_as_is' in category.secondary_actions %}
+                <button class="btn btn-ghost btn-sm" onclick="markAllReviewed()">
+                    ✓ Mark Reviewed
+                </button>
+                {% endif %}
             {% endif %}
         </div>
         {% endif %}
