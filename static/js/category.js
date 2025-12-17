@@ -338,8 +338,7 @@ async function deleteSelected() {
             selectedRows.forEach(rowNum => {
                 const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
                 if (row) {
-                    row.style.opacity = '0.3';
-                    row.style.textDecoration = 'line-through';
+                    row.classList.add('row-deleted');
                 }
             });
             clearSelection();

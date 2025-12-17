@@ -651,6 +651,53 @@ p {
   background: #fef0f7;
 }
 
+/* Deleted/merged row indicators */
+.data-table tbody tr.row-deleted {
+  opacity: 0.5;
+  text-decoration: line-through;
+  background: #f5f5f5 !important;
+}
+
+.data-table tbody tr.row-deleted td {
+  color: var(--color-text-tertiary);
+}
+
+.data-table tbody tr.row-merged {
+  opacity: 0.6;
+  background: #f0f0f5 !important;
+}
+
+.data-table tbody tr.row-merged td::before {
+  content: '';
+}
+
+/* Action badge shown on rows with actions */
+.action-indicator {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  margin-left: 0.5rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.action-indicator.deleted {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.action-indicator.merged {
+  background: #e8eaf6;
+  color: #3949ab;
+}
+
+.action-indicator.reviewed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
 .data-table tbody tr:hover {
   filter: brightness(0.97);
 }

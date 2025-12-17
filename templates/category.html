@@ -228,7 +228,7 @@
                     {% for row in rows %}
                     <tr data-row-num="{{ row.row_num }}"
                         data-duplicate-group="{{ row.duplicate_group_id if row.duplicate_group_id else '' }}"
-                        class="data-row {% if row.bg_color in ['#ffff00', '#ffff01', '#fffef0', '#ffffe0'] %}row-yellow{% elif row.bg_color in ['#00ff00', '#00ff01', '#00fe00'] %}row-green{% elif row.bg_color in ['#ff0000', '#ff0001', '#fe0000'] %}row-red{% elif row.bg_color in ['#ff00ff', '#ff00fe', '#fe00ff'] %}row-fuschia{% endif %}{% if row.duplicate_group_id %} dup-group-{{ row.duplicate_group_id }}{% endif %}"
+                        class="data-row {% if row.bg_color in ['#ffff00', '#ffff01', '#fffef0', '#ffffe0'] %}row-yellow{% elif row.bg_color in ['#00ff00', '#00ff01', '#00fe00'] %}row-green{% elif row.bg_color in ['#ff0000', '#ff0001', '#fe0000'] %}row-red{% elif row.bg_color in ['#ff00ff', '#ff00fe', '#fe00ff'] %}row-fuschia{% endif %}{% if row.duplicate_group_id %} dup-group-{{ row.duplicate_group_id }}{% endif %}{% if row.action and 'deleted' in row.action %} row-deleted{% elif row.action and 'merged' in row.action %} row-merged{% endif %}"
                         onclick="handleRowClick(event, this)"
                         oncontextmenu="handleRowRightClick(event, this); return false;">
                         <td class="col-checkbox" onclick="event.stopPropagation();">
@@ -239,7 +239,16 @@
                             <span class="expand-icon" id="expand-{{ row.row_num }}">▶</span>
                             {% endif %}
                         </td>
-                        <td class="col-row-num">{{ row.row_num }}</td>
+                        <td class="col-row-num">
+                            {{ row.row_num }}
+                            {% if row.action and 'deleted' in row.action %}
+                            <span class="action-indicator deleted" title="Marked for deletion">DEL</span>
+                            {% elif row.action and 'merged' in row.action %}
+                            <span class="action-indicator merged" title="Merged with another row">MRG</span>
+                            {% elif row.action == 'reviewed_no_change' %}
+                            <span class="action-indicator reviewed" title="Reviewed, no change needed">OK</span>
+                            {% endif %}
+                        </td>
                         <td class="col-practice">
                             {{ row.practice }}
                             {# Inline reason tags - show why this row is here #}
