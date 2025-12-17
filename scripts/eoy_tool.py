@@ -1213,7 +1213,9 @@ def derive_network_name(rows):
             return best_word.title() + " Network"
 
     # Fallback: use first practice name
-    first_name = rows[0].practice.split()[0] if rows[0].practice else "Unknown"
+    practice = rows[0].practice or ""
+    words = practice.split()
+    first_name = words[0] if words else "Unknown"
     return first_name + " Network"
 
 @app.route('/api/confirm_network', methods=['POST'])
@@ -1493,13 +1495,13 @@ def api_match_orphan_to_invalid():
 
         # Calculate weighted match score (70% name, 30% address)
         name_score = fuzz.token_set_ratio(
-            normalize_name(no_row.practice),
-            normalize_name(inv_row.practice)
+            normalize_name(no_row.practice or ''),
+            normalize_name(inv_row.practice or '')
         ) / 100.0
 
         address_score = fuzz.token_set_ratio(
-            normalize_address(no_row.address + ' ' + no_row.city),
-            normalize_address(inv_row.address + ' ' + inv_row.city)
+            normalize_address((no_row.address or '') + ' ' + (no_row.city or '')),
+            normalize_address((inv_row.address or '') + ' ' + (inv_row.city or ''))
         ) / 100.0
 
         combined_score = (name_score * 0.7) + (address_score * 0.3)
@@ -1550,13 +1552,13 @@ def api_process_orphan_batch():
 
             # Calculate weighted match score
             name_score = fuzz.token_set_ratio(
-                normalize_name(no_row.practice),
-                normalize_name(inv_row.practice)
+                normalize_name(no_row.practice or ''),
+                normalize_name(inv_row.practice or '')
             ) / 100.0
 
             address_score = fuzz.token_set_ratio(
-                normalize_address(no_row.address + ' ' + no_row.city),
-                normalize_address(inv_row.address + ' ' + inv_row.city)
+                normalize_address((no_row.address or '') + ' ' + (no_row.city or '')),
+                normalize_address((inv_row.address or '') + ' ' + (inv_row.city or ''))
             ) / 100.0
 
             combined_score = (name_score * 0.7) + (address_score * 0.3)
