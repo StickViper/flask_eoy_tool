@@ -218,6 +218,13 @@
                     </tr>
                 </thead>
                 <tbody>
+                    {% if not rows %}
+                    <tr>
+                        <td colspan="11" style="text-align: center; padding: 3rem; color: var(--color-text-tertiary);">
+                            No rows in this category. All items may have been resolved.
+                        </td>
+                    </tr>
+                    {% endif %}
                     {% for row in rows %}
                     <tr data-row-num="{{ row.row_num }}"
                         data-duplicate-group="{{ row.duplicate_group_id if row.duplicate_group_id else '' }}"
