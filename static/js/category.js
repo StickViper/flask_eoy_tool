@@ -18,6 +18,26 @@ let isActionInProgress = false;  // Prevent double-clicks
 let mergeGroupRows = [];
 let selectedSurvivor = null;
 let networkGroupRows = [];
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+/**
+ * Escape HTML special characters to prevent XSS attacks
+ */
+function escapeHtml(text) {
+    if (text == null) return '';
+    const str = String(text);
+    const htmlEscapes = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return str.replace(/[&<>"']/g, char => htmlEscapes[char]);
+}
 let selectedNetworkRows = new Set();
 
 // Status options for dropdown
@@ -543,7 +563,7 @@ async function saveInlineEdit(newValue) {
                     cell.innerHTML = '<span class="text-tertiary">\u2014</span>';
                 }
             } else {
-                cell.innerHTML = newValue || '\u2014';
+                cell.textContent = newValue || '\u2014';
             }
 
             cell.style.backgroundColor = '#d4edda';
@@ -747,12 +767,12 @@ function renderMergeModal() {
                 <input type="radio" name="survivor" value="${row.row_num}" ${selectedSurvivor === row.row_num ? 'checked' : ''} style="width: 18px; height: 18px;">
             </div>
             <div style="font-size: 0.875rem; line-height: 1.6;">
-                <div><strong>Practice:</strong> ${row.practice || '\u2014'}</div>
-                <div><strong>Phone:</strong> ${row.phone || '\u2014'}</div>
-                <div><strong>Address:</strong> ${row.address || '\u2014'}</div>
-                <div><strong>City/State:</strong> ${row.city || '\u2014'}, ${row.state || '\u2014'}</div>
-                <div><strong>Status:</strong> ${row.status || '\u2014'}</div>
-                <div><strong>Notes:</strong> <span style="color: var(--color-text-secondary);">${row.notes || '\u2014'}</span></div>
+                <div><strong>Practice:</strong> ${escapeHtml(row.practice) || '\u2014'}</div>
+                <div><strong>Phone:</strong> ${escapeHtml(row.phone) || '\u2014'}</div>
+                <div><strong>Address:</strong> ${escapeHtml(row.address) || '\u2014'}</div>
+                <div><strong>City/State:</strong> ${escapeHtml(row.city) || '\u2014'}, ${escapeHtml(row.state) || '\u2014'}</div>
+                <div><strong>Status:</strong> ${escapeHtml(row.status) || '\u2014'}</div>
+                <div><strong>Notes:</strong> <span style="color: var(--color-text-secondary);">${escapeHtml(row.notes) || '\u2014'}</span></div>
             </div>
         `;
         container.appendChild(card);
@@ -846,10 +866,10 @@ function renderNetworkModal() {
         rowEl.innerHTML = `
             <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleNetworkRow(${row.row_num})" style="width: 18px; height: 18px;">
             <div style="flex: 1; font-size: 0.875rem;">
-                <div style="font-weight: 500;">#${row.row_num}: ${row.practice || '\u2014'}</div>
-                <div style="color: var(--color-text-secondary);">${row.address || '\u2014'}, ${row.city || '\u2014'} ${row.state || '\u2014'}</div>
+                <div style="font-weight: 500;">#${row.row_num}: ${escapeHtml(row.practice) || '\u2014'}</div>
+                <div style="color: var(--color-text-secondary);">${escapeHtml(row.address) || '\u2014'}, ${escapeHtml(row.city) || '\u2014'} ${escapeHtml(row.state) || '\u2014'}</div>
             </div>
-            <div style="font-size: 0.8125rem; color: var(--color-text-tertiary);">${row.phone || '\u2014'}</div>
+            <div style="font-size: 0.8125rem; color: var(--color-text-tertiary);">${escapeHtml(row.phone) || '\u2014'}</div>
         `;
         container.appendChild(rowEl);
     });
