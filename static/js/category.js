@@ -1311,16 +1311,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('rowContextMenu').style.display = 'none';
     });
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts (Escape only - Ctrl+Z/Y handled by shortcuts.js)
     document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
-            e.preventDefault();
-            undo();
-        }
-        if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
-            e.preventDefault();
-            redo();
-        }
         if (e.key === 'Escape') {
             closeMergeModal();
             closeNetworkModal();
