@@ -1,0 +1,42 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "timestamp": "2025-12-28T18:53:26.872645",
+      "action_type": "edit",
+      "description": "Status change",
+      "before_state": {
+        "row_num": 45,
+        "practice": "Women's Health Specialists",
+        "phone": "555-123-4567",
+        "address": "123 Main St Suite 200",
+        "city": "Austin",
+        "state": "TX",
+        "zip": "78701",
+        "qty_2023": "50",
+        "qty_2024": "50",
+        "qty_2025": "50",
+        "status": "Successful Order",
+        "notes": "ordered 2025",
+        "bg_color": "#ffff00"
+      },
+      "after_state": {
+        "row_num": 45,
+        "practice": "Women's Health Specialists",
+        "phone": "555-123-4567",
+        "address": "123 Main St Suite 200",
+        "city": "Austin",
+        "state": "TX",
+        "zip": "78701",
+        "qty_2023": "50",
+        "qty_2024": "50",
+        "qty_2025": "0",
+        "status": "Not interested",
+        "notes": "ordered 2025; not interested",
+        "bg_color": "#ffffff"
+      }
+    }
+  ],
+  "current_position": 1,
+  "last_updated": "2025-12-28T18:53:26.873156"
+}

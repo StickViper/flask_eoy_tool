@@ -40,17 +40,16 @@ def add_to_undo_stack(state: AppState, action_type: str, description: str,
 
 
 def save_undo_log(state: AppState):
-    """Save undo stack to JSON file"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Save to data/undo-logs folder
+    """Save undo stack to JSON file (single file, overwritten each time)"""
     log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'undo-logs')
     os.makedirs(log_dir, exist_ok=True)
-    filename = os.path.join(log_dir, f"eoy_undo_log_{timestamp}.json")
+    filename = os.path.join(log_dir, 'undo_log.json')
 
     with open(filename, 'w') as f:
         json.dump({
             'actions': state.undo_stack,
-            'current_position': len(state.undo_stack)
+            'current_position': len(state.undo_stack),
+            'last_updated': datetime.now().isoformat()
         }, f, indent=2)
 
 
