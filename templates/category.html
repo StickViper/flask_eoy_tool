@@ -234,7 +234,7 @@
                         <td class="col-checkbox" onclick="event.stopPropagation();">
                             <input type="checkbox" class="custom-checkbox row-checkbox" data-row-num="{{ row.row_num }}">
                         </td>
-                        <td style="text-align: center; cursor: pointer;" onclick="event.stopPropagation(); toggleDetailRow({{ row.row_num }});">
+                        <td style="text-align: center;{% if row.matched_no_row or row.duplicate_group_id %} cursor: pointer;{% endif %}"{% if row.matched_no_row or row.duplicate_group_id %} onclick="event.stopPropagation(); toggleDetailRow({{ row.row_num }});"{% endif %}>
                             {% if row.matched_no_row or row.duplicate_group_id %}
                             <span class="expand-icon" id="expand-{{ row.row_num }}">▶</span>
                             {% endif %}

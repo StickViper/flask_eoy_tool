@@ -329,13 +329,14 @@ p {
   background: #22c55e;
 }
 
-/* Category list - compact to fit all 12 categories */
+/* Category list - scrollable when many categories */
 .categories-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .category-item {
