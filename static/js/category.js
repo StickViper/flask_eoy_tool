@@ -657,6 +657,51 @@ async function redo() {
     }
 }
 
+async function updateUndoRedoStatus() {
+    try {
+        const response = await fetch('/api/undo_status');
+        const status = await response.json();
+
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+
+        if (undoBtn) {
+            if (status.can_undo && status.undo_description) {
+                const shortDesc = status.undo_description.length > 20
+                    ? status.undo_description.substring(0, 20) + '...'
+                    : status.undo_description;
+                undoBtn.innerHTML = `↶ Undo: ${escapeHtml(shortDesc)}`;
+                undoBtn.title = `Undo: ${status.undo_description} (Ctrl+Z)`;
+                undoBtn.disabled = false;
+            } else {
+                undoBtn.innerHTML = '↶ Undo';
+                undoBtn.title = 'Nothing to undo';
+                undoBtn.disabled = true;
+            }
+        }
+
+        if (redoBtn) {
+            if (status.can_redo && status.redo_description) {
+                const shortDesc = status.redo_description.length > 20
+                    ? status.redo_description.substring(0, 20) + '...'
+                    : status.redo_description;
+                redoBtn.innerHTML = `↷ Redo: ${escapeHtml(shortDesc)}`;
+                redoBtn.title = `Redo: ${status.redo_description} (Ctrl+Y)`;
+                redoBtn.disabled = false;
+            } else {
+                redoBtn.innerHTML = '↷ Redo';
+                redoBtn.title = 'Nothing to redo';
+                redoBtn.disabled = true;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to update undo/redo status:', error);
+    }
+}
+
+// Update undo/redo status on page load
+document.addEventListener('DOMContentLoaded', updateUndoRedoStatus);
+
 // =============================================================================
 // NOTIFICATIONS
 // =============================================================================

@@ -301,6 +301,19 @@ def api_export():
         })
 
 
+@app.route('/api/undo_status')
+def api_undo_status():
+    """Get current undo/redo status for UI display"""
+    return jsonify({
+        'can_undo': len(state.undo_stack) > 0,
+        'can_redo': len(state.redo_stack) > 0,
+        'undo_description': state.undo_stack[-1]['description'] if state.undo_stack else None,
+        'redo_description': state.redo_stack[-1]['description'] if state.redo_stack else None,
+        'undo_count': len(state.undo_stack),
+        'redo_count': len(state.redo_stack)
+    })
+
+
 @app.route('/api/undo', methods=['POST'])
 def api_undo():
     """API endpoint to undo last action"""
