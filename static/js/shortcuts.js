@@ -109,10 +109,25 @@ function performSearch(query) {
 
     rows.forEach(row => {
         const text = row.textContent.toLowerCase();
+        const rowNum = row.dataset.rowNum;
+        const detailRow = document.getElementById(`detail-${rowNum}`);
+
         if (text.includes(lowerQuery)) {
             row.style.display = '';
+            // Show detail row only if it was explicitly expanded
+            if (detailRow && detailRow.dataset.wasVisible === 'true') {
+                detailRow.style.display = 'table-row';
+            }
         } else {
             row.style.display = 'none';
+            // Always hide detail row when parent is hidden
+            if (detailRow) {
+                // Remember if it was visible before hiding
+                if (detailRow.style.display === 'table-row') {
+                    detailRow.dataset.wasVisible = 'true';
+                }
+                detailRow.style.display = 'none';
+            }
         }
     });
 }

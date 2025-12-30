@@ -189,9 +189,12 @@ function clearSelection() {
 
 function selectAll() {
     document.querySelectorAll('.data-row').forEach(row => {
-        selectedRows.add(row.dataset.rowNum);
-        row.classList.add('selected');
-        row.querySelector('.row-checkbox').checked = true;
+        // Only select visible rows (not hidden by search filter)
+        if (row.style.display !== 'none') {
+            selectedRows.add(row.dataset.rowNum);
+            row.classList.add('selected');
+            row.querySelector('.row-checkbox').checked = true;
+        }
     });
     document.getElementById('selectAllCheckbox').checked = true;
     updateSelectionBar();
@@ -350,7 +353,7 @@ async function deleteSelected() {
         const response = await fetch('/api/delete_rows', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ row_nums: Array.from(selectedRows) })
+            body: JSON.stringify({ row_nums: Array.from(selectedRows).map(n => parseInt(n)) })
         });
         const result = await response.json();
 
@@ -377,6 +380,7 @@ async function deleteSelected() {
             showNotification(`Marked ${result.count} row(s) for deletion`, 'info');
             updateUndoRedoStatus();  // Sync undo button
             updateProgressBar();     // Update progress
+            updateCategoryCounts();  // Update sidebar counts
         } else {
             showNotification(`Error: ${result.error}`, 'error');
         }
@@ -453,6 +457,7 @@ async function markAsReviewed() {
             showNotification(`Marked ${result.count} row(s) as reviewed`, 'info');
             updateUndoRedoStatus();  // Sync undo button
             updateProgressBar();     // Update progress
+            updateCategoryCounts();  // Update sidebar counts
         } else {
             showNotification(`Error: ${result.error}`, 'error');
         }
@@ -789,6 +794,44 @@ async function updateProgressBar() {
         }
     } catch (error) {
         console.error('Failed to update progress bar:', error);
+    }
+}
+
+async function updateCategoryCounts() {
+    try {
+        const response = await fetch('/api/get_categories');
+        const data = await response.json();
+
+        // Update sidebar category counts
+        data.categories.forEach(cat => {
+            const categoryLink = document.querySelector(`.category-item[href="/category/${cat.id}"]`);
+            if (categoryLink) {
+                const countEl = categoryLink.querySelector('.category-count');
+                if (countEl) {
+                    countEl.textContent = `${cat.row_count} row${cat.row_count !== 1 ? 's' : ''}`;
+                }
+                // Update completed state
+                const iconEl = categoryLink.querySelector('.category-icon');
+                if (cat.row_count === 0) {
+                    categoryLink.classList.add('completed');
+                    if (iconEl) iconEl.textContent = '✓';
+                } else {
+                    categoryLink.classList.remove('completed');
+                    if (iconEl) iconEl.textContent = '•';
+                }
+            }
+        });
+
+        // Update current category header row count
+        const currentCat = data.categories.find(c => c.id === data.current_category_id);
+        if (currentCat) {
+            const headerCount = document.querySelector('.category-title .row-count');
+            if (headerCount) {
+                headerCount.textContent = `${currentCat.row_count} rows`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to update category counts:', error);
     }
 }
 

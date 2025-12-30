@@ -175,6 +175,26 @@ def api_get_progress():
     return jsonify(calculate_progress())
 
 
+@app.route('/api/get_categories')
+def api_get_categories():
+    """Get current category counts for sidebar updates"""
+    categories = []
+    for cat in state.categories:
+        # Count unresolved rows (no action taken)
+        unresolved_count = 0
+        for row_num in cat.row_nums:
+            row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+            if row and not row.action:
+                unresolved_count += 1
+        categories.append({
+            'id': cat.id,
+            'name': cat.name,
+            'row_count': unresolved_count,
+            'total_count': len(cat.row_nums)
+        })
+    return jsonify({'categories': categories, 'current_category_id': state.current_category_id})
+
+
 def get_action_taken(row) -> str:
     """
     Derive action taken label for a row based on its action and field_edits.
