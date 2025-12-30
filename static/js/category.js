@@ -417,15 +417,8 @@ async function markAsReviewed() {
         const result = await response.json();
 
         if (result.success) {
-            selectedRows.forEach(rowNum => {
-                const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
-                if (row) {
-                    row.style.backgroundColor = 'var(--color-bg-tertiary)';
-                    row.classList.add('reviewed');
-                }
-            });
-            clearSelection();
             showNotification(`Marked ${result.count} row(s) as reviewed`, 'info');
+            location.reload();  // Reload to sync undo stack and show OK badges
         } else {
             showNotification(`Error: ${result.error}`, 'error');
         }
@@ -575,6 +568,7 @@ async function saveInlineEdit(newValue) {
             row.classList.add('edited');
             currentEditingCell = null;
             updateProgressBar();
+            updateUndoRedoStatus();  // Sync undo button with server
         } else {
             showNotification(`Error: ${result.error}`, 'error');
             cancelInlineEdit();
