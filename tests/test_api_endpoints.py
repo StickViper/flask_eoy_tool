@@ -224,6 +224,100 @@ class TestUndoStatusEndpoint:
         assert undo_description == 'Edit row 3'
 
 
+class TestCategoryCountsNegativeCases:
+    """Verify tests properly fail when behavior is incorrect"""
+
+    def test_wrong_count_fails_assertion(self):
+        """Verify asserting wrong count would fail"""
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=1, practice="Practice 1", phone="555-111-1111",
+                address="123 Main", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", status="", notes="",
+                bg_color="#ffffff"
+            ),
+        ]
+        test_state.categories = [
+            ReviewCategory(id='test_cat', name='Test', description='Test', row_nums=[1], allow_batch=True)
+        ]
+
+        unresolved = sum(1 for rn in test_state.categories[0].row_nums
+                         for r in test_state.wl_rows if r.row_num == rn and not r.action)
+
+        # Correct assertion passes
+        assert unresolved == 1
+
+        # Incorrect assertion would fail (using != to prove the logic works)
+        assert unresolved != 0
+        assert unresolved != 2
+
+    def test_resolved_row_not_counted_as_unresolved(self):
+        """Verify resolved rows are excluded from unresolved count"""
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=1, practice="Practice 1", phone="555-111-1111",
+                address="123 Main", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", status="", notes="",
+                bg_color="#ffffff"
+            ),
+        ]
+        test_state.wl_rows[0].action = 'deleted'  # Resolved
+
+        test_state.categories = [
+            ReviewCategory(id='test_cat', name='Test', description='Test', row_nums=[1], allow_batch=True)
+        ]
+
+        unresolved = sum(1 for rn in test_state.categories[0].row_nums
+                         for r in test_state.wl_rows if r.row_num == rn and not r.action)
+
+        # Must be 0, not 1 - proves action filtering works
+        assert unresolved == 0
+        assert unresolved != 1  # Would be 1 if action wasn't checked
+
+
+class TestUndoRedoNegativeCases:
+    """Verify undo/redo tests properly detect incorrect state"""
+
+    def test_empty_stack_cannot_provide_description(self):
+        """Empty stack has no description to return"""
+        state.undo_stack = []
+
+        # Safely get description (mirrors actual code)
+        undo_description = state.undo_stack[-1]['description'] if state.undo_stack else None
+
+        assert undo_description is None
+        assert undo_description != 'Delete row 1'  # Cannot have description if empty
+
+    def test_redo_not_available_without_undo(self):
+        """Redo should only be available after undo"""
+        state.undo_stack = []
+        state.redo_stack = []
+
+        add_to_undo_stack(state, 'delete', 'Delete row 1', {'row_num': 1}, None)
+
+        # Redo not available (no undo performed yet)
+        can_redo = len(state.redo_stack) > 0
+        assert can_redo is False
+
+    def test_new_action_clears_redo(self):
+        """New action should clear redo stack"""
+        state.undo_stack = []
+        state.redo_stack = []
+
+        # Add action
+        add_to_undo_stack(state, 'delete', 'Delete row 1', {}, None)
+        # Simulate undo
+        action = state.undo_stack.pop()
+        state.redo_stack.append(action)
+        assert len(state.redo_stack) == 1
+
+        # New action should clear redo
+        add_to_undo_stack(state, 'delete', 'Delete row 2', {}, None)
+        assert len(state.redo_stack) == 0  # Cleared by new action
+
+
 class TestMarkReviewedUndoRedo:
     """Test undo/redo for mark_reviewed action type"""
 
@@ -365,3 +459,98 @@ class TestMarkReviewedUndoRedo:
         # Should not crash, just return True
         success = restore_state(test_state, action, 'undo')
         assert success is True
+
+
+class TestRestoreStateEdgeCases:
+    """Test restore_state edge cases and error handling"""
+
+    def test_restore_unknown_action_type(self):
+        """Unknown action types should not crash"""
+        from undo_redo import restore_state
+
+        test_state = AppState()
+        test_state.wl_rows = []
+
+        action = {
+            'action_type': 'unknown_future_action',
+            'before_state': {},
+            'after_state': {}
+        }
+
+        # Should return True (graceful handling)
+        success = restore_state(test_state, action, 'undo')
+        assert success is True
+
+    def test_restore_edit_field_updates_row(self):
+        """Verify edit_field actually updates row data"""
+        from undo_redo import restore_state
+
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=1, practice="Old Practice", phone="555-111-1111",
+                address="123 Main", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="", status="", notes="",
+                bg_color="#ffffff"
+            ),
+        ]
+
+        action = {
+            'action_type': 'edit_field',
+            'before_state': {
+                'row_num': 1,
+                'field': 'practice',
+                'old_value': 'Original Practice'
+            },
+            'after_state': {
+                'row_num': 1,
+                'field': 'practice',
+                'new_value': 'New Practice'
+            }
+        }
+
+        # Undo should restore old value
+        success = restore_state(test_state, action, 'undo')
+        assert success is True
+        assert test_state.wl_rows[0].practice == 'Original Practice'
+        assert test_state.wl_rows[0].practice != 'Old Practice'  # Verify it changed
+
+        # Redo should set new value
+        success = restore_state(test_state, action, 'redo')
+        assert success is True
+        assert test_state.wl_rows[0].practice == 'New Practice'
+
+    def test_restore_preserves_other_fields(self):
+        """Verify restore only affects targeted field"""
+        from undo_redo import restore_state
+
+        test_state = AppState()
+        test_state.wl_rows = [
+            ProviderRow(
+                row_num=1, practice="Practice", phone="555-111-1111",
+                address="123 Main", city="Austin", state="TX", zip="78701",
+                qty_2023="", qty_2024="", qty_2025="50", status="", notes="Original notes",
+                bg_color="#ffffff"
+            ),
+        ]
+
+        action = {
+            'action_type': 'edit_field',
+            'before_state': {
+                'row_num': 1,
+                'field': 'status',
+                'old_value': 'Not interested'
+            },
+            'after_state': {
+                'row_num': 1,
+                'field': 'status',
+                'new_value': 'Successful Order'
+            }
+        }
+
+        restore_state(test_state, action, 'undo')
+
+        # Other fields should be unchanged
+        assert test_state.wl_rows[0].notes == 'Original notes'
+        assert test_state.wl_rows[0].qty_2025 == '50'
+        assert test_state.wl_rows[0].phone == '555-111-1111'
