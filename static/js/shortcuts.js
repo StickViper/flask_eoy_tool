@@ -134,7 +134,10 @@ function performSearch(query) {
 
 // Export Function
 function exportCategory() {
-    const rows = document.querySelectorAll('.data-row');
+    const allRows = document.querySelectorAll('.data-row');
+    // Only export visible rows (respect search filter)
+    const rows = Array.from(allRows).filter(row => row.style.display !== 'none');
+
     if (rows.length === 0) {
         alert('No data to export');
         return;

@@ -608,6 +608,7 @@ async function saveInlineEdit(newValue) {
             currentEditingCell = null;
             updateProgressBar();
             updateUndoRedoStatus();  // Sync undo button with server
+            updateCategoryCounts();  // Update sidebar counts
         } else {
             showNotification(`Error: ${result.error}`, 'error');
             cancelInlineEdit();
