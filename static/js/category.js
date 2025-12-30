@@ -359,10 +359,21 @@ async function deleteSelected() {
                 const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
                 if (row) {
                     row.classList.add('row-deleted');
+                    // Add DEL badge if not present
+                    const rowNumCell = row.querySelector('.col-row-num');
+                    if (rowNumCell && !rowNumCell.querySelector('.action-indicator.deleted')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'action-indicator deleted';
+                        badge.title = 'Marked for deletion';
+                        badge.textContent = 'DEL';
+                        rowNumCell.appendChild(badge);
+                    }
                 }
             });
             clearSelection();
             showNotification(`Marked ${result.count} row(s) for deletion`, 'info');
+            updateUndoRedoStatus();  // Sync undo button
+            updateProgressBar();     // Update progress
         } else {
             showNotification(`Error: ${result.error}`, 'error');
         }
@@ -417,8 +428,25 @@ async function markAsReviewed() {
         const result = await response.json();
 
         if (result.success) {
+            selectedRows.forEach(rowNum => {
+                const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+                if (row) {
+                    row.classList.add('reviewed');
+                    // Add OK badge if not present
+                    const rowNumCell = row.querySelector('.col-row-num');
+                    if (rowNumCell && !rowNumCell.querySelector('.action-indicator.reviewed')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'action-indicator reviewed';
+                        badge.title = 'Reviewed, no change needed';
+                        badge.textContent = 'OK';
+                        rowNumCell.appendChild(badge);
+                    }
+                }
+            });
+            clearSelection();
             showNotification(`Marked ${result.count} row(s) as reviewed`, 'info');
-            location.reload();  // Reload to sync undo stack and show OK badges
+            updateUndoRedoStatus();  // Sync undo button
+            updateProgressBar();     // Update progress
         } else {
             showNotification(`Error: ${result.error}`, 'error');
         }
