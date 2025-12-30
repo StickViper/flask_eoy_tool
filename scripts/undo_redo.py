@@ -2,10 +2,10 @@
 Undo/Redo system for EOY Cleanup Tool
 
 Manages action stack, state restoration, and progress calculation.
+Undo/redo is session-only (in-memory) - no disk persistence.
 """
 
 from __future__ import annotations
-import os
 import json
 from datetime import datetime
 from typing import Any, Dict, TYPE_CHECKING
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def add_to_undo_stack(state: AppState, action_type: str, description: str,
                       before_state: Any, after_state: Any = None):
-    """Add action to undo stack"""
+    """Add action to undo stack (session-only, in-memory)"""
     action = {
         'id': len(state.undo_stack) + 1,
         'timestamp': datetime.now().isoformat(),
@@ -34,23 +34,6 @@ def add_to_undo_stack(state: AppState, action_type: str, description: str,
     # Keep only last 50 actions
     if len(state.undo_stack) > 50:
         state.undo_stack.pop(0)
-
-    # Save to disk
-    save_undo_log(state)
-
-
-def save_undo_log(state: AppState):
-    """Save undo stack to JSON file (single file, overwritten each time)"""
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'undo-logs')
-    os.makedirs(log_dir, exist_ok=True)
-    filename = os.path.join(log_dir, 'undo_log.json')
-
-    with open(filename, 'w') as f:
-        json.dump({
-            'actions': state.undo_stack,
-            'current_position': len(state.undo_stack),
-            'last_updated': datetime.now().isoformat()
-        }, f, indent=2)
 
 
 def save_progress(state: AppState) -> str:
