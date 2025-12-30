@@ -358,10 +358,13 @@ async function deleteSelected() {
             selectedRows.forEach(rowNum => {
                 const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
                 if (row) {
+                    row.classList.remove('reviewed');
                     row.classList.add('row-deleted');
-                    // Add DEL badge if not present
                     const rowNumCell = row.querySelector('.col-row-num');
-                    if (rowNumCell && !rowNumCell.querySelector('.action-indicator.deleted')) {
+                    if (rowNumCell) {
+                        // Remove any existing action badges first
+                        rowNumCell.querySelectorAll('.action-indicator').forEach(b => b.remove());
+                        // Add DEL badge
                         const badge = document.createElement('span');
                         badge.className = 'action-indicator deleted';
                         badge.title = 'Marked for deletion';
@@ -431,10 +434,13 @@ async function markAsReviewed() {
             selectedRows.forEach(rowNum => {
                 const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
                 if (row) {
+                    row.classList.remove('row-deleted', 'row-merged');
                     row.classList.add('reviewed');
-                    // Add OK badge if not present
                     const rowNumCell = row.querySelector('.col-row-num');
-                    if (rowNumCell && !rowNumCell.querySelector('.action-indicator.reviewed')) {
+                    if (rowNumCell) {
+                        // Remove any existing action badges first
+                        rowNumCell.querySelectorAll('.action-indicator').forEach(b => b.remove());
+                        // Add OK badge
                         const badge = document.createElement('span');
                         badge.className = 'action-indicator reviewed';
                         badge.title = 'Reviewed, no change needed';
