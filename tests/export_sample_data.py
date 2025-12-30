@@ -16,7 +16,8 @@ from pathlib import Path
 # Add scripts/ to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from eoy_tool import load_data, status_to_color
+from loading import load_data
+from helpers import status_to_color
 
 
 def main():

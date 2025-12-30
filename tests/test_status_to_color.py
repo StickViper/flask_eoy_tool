@@ -6,7 +6,7 @@ Must handle exact matches only (no substring matching).
 """
 
 import pytest
-from eoy_tool import status_to_color
+from helpers import status_to_color
 
 
 class TestStatusToColor:
