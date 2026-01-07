@@ -1728,23 +1728,41 @@ def api_batch_remove_notes():
 
 @app.route('/api/batch_transform_notes', methods=['POST'])
 def api_batch_transform_notes():
-    """Transform note patterns (e.g., 'same network' → 'network(~N)')"""
+    """Transform note patterns to (NetworkName ~N) format
+
+    Accepts:
+        category_id: Category to process
+        network_name: User-provided name for the network (required)
+
+    Transforms notes containing "same network", "part of network", etc.
+    into a cleaner format like "(Acme Medical ~5)"
+    """
     data = request.get_json()
     category_id = data.get('category_id')
+    network_name = data.get('network_name', '').strip()
+
+    if not network_name:
+        return jsonify({'success': False, 'error': 'Network name is required'}), 400
 
     # Find category
     category = next((c for c in state.categories if c.id == category_id), None)
     if not category:
         return jsonify({'success': False, 'error': 'Category not found'}), 404
 
-    # Transform patterns
-    transforms = [
-        (r'\bsame\s+network\b', 'network(~N)'),
-        (r'\bpart\s+of\s+network\b', 'network(~N)'),
-        (r'\bnetwork\s+location\b', 'network(~N)'),
-        (r'\bduplicate\b', 'dup'),
-        (r'\bpossible\s+dup\b', 'dup?'),
-        (r'\bmaybe\s+dup\b', 'dup?'),
+    # Count total rows in this category for the ~N count
+    location_count = len(category.row_nums)
+
+    # Build the replacement string with user-provided name
+    network_label = f'({network_name} ~{location_count})'
+
+    # Patterns that indicate network-related notes to transform
+    network_patterns = [
+        r'\bsame\s+network\s*[-–]?\s*multiple\s+locations?\b',
+        r'\bsame\s+network\b',
+        r'\bpart\s+of\s+network\b',
+        r'\bnetwork\s+location\b',
+        r'\bmultiple\s+locations?\b',
+        r'\bnetwork\(~?\d*\)',  # Previous network(~N) format
     ]
 
     count = 0
@@ -1757,8 +1775,30 @@ def api_batch_transform_notes():
             original_notes = row.notes
             new_notes = original_notes
 
-            for pattern, replacement in transforms:
-                new_notes = re.sub(pattern, replacement, new_notes, flags=re.IGNORECASE)
+            # Replace network patterns with the new formatted label
+            for pattern in network_patterns:
+                new_notes = re.sub(pattern, network_label, new_notes, flags=re.IGNORECASE)
+
+            # Also handle general duplicate patterns
+            new_notes = re.sub(r'\bduplicate\b', 'dup', new_notes, flags=re.IGNORECASE)
+            new_notes = re.sub(r'\bpossible\s+dup\b', 'dup?', new_notes, flags=re.IGNORECASE)
+            new_notes = re.sub(r'\bmaybe\s+dup\b', 'dup?', new_notes, flags=re.IGNORECASE)
+
+            # Clean up: remove duplicate network labels if multiple patterns matched
+            # Keep only first occurrence
+            label_escaped = re.escape(network_label)
+            first_match = re.search(label_escaped, new_notes)
+            if first_match:
+                # Remove all but first occurrence
+                new_notes = new_notes[:first_match.end()] + re.sub(
+                    label_escaped, '', new_notes[first_match.end():]
+                )
+
+            # Clean up extra semicolons and spaces
+            new_notes = re.sub(r';\s*;', ';', new_notes)
+            new_notes = re.sub(r'^\s*;\s*', '', new_notes)
+            new_notes = re.sub(r'\s*;\s*$', '', new_notes)
+            new_notes = re.sub(r'\s+', ' ', new_notes).strip()
 
             if new_notes != original_notes:
                 before_states.append({
@@ -1777,12 +1817,12 @@ def api_batch_transform_notes():
     if before_states:
         add_to_undo_stack(
             'batch_transform_notes',
-            f'Transformed notes on {count} row(s)',
-            {'rows': before_states},
-            {'rows': after_states}
+            f'Transformed notes to "{network_label}" on {count} row(s)',
+            {'rows': before_states, 'network_name': network_name},
+            {'rows': after_states, 'network_name': network_name}
         )
 
-    return jsonify({'success': True, 'count': count})
+    return jsonify({'success': True, 'count': count, 'network_label': network_label})
 
 @app.route('/api/batch_archive_ni', methods=['POST'])
 def api_batch_archive_ni():

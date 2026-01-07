@@ -1224,19 +1224,72 @@ async function batchRemoveNotes() {
     }
 }
 
-async function batchTransformNotes() {
+// Transform Notes Modal state
+let transformRowCount = 0;
+
+function openTransformNotesModal() {
     const allRows = document.querySelectorAll('.data-row');
-    if (!confirm(`Transform note patterns on all ${allRows.length} rows?\n\nThis will transform: 'same network' → 'network(~N)', etc.`)) return;
+    transformRowCount = allRows.length;
+
+    // Update count in preview
+    document.getElementById('transformCount').textContent = transformRowCount;
+
+    // Clear previous input
+    const nameInput = document.getElementById('transformNetworkName');
+    nameInput.value = '';
+
+    // Update preview on input
+    nameInput.oninput = function() {
+        updateTransformPreview(this.value);
+    };
+
+    // Handle Enter key to confirm
+    nameInput.onkeydown = function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmTransformNotes();
+        }
+    };
+
+    // Show modal
+    document.getElementById('transformNotesModal').style.display = 'block';
+
+    // Focus the input
+    setTimeout(() => nameInput.focus(), 100);
+}
+
+function updateTransformPreview(networkName) {
+    const preview = document.getElementById('transformPreview');
+    const displayName = networkName.trim() || 'NetworkName';
+    preview.innerHTML = `(${escapeHtml(displayName)} ~<span id="transformCount">${transformRowCount}</span>)`;
+}
+
+function closeTransformNotesModal() {
+    document.getElementById('transformNotesModal').style.display = 'none';
+}
+
+async function confirmTransformNotes() {
+    const networkName = document.getElementById('transformNetworkName').value.trim();
+
+    if (!networkName) {
+        showNotification('Please enter a network name', 'warning');
+        return;
+    }
 
     try {
         const response = await fetch('/api/batch_transform_notes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category_id: getCategoryId() })
+            body: JSON.stringify({
+                category_id: getCategoryId(),
+                network_name: networkName
+            })
         });
         const result = await response.json();
         if (result.success) {
-            showNotification(`Transformed notes on ${result.count} rows`, 'info');
+            const label = result.network_label || `(${networkName} ~${result.count})`;
+            showNotification(`Transformed ${result.count} notes to ${label}`, 'info');
+            closeTransformNotesModal();
             location.reload();
         } else {
             showNotification(`Error: ${result.error}`, 'error');
@@ -1244,6 +1297,11 @@ async function batchTransformNotes() {
     } catch (error) {
         showNotification(`Error: ${error}`, 'error');
     }
+}
+
+function batchTransformNotes() {
+    // Open modal instead of using prompt
+    openTransformNotesModal();
 }
 
 async function batchArchiveNI() {
@@ -1408,6 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') {
             closeMergeModal();
             closeNetworkModal();
+            closeTransformNotesModal();
         }
     });
 });
