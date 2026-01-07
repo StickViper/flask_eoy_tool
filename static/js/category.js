@@ -1198,6 +1198,98 @@ async function markAllReviewed() {
     }
 }
 
+// =============================================================================
+// BATCH NOTE ACTIONS
+// =============================================================================
+
+async function batchRemoveNotes() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Remove matching note patterns from all ${allRows.length} rows?\n\nThis will remove: vm, call back, office closed, not needed, checked, and similar patterns.`)) return;
+
+    try {
+        const response = await fetch('/api/batch_remove_notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Cleaned notes on ${result.count} rows`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function batchTransformNotes() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Transform note patterns on all ${allRows.length} rows?\n\nThis will transform: 'same network' → 'network(~N)', etc.`)) return;
+
+    try {
+        const response = await fetch('/api/batch_transform_notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Transformed notes on ${result.count} rows`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function batchArchiveNI() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Archive NI reasons on all ${allRows.length} rows?\n\nThis will move NI reasons to archived format for cleaner display.`)) return;
+
+    try {
+        const response = await fetch('/api/batch_archive_ni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Archived NI reasons on ${result.count} rows`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
+async function batchFixSemicolons() {
+    const allRows = document.querySelectorAll('.data-row');
+    if (!confirm(`Fix semicolons on all ${allRows.length} rows?\n\nThis will add proper semicolons between note entries.`)) return;
+
+    try {
+        const response = await fetch('/api/batch_fix_semicolons', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: getCategoryId() })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`Fixed semicolons on ${result.count} rows`, 'info');
+            location.reload();
+        } else {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error}`, 'error');
+    }
+}
+
 function getCategoryId() {
     // Extract category ID from URL
     const path = window.location.pathname;

@@ -187,14 +187,19 @@ def detect_duplicates(wl_rows):
                 if not name:
                     name = re.sub(r'[^a-z]', '', rows[0].practice.lower())[:10] or 'network'
 
+                # Count unique addresses (not just rows)
+                unique_addrs = set(normalize_address(r.address) for r in rows if r.address)
+                location_count = len(unique_addrs) if unique_addrs else len(rows)
+
                 for row in rows:
                     row.network_name = name
                     row.issues.append({
                         'category': 'networks',
                         'severity': 'review',
-                        'message': f"Network detected (~{len(rows)} locations)",
+                        'message': f"Network detected (~{location_count} unique locations, {len(rows)} rows)",
                         'network_name': name,
-                        'location_count': len(rows)
+                        'location_count': location_count,
+                        'row_count': len(rows)
                     })
                 networks += len(rows)
             else:
@@ -230,20 +235,40 @@ def detect_address_clusters(wl_rows):
     - 4 rows with 4 different names and phones
     - But 3 share street number + state
     - Possible same building, multi-location practice, or data issues
+
+    Uses two-tier detection:
+    1. Exact address match (normalized full address + city + state)
+    2. Street number + city + state match (catches same building, different suites)
     """
     print(f"[Phase 2.3b] Detecting address-based clusters...")
 
-    # Group by (street_number, state) - catches same building
-    addr_groups = defaultdict(list)
+    # First pass: Group by full normalized address (exact matches)
+    exact_addr_groups = defaultdict(list)
+    for row in wl_rows:
+        # Normalize full address: remove suite/apt, lowercase, strip spaces
+        addr = normalize_address(row.address or '')
+        city = (row.city or '').strip().lower()
+        state = (row.state or '').strip().upper()
+        if addr and city and state:
+            # Full address key
+            full_key = (addr, city, state)
+            exact_addr_groups[full_key].append(row)
+
+    # Second pass: Group by (street_number, city, state) - catches same building
+    street_num_groups = defaultdict(list)
     for row in wl_rows:
         street_num = extract_street_number(row.address)
+        city = (row.city or '').strip().lower()
         state = (row.state or '').strip().upper()
-        if street_num and state:
-            key = (street_num, state)
-            addr_groups[key].append(row)
+        if street_num and city and state:
+            key = (street_num, city, state)
+            street_num_groups[key].append(row)
 
     cluster_count = 0
-    for key, rows in addr_groups.items():
+    flagged_row_nums = set()
+
+    # Process exact address matches first (highest confidence)
+    for key, rows in exact_addr_groups.items():
         if len(rows) < 2:
             continue
 
@@ -261,19 +286,64 @@ def detect_address_clusters(wl_rows):
         if len(phones) <= 1:
             continue  # Same phone - already caught by phone grouping
 
-        # This is an address cluster with different phones
-        street_num, state = key
+        # This is an exact address cluster with different phones
+        addr, city, state = key
         for row in rows:
+            if row.row_num in flagged_row_nums:
+                continue
             # Don't double-flag if already caught
             existing_cats = [issue.get('category') for issue in row.issues]
             if 'address_cluster' not in existing_cats:
                 row.issues.append({
                     'category': 'address_cluster',
                     'severity': 'review',
-                    'message': f"Same address ({street_num}... {state}), different phones ({len(rows)} rows)",
+                    'message': f"Exact address match ({len(rows)} rows with different phones)",
                     'cluster_size': len(rows),
-                    'address_key': f"{street_num}, {state}"
+                    'address_key': f"{addr}, {city}, {state}",
+                    'match_type': 'exact'
                 })
+                flagged_row_nums.add(row.row_num)
+                cluster_count += 1
+
+    # Process street number matches (lower confidence, catches suites in same building)
+    for key, rows in street_num_groups.items():
+        if len(rows) < 2:
+            continue
+
+        # Skip rows already flagged
+        unflagged_rows = [r for r in rows if r.row_num not in flagged_row_nums]
+        if len(unflagged_rows) < 2:
+            continue
+
+        # Skip if ALL already flagged as duplicates/networks (by phone grouping)
+        all_already_flagged = all(
+            any(issue.get('category') in ['exact_dupes', 'networks', 'fuzzy_dupes', 'address_cluster']
+                for issue in row.issues)
+            for row in unflagged_rows
+        )
+        if all_already_flagged:
+            continue
+
+        # Check if they have DIFFERENT phones (phone grouping would miss these)
+        phones = set(normalize_phone(r.phone) for r in unflagged_rows if r.phone)
+        if len(phones) <= 1:
+            continue  # Same phone - already caught by phone grouping
+
+        # This is a street number cluster with different phones
+        street_num, city, state = key
+        for row in unflagged_rows:
+            # Don't double-flag if already caught
+            existing_cats = [issue.get('category') for issue in row.issues]
+            if 'address_cluster' not in existing_cats:
+                row.issues.append({
+                    'category': 'address_cluster',
+                    'severity': 'review',
+                    'message': f"Same building ({street_num}... {city}, {state}), different phones ({len(unflagged_rows)} rows)",
+                    'cluster_size': len(unflagged_rows),
+                    'address_key': f"{street_num}, {city}, {state}",
+                    'match_type': 'street_number'
+                })
+                flagged_row_nums.add(row.row_num)
                 cluster_count += 1
 
     print(f"  Found {cluster_count} rows in address clusters (different phones)")
@@ -525,48 +595,48 @@ def categorize_issues(wl_rows, no_rows):
         ReviewCategory(
             id="address_cluster",
             name="Same Address",
-            description="Different phones/names at same street address",
+            description="Different phones/names at same street address - may be network or suite neighbors",
             row_nums=[],
-            allow_batch=False,
-            primary_action=None,
-            secondary_actions=["confirm_network", "merge", "edit", "review_individual"]
+            allow_batch=True,
+            primary_action="confirm_network",
+            secondary_actions=["merge", "edit", "mark_reviewed"]
         ),
-        # Note cleanup categories (manual review - no batch action)
+        # Note cleanup categories - batch actions for common note patterns
         ReviewCategory(
             id="notes_remove",
             name="Notes: Remove",
             description="Notes with content to remove (vm, call back, office closed, etc.)",
             row_nums=[],
-            allow_batch=False,
-            primary_action=None,
-            secondary_actions=["edit"]
+            allow_batch=True,
+            primary_action="batch_remove_notes",
+            secondary_actions=["edit", "mark_reviewed"]
         ),
         ReviewCategory(
             id="notes_transform",
             name="Notes: Transform",
             description="Notes to transform (e.g., 'same network' → 'network(~N)')",
             row_nums=[],
-            allow_batch=False,
-            primary_action=None,
-            secondary_actions=["edit"]
+            allow_batch=True,
+            primary_action="batch_transform_notes",
+            secondary_actions=["edit", "mark_reviewed"]
         ),
         ReviewCategory(
             id="notes_archive_ni",
             name="Notes: NI Reason",
             description="Not Interested with reason to archive",
             row_nums=[],
-            allow_batch=False,
-            primary_action=None,
-            secondary_actions=["edit"]
+            allow_batch=True,
+            primary_action="batch_archive_ni",
+            secondary_actions=["edit", "mark_reviewed"]
         ),
         ReviewCategory(
             id="notes_fix_semicolons",
             name="Notes: Fix Semicolons",
             description="Notes missing semicolons between entries",
             row_nums=[],
-            allow_batch=False,
-            primary_action=None,
-            secondary_actions=["edit"]
+            allow_batch=True,
+            primary_action="batch_fix_semicolons",
+            secondary_actions=["edit", "mark_reviewed"]
         ),
         ReviewCategory(
             id="yellow_95",
@@ -598,11 +668,11 @@ def categorize_issues(wl_rows, no_rows):
         ReviewCategory(
             id="orphan_no",
             name="Unmatched Orders",
-            description="New Orders without yellow match in Working List",
+            description="New Orders without yellow match in Working List - may need manual lookup",
             row_nums=[],
-            allow_batch=False,
-            primary_action=None,
-            secondary_actions=[]
+            allow_batch=True,
+            primary_action="mark_all_reviewed",
+            secondary_actions=["google_search", "mark_reviewed"]
         ),
         ReviewCategory(
             id="green_sent",

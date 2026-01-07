@@ -150,7 +150,11 @@ def category(category_id):
     state.current_category_id = category_id
 
     # Get rows for this category
-    rows = [r for r in state.wl_rows if r.row_num in cat.row_nums]
+    # Special handling for orphan_no category - these are New Order rows, not Working List rows
+    if category_id == 'orphan_no':
+        rows = [r for r in state.no_rows if r.row_num in cat.row_nums]
+    else:
+        rows = [r for r in state.wl_rows if r.row_num in cat.row_nums]
 
     return render_template('category.html',
                          category=cat,
@@ -1643,6 +1647,263 @@ def api_confirm_orphan_match():
             'success': True,
             'message': 'Sent to Manual Review for further investigation'
         })
+
+# ============================================================================
+# BATCH NOTE PROCESSING APIs
+# ============================================================================
+
+@app.route('/api/batch_remove_notes', methods=['POST'])
+def api_batch_remove_notes():
+    """Remove matching note patterns from all rows in category"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Patterns to remove (from note_patterns.py REMOVE_PATTERNS)
+    remove_patterns = [
+        r'\bvm\b',
+        r'\bcall back\b',
+        r'\bcall\s*-?\s*back\b',
+        r'\boffice closed\b',
+        r'\bnot needed\b',
+        r'\bchecked\b',
+        r'\bverified\b',
+        r'\bconfirmed\b',
+        r'\bupdated\b',
+        r'\bleft message\b',
+        r'\blm\b',
+        r'\bno answer\b',
+        r'\bna\b',
+        r'\bbusyline\b',
+        r'\bbusy\b',
+    ]
+
+    count = 0
+    before_states = []
+    after_states = []
+
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.notes:
+            original_notes = row.notes
+            new_notes = original_notes
+
+            # Remove patterns
+            for pattern in remove_patterns:
+                new_notes = re.sub(pattern, '', new_notes, flags=re.IGNORECASE)
+
+            # Clean up resulting notes
+            new_notes = re.sub(r';\s*;', ';', new_notes)
+            new_notes = re.sub(r'^\s*;\s*', '', new_notes)
+            new_notes = re.sub(r'\s*;\s*$', '', new_notes)
+            new_notes = re.sub(r'\s+', ' ', new_notes).strip()
+
+            if new_notes != original_notes:
+                before_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': original_notes, 'action': row.action}
+                })
+                row.notes = new_notes
+                row.field_edits['notes'] = new_notes
+                row.action = 'edit'
+                after_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': new_notes, 'action': 'edit'}
+                })
+                count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'batch_remove_notes',
+            f'Removed note patterns from {count} row(s)',
+            {'rows': before_states},
+            {'rows': after_states}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/batch_transform_notes', methods=['POST'])
+def api_batch_transform_notes():
+    """Transform note patterns (e.g., 'same network' → 'network(~N)')"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    # Transform patterns
+    transforms = [
+        (r'\bsame\s+network\b', 'network(~N)'),
+        (r'\bpart\s+of\s+network\b', 'network(~N)'),
+        (r'\bnetwork\s+location\b', 'network(~N)'),
+        (r'\bduplicate\b', 'dup'),
+        (r'\bpossible\s+dup\b', 'dup?'),
+        (r'\bmaybe\s+dup\b', 'dup?'),
+    ]
+
+    count = 0
+    before_states = []
+    after_states = []
+
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.notes:
+            original_notes = row.notes
+            new_notes = original_notes
+
+            for pattern, replacement in transforms:
+                new_notes = re.sub(pattern, replacement, new_notes, flags=re.IGNORECASE)
+
+            if new_notes != original_notes:
+                before_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': original_notes, 'action': row.action}
+                })
+                row.notes = new_notes
+                row.field_edits['notes'] = new_notes
+                row.action = 'edit'
+                after_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': new_notes, 'action': 'edit'}
+                })
+                count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'batch_transform_notes',
+            f'Transformed notes on {count} row(s)',
+            {'rows': before_states},
+            {'rows': after_states}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/batch_archive_ni', methods=['POST'])
+def api_batch_archive_ni():
+    """Archive NI reasons to cleaner format"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    count = 0
+    before_states = []
+    after_states = []
+
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.notes:
+            original_notes = row.notes
+
+            # Extract NI reason and archive it
+            ni_match = re.search(r'not\s+interested[:\s-]*([^;]+)', original_notes, re.IGNORECASE)
+            if ni_match:
+                reason = ni_match.group(1).strip()
+                if reason and len(reason) > 2:
+                    # Archive format: NI(reason)
+                    new_notes = re.sub(
+                        r'not\s+interested[:\s-]*[^;]+',
+                        f'NI({reason[:30]})',
+                        original_notes,
+                        flags=re.IGNORECASE
+                    )
+
+                    if new_notes != original_notes:
+                        before_states.append({
+                            'row_num': row_num,
+                            'fields': {'notes': original_notes, 'action': row.action}
+                        })
+                        row.notes = new_notes
+                        row.field_edits['notes'] = new_notes
+                        row.action = 'edit'
+                        after_states.append({
+                            'row_num': row_num,
+                            'fields': {'notes': new_notes, 'action': 'edit'}
+                        })
+                        count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'batch_archive_ni',
+            f'Archived NI reasons on {count} row(s)',
+            {'rows': before_states},
+            {'rows': after_states}
+        )
+
+    return jsonify({'success': True, 'count': count})
+
+@app.route('/api/batch_fix_semicolons', methods=['POST'])
+def api_batch_fix_semicolons():
+    """Fix missing semicolons between note entries"""
+    data = request.get_json()
+    category_id = data.get('category_id')
+
+    # Find category
+    category = next((c for c in state.categories if c.id == category_id), None)
+    if not category:
+        return jsonify({'success': False, 'error': 'Category not found'}), 404
+
+    count = 0
+    before_states = []
+    after_states = []
+
+    for row_num in category.row_nums:
+        row = next((r for r in state.wl_rows if r.row_num == row_num), None)
+        if row and row.notes:
+            original_notes = row.notes
+
+            # Patterns that indicate a new note entry
+            entry_starts = [
+                r'(?<=[a-z])(\s+)(vm\d*)',
+                r'(?<=[a-z])(\s+)(sent)',
+                r'(?<=[a-z])(\s+)(not interested)',
+                r'(?<=[a-z])(\s+)(network)',
+                r'(?<=[a-z])(\s+)(dup)',
+                r'(?<=[a-z])(\s+)(invalid)',
+                r'(?<=[a-z])(\s+)(closed)',
+                r'(?<=[a-z])(\s+)(NI\()',
+            ]
+
+            new_notes = original_notes
+            for pattern in entry_starts:
+                new_notes = re.sub(pattern, r'; \2', new_notes, flags=re.IGNORECASE)
+
+            # Clean up double semicolons
+            new_notes = re.sub(r';\s*;', ';', new_notes)
+            new_notes = re.sub(r'^\s*;\s*', '', new_notes)
+
+            if new_notes != original_notes:
+                before_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': original_notes, 'action': row.action}
+                })
+                row.notes = new_notes
+                row.field_edits['notes'] = new_notes
+                row.action = 'edit'
+                after_states.append({
+                    'row_num': row_num,
+                    'fields': {'notes': new_notes, 'action': 'edit'}
+                })
+                count += 1
+
+    if before_states:
+        add_to_undo_stack(
+            'batch_fix_semicolons',
+            f'Fixed semicolons on {count} row(s)',
+            {'rows': before_states},
+            {'rows': after_states}
+        )
+
+    return jsonify({'success': True, 'count': count})
 
 # ============================================================================
 # MAIN ENTRY POINT
